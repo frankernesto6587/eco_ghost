@@ -4,6 +4,7 @@ export interface TransactionFilters {
   type?: string;
   accountId?: string;
   categoryId?: string;
+  currency?: string;
   from?: string;
   to?: string;
   cursor?: string;

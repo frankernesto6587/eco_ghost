@@ -38,6 +38,11 @@ export class TransactionQueryDto {
   @IsString()
   accountId?: string;
 
+  @ApiPropertyOptional({ example: 'USD', description: 'Filter by account currency' })
+  @IsOptional()
+  @IsString()
+  currency?: string;
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()

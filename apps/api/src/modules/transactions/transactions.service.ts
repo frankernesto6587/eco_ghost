@@ -193,7 +193,7 @@ export class TransactionsService {
   }
 
   async findAll(orgId: string, query: TransactionQueryDto) {
-    const { from, to, type, categoryId, accountId, projectId, cursor, limit = 20, deleted } = query;
+    const { from, to, type, categoryId, accountId, projectId, currency, cursor, limit = 20, deleted } = query;
 
     const where: Prisma.TransactionWhereInput = {
       orgId,
@@ -210,6 +210,7 @@ export class TransactionsService {
     if (categoryId) where.categoryId = categoryId;
     if (accountId) where.accountId = accountId;
     if (projectId) where.projectId = projectId;
+    if (currency) where.account = { currency };
 
     const transactions = await this.prisma.transaction.findMany({
       where,

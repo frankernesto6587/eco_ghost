@@ -68,6 +68,7 @@ interface Filters {
   type: string | undefined;
   accountId: string | undefined;
   categoryId: string | undefined;
+  currency: string | undefined;
 }
 
 interface TransactionFormValues {
@@ -91,6 +92,7 @@ function buildParams(filters: Filters, cursor?: string, deleted?: boolean): Tran
   if (filters.type) params.type = filters.type;
   if (filters.accountId) params.accountId = filters.accountId;
   if (filters.categoryId) params.categoryId = filters.categoryId;
+  if (filters.currency) params.currency = filters.currency;
   if (filters.dateRange) {
     params.from = filters.dateRange[0].startOf('day').toISOString();
     params.to = filters.dateRange[1].endOf('day').toISOString();
@@ -250,12 +252,13 @@ export default function TransactionsPage() {
   const watchedAccountId = Form.useWatch('accountId', form);
 
   // ---- State ----
-  const [filters, setFilters] = useState<Filters>({
+  const [filters, setFilters] = useState<Filters>(() => ({
     dateRange: null,
     type: undefined,
     accountId: undefined,
     categoryId: undefined,
-  });
+    currency: localStorage.getItem('txFilterCurrency') || undefined,
+  }));
   const [viewDeleted, setViewDeleted] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
@@ -506,6 +509,15 @@ export default function TransactionsPage() {
     setFilters((prev) => ({ ...prev, accountId: value }));
   }, []);
 
+  const handleCurrencyChange = useCallback((value: string | undefined) => {
+    if (value) {
+      localStorage.setItem('txFilterCurrency', value);
+    } else {
+      localStorage.removeItem('txFilterCurrency');
+    }
+    setFilters((prev) => ({ ...prev, currency: value }));
+  }, []);
+
   const handleCategoryChange = useCallback((value: string | undefined) => {
     setFilters((prev) => ({ ...prev, categoryId: value }));
   }, []);
@@ -664,6 +676,7 @@ export default function TransactionsPage() {
   const isError = transactionsQuery.isError;
   const summary = summaryQuery.data;
   const accounts = accountsQuery.data ?? [];
+  const currencies = useMemo(() => [...new Set(accounts.map((a) => a.currency))].sort(), [accounts]);
   const isSaving = createMutation.isPending || updateMutation.isPending;
 
   return (
@@ -788,10 +801,15 @@ export default function TransactionsPage() {
                   />
                 </Col>
                 <Col span={24}>
+                  <Select style={{ width: '100%' }} placeholder="Moneda" value={filters.currency} onChange={handleCurrencyChange} allowClear
+                    options={currencies.map((c) => ({ label: c, value: c }))}
+                  />
+                </Col>
+                <Col span={24}>
                   <TreeSelect style={{ width: '100%' }} placeholder="Categoria" value={filters.categoryId} onChange={handleCategoryChange} allowClear treeData={categoryTree} loading={categoriesQuery.isLoading} treeDefaultExpandAll />
                 </Col>
                 <Col span={24}>
-                  <Button block onClick={() => setFilters({ dateRange: null, type: undefined, accountId: undefined, categoryId: undefined })}>
+                  <Button block onClick={() => { localStorage.removeItem('txFilterCurrency'); setFilters({ dateRange: null, type: undefined, accountId: undefined, categoryId: undefined, currency: undefined }); }}>
                     Limpiar
                   </Button>
                 </Col>
@@ -840,7 +858,17 @@ export default function TransactionsPage() {
                 }))}
               />
             </Col>
-            <Col xs={24} sm={12} md={5}>
+            <Col xs={24} sm={12} md={3}>
+              <Select
+                style={{ width: '100%' }}
+                placeholder="Moneda"
+                value={filters.currency}
+                onChange={handleCurrencyChange}
+                allowClear
+                options={currencies.map((c) => ({ label: c, value: c }))}
+              />
+            </Col>
+            <Col xs={24} sm={12} md={4}>
               <TreeSelect
                 style={{ width: '100%' }}
                 placeholder="Categoria"
@@ -852,17 +880,19 @@ export default function TransactionsPage() {
                 treeDefaultExpandAll
               />
             </Col>
-            <Col xs={24} md={3}>
+            <Col xs={24} md={2}>
               <Button
                 block
-                onClick={() =>
+                onClick={() => {
+                  localStorage.removeItem('txFilterCurrency');
                   setFilters({
                     dateRange: null,
                     type: undefined,
                     accountId: undefined,
                     categoryId: undefined,
-                  })
-                }
+                    currency: undefined,
+                  });
+                }}
               >
                 Limpiar
               </Button>

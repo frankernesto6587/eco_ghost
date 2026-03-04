@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ConfigProvider, App as AntApp } from 'antd';
 import { BrowserRouter } from 'react-router-dom';
@@ -21,6 +21,11 @@ const queryClient = new QueryClient({
 function App() {
   const isDark = useUIStore((s) => s.isDark);
   const themeConfig = useMemo(() => getAntdTheme(isDark), [isDark]);
+
+  useEffect(() => {
+    document.documentElement.style.background = isDark ? '#000000' : '#f5f5f5';
+    document.body.style.background = isDark ? '#000000' : '#f5f5f5';
+  }, [isDark]);
 
   return (
     <ErrorBoundary>

@@ -114,6 +114,7 @@ function flattenCategories(
       </span>
     ),
     value: cat.id,
+    name: cat.name,
     children: cat.children?.length ? flattenCategories(cat.children) : undefined,
   }));
 }
@@ -1125,6 +1126,11 @@ export default function TransactionsPage() {
               <TreeSelect
                 placeholder="Seleccionar categoria"
                 allowClear
+                showSearch
+                treeNodeFilterProp="label"
+                filterTreeNode={(input, node) =>
+                  String((node as any)?.name ?? '').toLowerCase().includes(input.toLowerCase())
+                }
                 treeData={categoryTree}
                 loading={categoriesQuery.isLoading}
                 treeDefaultExpandAll

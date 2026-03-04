@@ -270,7 +270,9 @@ export class TelegramService {
       return { ok: false, error: 'TELEGRAM_BOT_TOKEN not configured' };
     }
 
-    const webhookUrl = `${baseUrl.replace(/\/$/, '')}/api/v1/telegram/webhook`;
+    // Strip any trailing path — only keep protocol + host
+    const parsed = new URL(baseUrl);
+    const webhookUrl = `${parsed.origin}/api/v1/telegram/webhook`;
     const secret = this.config.get<string>('TELEGRAM_WEBHOOK_SECRET', '');
 
     const res = await fetch(`https://api.telegram.org/bot${this.botToken}/setWebhook`, {

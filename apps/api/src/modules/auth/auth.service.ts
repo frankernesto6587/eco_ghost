@@ -6,7 +6,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { AuthProvider, User } from '@prisma/client';
-import * as bcrypt from 'bcrypt';
+import * as bcrypt from 'bcryptjs';
 import slugify from 'slugify';
 import { v4 as uuidv4 } from 'uuid';
 import { DEFAULT_CATEGORIES } from '@ecoghost/shared';

@@ -55,6 +55,7 @@ const TYPE_COLORS: Record<TransactionType, string> = {
   [TransactionType.INCOME]: 'green',
   [TransactionType.EXPENSE]: 'red',
   [TransactionType.TRANSFER]: 'blue',
+  [TransactionType.EXCHANGE]: 'orange',
 };
 
 function RecentTransactionCard({ tx }: { tx: RecentTransaction }) {

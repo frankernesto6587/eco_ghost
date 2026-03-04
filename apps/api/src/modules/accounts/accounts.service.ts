@@ -34,10 +34,12 @@ export class AccountsService {
 
     const accountIds = accounts.map((a) => a.id);
 
-    // Single query: aggregate income/expense grouped by account + type
+    const baseWhere = { orgId, accountId: { in: accountIds }, deletedAt: null };
+
+    // Income/Expense grouped by account + type
     const balances = await this.prisma.transaction.groupBy({
       by: ['accountId', 'type'],
-      where: { orgId, accountId: { in: accountIds } },
+      where: baseWhere,
       _sum: { amount: true },
     });
 
@@ -51,6 +53,27 @@ export class AccountsService {
       } else if (row.type === 'EXPENSE') {
         balanceMap.set(row.accountId, current - amount);
       }
+      // TRANSFER/EXCHANGE handled below with linkedTransactionId distinction
+    }
+
+    // TRANSFER/EXCHANGE: incoming (no linkedTransactionId) grouped by account
+    const transferInRows = await this.prisma.transaction.groupBy({
+      by: ['accountId'],
+      where: { ...baseWhere, type: { in: ['TRANSFER', 'EXCHANGE'] }, linkedTransactionId: null },
+      _sum: { amount: true },
+    });
+    for (const row of transferInRows) {
+      balanceMap.set(row.accountId, (balanceMap.get(row.accountId) ?? 0) + (row._sum.amount ?? 0));
+    }
+
+    // TRANSFER/EXCHANGE: outgoing (has linkedTransactionId) grouped by account
+    const transferOutRows = await this.prisma.transaction.groupBy({
+      by: ['accountId'],
+      where: { ...baseWhere, type: { in: ['TRANSFER', 'EXCHANGE'] }, linkedTransactionId: { not: null } },
+      _sum: { amount: true },
+    });
+    for (const row of transferOutRows) {
+      balanceMap.set(row.accountId, (balanceMap.get(row.accountId) ?? 0) - (row._sum.amount ?? 0));
     }
 
     return accounts.map((account) => ({
@@ -110,19 +133,30 @@ export class AccountsService {
   }
 
   private async computeBalance(accountId: string, orgId: string): Promise<number> {
-    const income = await this.prisma.transaction.aggregate({
-      where: { accountId, orgId, type: 'INCOME' },
-      _sum: { amount: true },
-    });
+    const baseWhere = { accountId, orgId, deletedAt: null };
 
-    const expense = await this.prisma.transaction.aggregate({
-      where: { accountId, orgId, type: 'EXPENSE' },
-      _sum: { amount: true },
-    });
+    const [income, expense, transferIn, transferOut] = await Promise.all([
+      this.prisma.transaction.aggregate({
+        where: { ...baseWhere, type: 'INCOME' },
+        _sum: { amount: true },
+      }),
+      this.prisma.transaction.aggregate({
+        where: { ...baseWhere, type: 'EXPENSE' },
+        _sum: { amount: true },
+      }),
+      this.prisma.transaction.aggregate({
+        where: { ...baseWhere, type: { in: ['TRANSFER', 'EXCHANGE'] }, linkedTransactionId: null },
+        _sum: { amount: true },
+      }),
+      this.prisma.transaction.aggregate({
+        where: { ...baseWhere, type: { in: ['TRANSFER', 'EXCHANGE'] }, linkedTransactionId: { not: null } },
+        _sum: { amount: true },
+      }),
+    ]);
 
-    const totalIncome = income._sum.amount ?? 0;
-    const totalExpense = expense._sum.amount ?? 0;
-
-    return totalIncome - totalExpense;
+    return (income._sum.amount ?? 0)
+      - (expense._sum.amount ?? 0)
+      + (transferIn._sum.amount ?? 0)
+      - (transferOut._sum.amount ?? 0);
   }
 }

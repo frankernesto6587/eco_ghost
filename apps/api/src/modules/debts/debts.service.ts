@@ -204,7 +204,7 @@ export class DebtsService {
   private async computeBalance(accountId: string, orgId: string): Promise<number> {
     const rows = await this.prisma.transaction.groupBy({
       by: ['type'],
-      where: { accountId, orgId, type: { in: ['INCOME', 'EXPENSE'] } },
+      where: { accountId, orgId, type: { in: ['INCOME', 'EXPENSE'] }, deletedAt: null },
       _sum: { amount: true },
     });
     let balance = 0;

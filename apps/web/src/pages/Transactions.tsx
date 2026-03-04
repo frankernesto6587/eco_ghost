@@ -11,6 +11,7 @@ import {
   InputNumber,
   Modal,
   Row,
+  Segmented,
   Select,
   Space,
   Spin,
@@ -31,6 +32,7 @@ import {
   SwapOutlined,
   LoadingOutlined,
   FilterOutlined,
+  UndoOutlined,
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -75,6 +77,7 @@ interface TransactionFormValues {
   type: string;
   accountId: string;
   toAccountId?: string;
+  toAmount?: number;
   categoryId?: string;
   notes?: string;
 }
@@ -83,7 +86,7 @@ interface TransactionFormValues {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function buildParams(filters: Filters, cursor?: string): TransactionFilters {
+function buildParams(filters: Filters, cursor?: string, deleted?: boolean): TransactionFilters {
   const params: TransactionFilters = { limit: PAGE_SIZE };
   if (filters.type) params.type = filters.type;
   if (filters.accountId) params.accountId = filters.accountId;
@@ -93,6 +96,7 @@ function buildParams(filters: Filters, cursor?: string): TransactionFilters {
     params.to = filters.dateRange[1].endOf('day').toISOString();
   }
   if (cursor) params.cursor = cursor;
+  if (deleted) params.deleted = true;
   return params;
 }
 
@@ -120,6 +124,8 @@ function getTypeColor(type: string): string {
       return 'red';
     case 'TRANSFER':
       return 'blue';
+    case 'EXCHANGE':
+      return 'orange';
     default:
       return 'default';
   }
@@ -133,6 +139,8 @@ function getTypeLabel(type: string): string {
       return 'Gasto';
     case 'TRANSFER':
       return 'Transferencia';
+    case 'EXCHANGE':
+      return 'Cambio';
     default:
       return type;
   }
@@ -145,24 +153,29 @@ function getTypeLabel(type: string): string {
 function TransactionCard({
   transaction,
   canEdit,
+  isDeleted,
   onEdit,
   onDelete,
+  onRestore,
 }: {
   transaction: Transaction;
   canEdit: boolean;
+  isDeleted?: boolean;
   onEdit: (t: Transaction) => void;
   onDelete: (t: Transaction) => void;
+  onRestore?: (t: Transaction) => void;
 }) {
   const currency = transaction.account?.currency ?? 'USD';
-  const color = transaction.type === 'INCOME' ? '#52c41a' : transaction.type === 'EXPENSE' ? '#ff4d4f' : '#1677ff';
-  const prefix = transaction.type === 'INCOME' ? '+' : transaction.type === 'EXPENSE' ? '-' : '';
+  const isOutgoing = ['TRANSFER', 'EXCHANGE'].includes(transaction.type) && !!transaction.linkedTransactionId;
+  const color = transaction.type === 'INCOME' ? '#52c41a' : transaction.type === 'EXPENSE' || isOutgoing ? '#ff4d4f' : transaction.type === 'EXCHANGE' ? '#fa8c16' : '#1677ff';
+  const prefix = transaction.type === 'INCOME' ? '+' : transaction.type === 'EXPENSE' || isOutgoing ? '-' : '+';
 
   return (
     <Card
       size="small"
-      style={{ marginBottom: 8 }}
-      onClick={() => canEdit && onEdit(transaction)}
-      hoverable={canEdit}
+      style={{ marginBottom: 8, opacity: isDeleted ? 0.7 : 1 }}
+      onClick={() => !isDeleted && canEdit && onEdit(transaction)}
+      hoverable={!isDeleted && canEdit}
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -173,10 +186,18 @@ function TransactionCard({
             <Tag color={getTypeColor(transaction.type)}>{getTypeLabel(transaction.type)}</Tag>
             {transaction.category && <Tag>{transaction.category.name}</Tag>}
           </Space>
+          {isDeleted && transaction.deleteReason && (
+            <div style={{ marginTop: 4 }}>
+              <Text type="danger" style={{ fontSize: 12 }}>
+                Motivo: {transaction.deleteReason}
+              </Text>
+            </div>
+          )}
           <div style={{ marginTop: 4 }}>
             <Text type="secondary" style={{ fontSize: 12 }}>
               {formatDate(transaction.date)}
               {transaction.account && ` · ${transaction.account.name}`}
+              {isDeleted && transaction.deletedAt && ` · Eliminada: ${formatDate(transaction.deletedAt)}`}
             </Text>
           </div>
         </div>
@@ -184,7 +205,21 @@ function TransactionCard({
           <Text strong style={{ color, fontSize: 15 }}>
             {prefix}{formatCurrency(Math.abs(transaction.amount), currency)}
           </Text>
-          {canEdit && (
+          {isDeleted && onRestore ? (
+            <div style={{ marginTop: 4 }}>
+              <Button
+                type="text"
+                size="small"
+                icon={<UndoOutlined />}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onRestore(transaction);
+                }}
+              >
+                Restaurar
+              </Button>
+            </div>
+          ) : canEdit && !isDeleted ? (
             <div style={{ marginTop: 4 }}>
               <Button
                 type="text"
@@ -197,7 +232,7 @@ function TransactionCard({
                 }}
               />
             </div>
-          )}
+          ) : null}
         </div>
       </div>
     </Card>
@@ -212,6 +247,7 @@ export default function TransactionsPage() {
   const isMobile = useIsMobile();
   const [form] = Form.useForm<TransactionFormValues>();
   const watchedType = Form.useWatch('type', form);
+  const watchedAccountId = Form.useWatch('accountId', form);
 
   // ---- State ----
   const [filters, setFilters] = useState<Filters>({
@@ -220,6 +256,7 @@ export default function TransactionsPage() {
     accountId: undefined,
     categoryId: undefined,
   });
+  const [viewDeleted, setViewDeleted] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [allTransactions, setAllTransactions] = useState<Transaction[]>([]);
@@ -228,9 +265,9 @@ export default function TransactionsPage() {
 
   // ---- Data fetching ----
   const transactionsQuery = useQuery<TransactionListResponse>({
-    queryKey: ['transactions', filters],
+    queryKey: ['transactions', filters, viewDeleted],
     queryFn: async () => {
-      const params = buildParams(filters);
+      const params = buildParams(filters, undefined, viewDeleted);
       return transactionsService.getAll(params);
     },
   });
@@ -247,7 +284,7 @@ export default function TransactionsPage() {
   const loadMoreMutation = useMutation({
     mutationFn: async () => {
       if (!cursor) return null;
-      const params = buildParams(filters, cursor);
+      const params = buildParams(filters, cursor, viewDeleted);
       return transactionsService.getAll(params);
     },
     onSuccess: (result) => {
@@ -317,7 +354,8 @@ export default function TransactionsPage() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => transactionsService.remove(id),
+    mutationFn: ({ id, reason }: { id: string; reason: string }) =>
+      transactionsService.remove(id, reason),
     onSuccess: () => {
       message.success('Transaccion eliminada exitosamente');
       invalidateAll();
@@ -327,10 +365,23 @@ export default function TransactionsPage() {
     },
   });
 
+  const restoreMutation = useMutation({
+    mutationFn: (id: string) => transactionsService.restore(id),
+    onSuccess: () => {
+      message.success('Transaccion restaurada exitosamente');
+      invalidateAll();
+    },
+    onError: () => {
+      message.error('Error al restaurar la transaccion');
+    },
+  });
+
   // ---- Helpers ----
   const invalidateAll = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ['transactions'] });
     queryClient.invalidateQueries({ queryKey: ['transactions-summary'] });
+    queryClient.invalidateQueries({ queryKey: ['accounts'] });
+    queryClient.invalidateQueries({ queryKey: ['dashboard'] });
   }, [queryClient]);
 
   const closeModal = useCallback(() => {
@@ -368,16 +419,47 @@ export default function TransactionsPage() {
 
   const handleDelete = useCallback(
     (transaction: Transaction) => {
+      let deleteReason = '';
       modal.confirm({
         title: 'Eliminar transaccion',
-        content: `Estas seguro de que deseas eliminar "${transaction.description}"? Esta accion no se puede deshacer.`,
+        content: (
+          <div>
+            <p>{`Estas seguro de que deseas eliminar "${transaction.description}"?`}</p>
+            <TextArea
+              placeholder="Motivo de eliminacion (requerido)"
+              rows={3}
+              maxLength={500}
+              showCount
+              onChange={(e) => { deleteReason = e.target.value; }}
+            />
+          </div>
+        ),
         okText: t('common.delete'),
         okType: 'danger',
         cancelText: t('common.cancel'),
-        onOk: () => deleteMutation.mutateAsync(transaction.id),
+        onOk: () => {
+          if (!deleteReason.trim()) {
+            message.error('El motivo de eliminacion es requerido');
+            return Promise.reject();
+          }
+          return deleteMutation.mutateAsync({ id: transaction.id, reason: deleteReason.trim() });
+        },
       });
     },
-    [deleteMutation, t, modal],
+    [deleteMutation, t, modal, message],
+  );
+
+  const handleRestore = useCallback(
+    (transaction: Transaction) => {
+      modal.confirm({
+        title: 'Restaurar transaccion',
+        content: `Estas seguro de que deseas restaurar "${transaction.description}"?`,
+        okText: 'Restaurar',
+        cancelText: t('common.cancel'),
+        onOk: () => restoreMutation.mutateAsync(transaction.id),
+      });
+    },
+    [restoreMutation, t, modal],
   );
 
   const handleFormSubmit = useCallback(async () => {
@@ -391,7 +473,8 @@ export default function TransactionsPage() {
         accountId: values.accountId,
         categoryId: values.categoryId,
         notes: values.notes?.trim() || undefined,
-        ...(values.type === 'TRANSFER' && values.toAccountId ? { toAccountId: values.toAccountId } : {}),
+        ...((['TRANSFER', 'EXCHANGE'].includes(values.type) && values.toAccountId) ? { toAccountId: values.toAccountId } : {}),
+        ...(values.type === 'EXCHANGE' && values.toAmount ? { toAmount: Math.round(values.toAmount * 100) } : {}),
       };
 
       if (editingTransaction) {
@@ -451,11 +534,12 @@ export default function TransactionsPage() {
         align: 'right',
         render: (amount: number, record: Transaction) => {
           const currency = record.account?.currency ?? 'USD';
-          const color = record.type === 'INCOME' ? '#52c41a' : record.type === 'EXPENSE' ? '#ff4d4f' : '#1677ff';
+          const isOutgoing = ['TRANSFER', 'EXCHANGE'].includes(record.type) && !!record.linkedTransactionId;
+          const color = record.type === 'INCOME' ? '#52c41a' : record.type === 'EXPENSE' || isOutgoing ? '#ff4d4f' : record.type === 'EXCHANGE' ? '#fa8c16' : '#1677ff';
+          const prefix = record.type === 'INCOME' ? '+' : record.type === 'EXPENSE' || isOutgoing ? '-' : '+';
           return (
             <Text strong style={{ color }}>
-              {record.type === 'INCOME' ? '+' : record.type === 'EXPENSE' ? '-' : ''}
-              {formatCurrency(Math.abs(amount), currency)}
+              {prefix}{formatCurrency(Math.abs(amount), currency)}
             </Text>
           );
         },
@@ -467,7 +551,7 @@ export default function TransactionsPage() {
         width: 130,
         render: (type: string) => (
           <Tag color={getTypeColor(type)} icon={
-            type === 'INCOME' ? <ArrowUpOutlined /> : type === 'EXPENSE' ? <ArrowDownOutlined /> : <SwapOutlined />
+            type === 'INCOME' ? <ArrowUpOutlined /> : type === 'EXPENSE' ? <ArrowDownOutlined /> : type === 'EXCHANGE' ? <DollarOutlined /> : <SwapOutlined />
           }>
             {getTypeLabel(type)}
           </Tag>
@@ -491,42 +575,88 @@ export default function TransactionsPage() {
         render: (_: unknown, record: Transaction) =>
           record.account ? record.account.name : <Text type="secondary">--</Text>,
       },
-      ...(canManageOrg
+      ...(viewDeleted
         ? [
             {
-              title: 'Acciones',
-              key: 'actions',
-              width: 100,
-              align: 'center' as const,
+              title: 'Motivo',
+              key: 'deleteReason',
+              width: 200,
+              ellipsis: true,
               render: (_: unknown, record: Transaction) => (
-                <Space size="small">
-                  <Button
-                    type="text"
-                    size="small"
-                    icon={<EditOutlined />}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      openEditModal(record);
-                    }}
-                  />
-                  <Button
-                    type="text"
-                    size="small"
-                    danger
-                    icon={<DeleteOutlined />}
-                    loading={deleteMutation.isPending}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDelete(record);
-                    }}
-                  />
-                </Space>
+                <Text type="danger" style={{ fontSize: 12 }}>{record.deleteReason ?? '--'}</Text>
               ),
             },
+            {
+              title: 'Eliminada',
+              key: 'deletedAt',
+              width: 120,
+              render: (_: unknown, record: Transaction) => (
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  {record.deletedAt ? formatDate(record.deletedAt) : '--'}
+                </Text>
+              ),
+            },
+            ...(canManageOrg
+              ? [
+                  {
+                    title: 'Acciones',
+                    key: 'actions',
+                    width: 120,
+                    align: 'center' as const,
+                    render: (_: unknown, record: Transaction) => (
+                      <Button
+                        type="link"
+                        size="small"
+                        icon={<UndoOutlined />}
+                        loading={restoreMutation.isPending}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRestore(record);
+                        }}
+                      >
+                        Restaurar
+                      </Button>
+                    ),
+                  },
+                ]
+              : []),
           ]
-        : []),
+        : canManageOrg
+          ? [
+              {
+                title: 'Acciones',
+                key: 'actions',
+                width: 100,
+                align: 'center' as const,
+                render: (_: unknown, record: Transaction) => (
+                  <Space size="small">
+                    <Button
+                      type="text"
+                      size="small"
+                      icon={<EditOutlined />}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openEditModal(record);
+                      }}
+                    />
+                    <Button
+                      type="text"
+                      size="small"
+                      danger
+                      icon={<DeleteOutlined />}
+                      loading={deleteMutation.isPending}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDelete(record);
+                      }}
+                    />
+                  </Space>
+                ),
+              },
+            ]
+          : []),
     ],
-    [canManageOrg, openEditModal, handleDelete, deleteMutation.isPending],
+    [canManageOrg, viewDeleted, openEditModal, handleDelete, handleRestore, deleteMutation.isPending, restoreMutation.isPending],
   );
 
   // ---- Render ----
@@ -540,10 +670,22 @@ export default function TransactionsPage() {
     <div>
       {/* Page Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 8 }}>
-        <Title level={isMobile ? 3 : 2} style={{ margin: 0 }}>
-          {t('nav.transactions')}
-        </Title>
-        {canWrite && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+          <Title level={isMobile ? 3 : 2} style={{ margin: 0 }}>
+            {t('nav.transactions')}
+          </Title>
+          {canManageOrg && (
+            <Segmented
+              value={viewDeleted ? 'deleted' : 'active'}
+              onChange={(val) => setViewDeleted(val === 'deleted')}
+              options={[
+                { label: 'Activas', value: 'active' },
+                { label: 'Eliminadas', value: 'deleted' },
+              ]}
+            />
+          )}
+        </div>
+        {canWrite && !viewDeleted && (
           <Button type="primary" icon={<PlusOutlined />} onClick={openCreateModal}>
             {isMobile ? 'Nueva' : 'Nueva transaccion'}
           </Button>
@@ -551,7 +693,7 @@ export default function TransactionsPage() {
       </div>
 
       {/* Summary Cards */}
-      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+      {!viewDeleted && <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
         <Col xs={24} sm={8}>
           <Card loading={summaryQuery.isLoading}>
             <Statistic
@@ -614,7 +756,7 @@ export default function TransactionsPage() {
               ))}
           </Card>
         </Col>
-      </Row>
+      </Row>}
 
       {/* Filter Bar */}
       {isMobile ? (
@@ -637,7 +779,7 @@ export default function TransactionsPage() {
                 </Col>
                 <Col span={24}>
                   <Select style={{ width: '100%' }} placeholder="Tipo" value={filters.type} onChange={handleTypeChange} allowClear
-                    options={[{ label: 'Ingreso', value: 'INCOME' }, { label: 'Gasto', value: 'EXPENSE' }, { label: 'Transferencia', value: 'TRANSFER' }]}
+                    options={[{ label: 'Ingreso', value: 'INCOME' }, { label: 'Gasto', value: 'EXPENSE' }, { label: 'Transferencia', value: 'TRANSFER' }, { label: 'Cambio', value: 'EXCHANGE' }]}
                   />
                 </Col>
                 <Col span={24}>
@@ -680,6 +822,7 @@ export default function TransactionsPage() {
                   { label: 'Ingreso', value: 'INCOME' },
                   { label: 'Gasto', value: 'EXPENSE' },
                   { label: 'Transferencia', value: 'TRANSFER' },
+                  { label: 'Cambio', value: 'EXCHANGE' },
                 ]}
               />
             </Col>
@@ -747,15 +890,17 @@ export default function TransactionsPage() {
           isLoading ? (
             <div style={{ textAlign: 'center', padding: 24 }}><Spin /></div>
           ) : allTransactions.length === 0 ? (
-            <Text type="secondary">No hay transacciones</Text>
+            <Text type="secondary">{viewDeleted ? 'No hay transacciones eliminadas' : 'No hay transacciones'}</Text>
           ) : (
             allTransactions.map((tx) => (
               <TransactionCard
                 key={tx.id}
                 transaction={tx}
                 canEdit={canManageOrg}
+                isDeleted={viewDeleted}
                 onEdit={openEditModal}
                 onDelete={handleDelete}
+                onRestore={viewDeleted ? handleRestore : undefined}
               />
             ))
           )
@@ -768,12 +913,12 @@ export default function TransactionsPage() {
             pagination={false}
             scroll={{ x: 800 }}
             locale={{
-              emptyText: isLoading ? 'Cargando...' : 'No hay transacciones',
+              emptyText: isLoading ? 'Cargando...' : viewDeleted ? 'No hay transacciones eliminadas' : 'No hay transacciones',
             }}
             onRow={(record) => ({
-              style: { cursor: canManageOrg ? 'pointer' : 'default' },
+              style: { cursor: canManageOrg && !viewDeleted ? 'pointer' : 'default' },
               onClick: () => {
-                if (canManageOrg) {
+                if (canManageOrg && !viewDeleted) {
                   openEditModal(record);
                 }
               },
@@ -838,6 +983,7 @@ export default function TransactionsPage() {
                       { label: 'Ingreso', value: 'INCOME' },
                       { label: 'Gasto', value: 'EXPENSE' },
                       { label: 'Transferencia', value: 'TRANSFER' },
+                      { label: 'Cambio', value: 'EXCHANGE' },
                     ]}
                   />
                 </Form.Item>
@@ -888,8 +1034,9 @@ export default function TransactionsPage() {
                   <Select
                     placeholder="Seleccionar cuenta"
                     loading={accountsQuery.isLoading}
+                    onChange={() => form.setFieldValue('toAccountId', undefined)}
                     options={accounts.map((acc) => ({
-                      label: acc.name,
+                      label: `${acc.name} (${acc.currency})`,
                       value: acc.id,
                     }))}
                   />
@@ -897,23 +1044,51 @@ export default function TransactionsPage() {
               </Col>
             </Row>
 
-            {watchedType === 'TRANSFER' && (
-              <Form.Item
-                name="toAccountId"
-                label="Cuenta destino"
-                rules={[{ required: true, message: 'La cuenta destino es requerida' }]}
-              >
-                <Select
-                  placeholder="Seleccionar cuenta destino"
-                  loading={accountsQuery.isLoading}
-                  options={accounts
-                    .filter((acc) => acc.id !== form.getFieldValue('accountId'))
-                    .map((acc) => ({
-                      label: acc.name,
-                      value: acc.id,
-                    }))}
-                />
-              </Form.Item>
+            {(watchedType === 'TRANSFER' || watchedType === 'EXCHANGE') && (
+              <>
+                <Form.Item
+                  name="toAccountId"
+                  label="Cuenta destino"
+                  rules={[{ required: true, message: 'La cuenta destino es requerida' }]}
+                >
+                  <Select
+                    placeholder="Seleccionar cuenta destino"
+                    loading={accountsQuery.isLoading}
+                    options={accounts
+                      .filter((acc) => {
+                        if (acc.id === watchedAccountId) return false;
+                        if (watchedType === 'TRANSFER') {
+                          const srcAccount = accounts.find((a) => a.id === watchedAccountId);
+                          return srcAccount ? acc.currency === srcAccount.currency : true;
+                        }
+                        return true;
+                      })
+                      .map((acc) => ({
+                        label: `${acc.name} (${acc.currency})`,
+                        value: acc.id,
+                      }))}
+                  />
+                </Form.Item>
+                {watchedType === 'EXCHANGE' && (
+                  <Form.Item
+                    name="toAmount"
+                    label="Monto destino ($)"
+                    rules={[
+                      { required: true, message: 'El monto destino es requerido' },
+                      { type: 'number', min: 0.01, message: 'El monto debe ser mayor a 0' },
+                    ]}
+                  >
+                    <InputNumber
+                      style={{ width: '100%' }}
+                      placeholder="0.00"
+                      min={0.01}
+                      step={0.01}
+                      precision={2}
+                      prefix="$"
+                    />
+                  </Form.Item>
+                )}
+              </>
             )}
 
             <Form.Item name="categoryId" label="Categoria">

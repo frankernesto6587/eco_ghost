@@ -33,6 +33,7 @@ export enum TransactionType {
   INCOME = 'INCOME',
   EXPENSE = 'EXPENSE',
   TRANSFER = 'TRANSFER',
+  EXCHANGE = 'EXCHANGE',
 }
 
 /** Debt direction: RECEIVABLE = they owe me, PAYABLE = I owe them */

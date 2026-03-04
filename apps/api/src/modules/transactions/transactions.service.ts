@@ -88,6 +88,77 @@ export class TransactionsService {
       return result;
     }
 
+    // EXCHANGE requires destination account + destination amount
+    if (dto.type === 'EXCHANGE') {
+      if (!dto.toAccountId) {
+        throw new BadRequestException('toAccountId is required for EXCHANGE transactions');
+      }
+      if (!dto.toAmount) {
+        throw new BadRequestException('toAmount is required for EXCHANGE transactions');
+      }
+      if (dto.toAccountId === dto.accountId) {
+        throw new BadRequestException('Source and destination accounts must be different');
+      }
+
+      const [outgoing] = await this.prisma.$transaction(async (tx) => {
+        // 1. Incoming side (destination) with destination amount
+        const inc = await tx.transaction.create({
+          data: {
+            date: new Date(dto.date),
+            description: dto.description,
+            amount: dto.toAmount!,
+            type: 'EXCHANGE',
+            notes: dto.notes,
+            categoryId: dto.categoryId,
+            accountId: dto.toAccountId!,
+            projectId: dto.projectId,
+            orgId,
+            createdBy: userId,
+          },
+        });
+
+        // 2. Outgoing side (source) with source amount, linked to incoming
+        const out = await tx.transaction.create({
+          data: {
+            date: new Date(dto.date),
+            description: dto.description,
+            amount: dto.amount,
+            type: 'EXCHANGE',
+            notes: dto.notes,
+            categoryId: dto.categoryId,
+            accountId: dto.accountId,
+            projectId: dto.projectId,
+            linkedTransactionId: inc.id,
+            orgId,
+            createdBy: userId,
+          },
+        });
+
+        return [out, inc];
+      });
+
+      const result = await this.prisma.transaction.findUniqueOrThrow({
+        where: { id: outgoing.id },
+        include: {
+          category: true,
+          account: true,
+          project: true,
+          debt: true,
+          linkedTransaction: { include: { account: true } },
+        },
+      });
+
+      const [srcBalance, dstBalance] = await Promise.all([
+        this.computeBalance(dto.accountId, orgId),
+        this.computeBalance(dto.toAccountId!, orgId),
+      ]);
+      const dstAccount = result.linkedTransaction?.account;
+      const fmt = (n: number) => (n / 100).toFixed(2);
+      this.telegram.notify(orgId, `💱 *Cambio de divisa*\n${dto.description}\nOrigen: ${fmt(dto.amount)} ${result.account.currency} → ${result.account.name} (Saldo: ${fmt(srcBalance)} ${result.account.currency})\nDestino: ${fmt(dto.toAmount)} ${dstAccount?.currency ?? ''} → ${dstAccount?.name ?? '?'} (Saldo: ${fmt(dstBalance)} ${dstAccount?.currency ?? ''})`);
+
+      return result;
+    }
+
     // INCOME / EXPENSE — simple create
     const tx = await this.prisma.transaction.create({
       data: {
@@ -122,9 +193,12 @@ export class TransactionsService {
   }
 
   async findAll(orgId: string, query: TransactionQueryDto) {
-    const { from, to, type, categoryId, accountId, projectId, cursor, limit = 20 } = query;
+    const { from, to, type, categoryId, accountId, projectId, cursor, limit = 20, deleted } = query;
 
-    const where: Prisma.TransactionWhereInput = { orgId };
+    const where: Prisma.TransactionWhereInput = {
+      orgId,
+      deletedAt: deleted ? { not: null } : null,
+    };
 
     if (from || to) {
       where.date = {};
@@ -165,7 +239,7 @@ export class TransactionsService {
 
   async findOne(orgId: string, id: string) {
     const transaction = await this.prisma.transaction.findFirst({
-      where: { id, orgId },
+      where: { id, orgId, deletedAt: null },
       include: {
         category: true,
         account: true,
@@ -183,7 +257,7 @@ export class TransactionsService {
 
   async update(orgId: string, id: string, dto: UpdateTransactionDto) {
     const transaction = await this.prisma.transaction.findFirst({
-      where: { id, orgId },
+      where: { id, orgId, deletedAt: null },
     });
 
     if (!transaction) {
@@ -212,9 +286,9 @@ export class TransactionsService {
     });
   }
 
-  async remove(orgId: string, id: string) {
+  async remove(orgId: string, id: string, reason: string) {
     const transaction = await this.prisma.transaction.findFirst({
-      where: { id, orgId },
+      where: { id, orgId, deletedAt: null },
       include: { category: true, account: true },
     });
 
@@ -222,9 +296,53 @@ export class TransactionsService {
       throw new NotFoundException(`Transaction with id ${id} not found`);
     }
 
-    // If TRANSFER, delete both linked transactions
-    if (transaction.type === 'TRANSFER') {
-      // Find the paired transaction (could be via linkedTransactionId or linkedBy)
+    const now = new Date();
+
+    // If TRANSFER/EXCHANGE, soft-delete both linked transactions
+    if (['TRANSFER', 'EXCHANGE'].includes(transaction.type)) {
+      let pairedId = transaction.linkedTransactionId;
+      if (!pairedId) {
+        const linkedBy = await this.prisma.transaction.findFirst({
+          where: { linkedTransactionId: id, deletedAt: null },
+          select: { id: true },
+        });
+        pairedId = linkedBy?.id ?? null;
+      }
+
+      if (pairedId) {
+        await this.prisma.transaction.updateMany({
+          where: { id: { in: [id, pairedId] } },
+          data: { deletedAt: now, deleteReason: reason },
+        });
+        return transaction;
+      }
+    }
+
+    await this.prisma.transaction.update({
+      where: { id },
+      data: { deletedAt: now, deleteReason: reason },
+    });
+
+    const balance = await this.computeBalance(transaction.accountId, orgId);
+    const fmt = (n: number) => (n / 100).toFixed(2);
+    const catLine = transaction.category ? `\nCategoria: ${transaction.category.name}` : '';
+    this.telegram.notify(orgId, `🗑 *Transaccion eliminada*\n${transaction.description}\nMonto: ${fmt(transaction.amount)} ${transaction.account.currency}${catLine}\nCuenta: ${transaction.account.name} → Saldo: ${fmt(balance)} ${transaction.account.currency}\nMotivo: ${reason}`);
+
+    return transaction;
+  }
+
+  async restore(orgId: string, id: string) {
+    const transaction = await this.prisma.transaction.findFirst({
+      where: { id, orgId, deletedAt: { not: null } },
+      include: { account: true },
+    });
+
+    if (!transaction) {
+      throw new NotFoundException(`Transaction with id ${id} not found`);
+    }
+
+    // If TRANSFER/EXCHANGE, restore both linked transactions
+    if (['TRANSFER', 'EXCHANGE'].includes(transaction.type)) {
       let pairedId = transaction.linkedTransactionId;
       if (!pairedId) {
         const linkedBy = await this.prisma.transaction.findFirst({
@@ -235,34 +353,22 @@ export class TransactionsService {
       }
 
       if (pairedId) {
-        await this.prisma.$transaction(async (tx) => {
-          // Unlink to avoid FK constraint
-          await tx.transaction.updateMany({
-            where: { linkedTransactionId: { in: [id, pairedId] } },
-            data: { linkedTransactionId: null },
-          });
-          await tx.transaction.deleteMany({
-            where: { id: { in: [id, pairedId] } },
-          });
+        await this.prisma.transaction.updateMany({
+          where: { id: { in: [id, pairedId] } },
+          data: { deletedAt: null, deleteReason: null },
         });
         return transaction;
       }
     }
 
-    const deleted = await this.prisma.transaction.delete({
+    return this.prisma.transaction.update({
       where: { id },
+      data: { deletedAt: null, deleteReason: null },
     });
-
-    const balance = await this.computeBalance(transaction.accountId, orgId);
-    const fmt = (n: number) => (n / 100).toFixed(2);
-    const catLine = transaction.category ? `\nCategoria: ${transaction.category.name}` : '';
-    this.telegram.notify(orgId, `🗑 *Transaccion eliminada*\n${transaction.description}\nMonto: ${fmt(transaction.amount)} ${transaction.account.currency}${catLine}\nCuenta: ${transaction.account.name} → Saldo: ${fmt(balance)} ${transaction.account.currency}`);
-
-    return deleted;
   }
 
   async getSummary(orgId: string, query: TransactionQueryDto) {
-    const where: Prisma.TransactionWhereInput = { orgId };
+    const where: Prisma.TransactionWhereInput = { orgId, deletedAt: null };
 
     if (query.from || query.to) {
       where.date = {};
@@ -297,9 +403,11 @@ export class TransactionsService {
   }
 
   private async computeBalance(accountId: string, orgId: string): Promise<number> {
+    const baseWhere = { accountId, orgId, deletedAt: null };
+
     const rows = await this.prisma.transaction.groupBy({
       by: ['type'],
-      where: { accountId, orgId, type: { in: ['INCOME', 'EXPENSE'] } },
+      where: { ...baseWhere, type: { in: ['INCOME', 'EXPENSE'] } },
       _sum: { amount: true },
     });
     let balance = 0;
@@ -307,6 +415,20 @@ export class TransactionsService {
       const amount = row._sum.amount ?? 0;
       balance += row.type === 'INCOME' ? amount : -amount;
     }
+
+    // TRANSFER/EXCHANGE: incoming (no linkedTransactionId) adds, outgoing (has linkedTransactionId) subtracts
+    const [incoming, outgoing] = await Promise.all([
+      this.prisma.transaction.aggregate({
+        where: { ...baseWhere, type: { in: ['TRANSFER', 'EXCHANGE'] }, linkedTransactionId: null },
+        _sum: { amount: true },
+      }),
+      this.prisma.transaction.aggregate({
+        where: { ...baseWhere, type: { in: ['TRANSFER', 'EXCHANGE'] }, linkedTransactionId: { not: null } },
+        _sum: { amount: true },
+      }),
+    ]);
+    balance += (incoming._sum.amount ?? 0) - (outgoing._sum.amount ?? 0);
+
     return balance;
   }
 }

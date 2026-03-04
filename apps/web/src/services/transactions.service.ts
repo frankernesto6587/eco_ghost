@@ -8,6 +8,7 @@ export interface TransactionFilters {
   to?: string;
   cursor?: string;
   limit?: number;
+  deleted?: boolean;
 }
 
 export interface CreateTransactionDto {
@@ -18,6 +19,7 @@ export interface CreateTransactionDto {
   accountId: string;
   categoryId?: string;
   toAccountId?: string;
+  toAmount?: number;
   notes?: string;
 }
 
@@ -32,10 +34,13 @@ export interface Transaction {
   accountId: string;
   projectId: string | null;
   debtId: string | null;
+  linkedTransactionId: string | null;
   orgId: string;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
+  deletedAt: string | null;
+  deleteReason: string | null;
   category: { id: string; name: string; icon?: string; color?: string } | null;
   account: { id: string; name: string; currency: string; color?: string; icon?: string };
   project: unknown;
@@ -83,8 +88,13 @@ export const transactionsService = {
     return data;
   },
 
-  async remove(id: string): Promise<void> {
-    await api.delete(`/transactions/${id}`);
+  async remove(id: string, reason: string): Promise<void> {
+    await api.delete(`/transactions/${id}`, { data: { reason } });
+  },
+
+  async restore(id: string): Promise<Transaction> {
+    const { data } = await api.patch(`/transactions/${id}/restore`);
+    return data;
   },
 
   async getSummary(params?: TransactionSummaryParams): Promise<TransactionSummary> {

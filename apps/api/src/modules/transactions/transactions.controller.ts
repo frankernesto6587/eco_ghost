@@ -16,6 +16,7 @@ import {
   CreateTransactionDto,
   UpdateTransactionDto,
   TransactionQueryDto,
+  DeleteTransactionDto,
 } from './dto';
 import { CurrentUser, OrgId, Roles } from '../../common/decorators';
 import { RolesGuard } from '../../common/guards';
@@ -64,7 +65,17 @@ export class TransactionsController {
 
   @Delete(':id')
   @Roles(Role.OWNER)
-  remove(@OrgId() orgId: string, @Param('id') id: string) {
-    return this.transactionsService.remove(orgId, id);
+  remove(
+    @OrgId() orgId: string,
+    @Param('id') id: string,
+    @Body() dto: DeleteTransactionDto,
+  ) {
+    return this.transactionsService.remove(orgId, id, dto.reason);
+  }
+
+  @Patch(':id/restore')
+  @Roles(Role.OWNER)
+  restore(@OrgId() orgId: string, @Param('id') id: string) {
+    return this.transactionsService.restore(orgId, id);
   }
 }

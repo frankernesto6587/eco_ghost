@@ -54,8 +54,14 @@ export class CreateTransactionDto {
   @IsString()
   debtId?: string;
 
-  @ApiPropertyOptional({ example: 'clxyz111', description: 'Destination account for TRANSFER type' })
+  @ApiPropertyOptional({ example: 'clxyz111', description: 'Destination account for TRANSFER/EXCHANGE type' })
   @IsOptional()
   @IsString()
   toAccountId?: string;
+
+  @ApiPropertyOptional({ example: 360000, description: 'Destination amount in centavos (EXCHANGE only)' })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  toAmount?: number;
 }

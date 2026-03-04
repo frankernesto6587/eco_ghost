@@ -129,7 +129,7 @@ export class TelegramService {
 
     const balanceRows = await this.prisma.transaction.groupBy({
       by: ['accountId', 'type'],
-      where: { orgId: org.id, accountId: { in: accounts.map((a) => a.id) } },
+      where: { orgId: org.id, accountId: { in: accounts.map((a) => a.id) }, deletedAt: null },
       _sum: { amount: true },
     });
 
@@ -164,6 +164,7 @@ export class TelegramService {
         orgId: org.id,
         type: { in: ['INCOME', 'EXPENSE'] },
         date: { gte: startOfMonth, lte: endOfMonth },
+        deletedAt: null,
       },
       include: { account: { select: { currency: true } } },
     });

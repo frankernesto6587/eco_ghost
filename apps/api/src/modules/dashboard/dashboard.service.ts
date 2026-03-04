@@ -20,7 +20,7 @@ export class DashboardService {
     const accountIds = accounts.map((a) => a.id);
     const balanceRows = await this.prisma.transaction.groupBy({
       by: ['accountId', 'type'],
-      where: { orgId, accountId: { in: accountIds } },
+      where: { orgId, accountId: { in: accountIds }, deletedAt: null },
       _sum: { amount: true },
     });
 
@@ -42,6 +42,7 @@ export class DashboardService {
         orgId,
         type: { in: ['INCOME', 'EXPENSE'] },
         date: { gte: startOfMonth, lte: endOfMonth },
+        deletedAt: null,
       },
       include: { account: { select: { currency: true } } },
     });
@@ -93,7 +94,7 @@ export class DashboardService {
 
     // Recent transactions (last 10)
     const recentTransactions = await this.prisma.transaction.findMany({
-      where: { orgId },
+      where: { orgId, deletedAt: null },
       orderBy: { createdAt: 'desc' },
       take: 10,
       include: {
@@ -109,6 +110,7 @@ export class DashboardService {
         orgId,
         type: { in: ['INCOME', 'EXPENSE'] },
         date: { gte: sixMonthsAgo, lte: endOfMonth },
+        deletedAt: null,
       },
       select: { date: true, amount: true, type: true },
     });

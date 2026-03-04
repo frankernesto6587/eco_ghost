@@ -27,7 +27,7 @@ export default function RegisterPage() {
         background: token.colorBgLayout,
       }}
     >
-      <Card style={{ width: 400, boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
+      <Card style={{ width: '100%', maxWidth: 400, margin: '0 16px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
         <Space direction="vertical" size="middle" style={{ width: '100%' }}>
           <div style={{ textAlign: 'center' }}>
             <Title level={3} style={{ marginBottom: 4 }}>

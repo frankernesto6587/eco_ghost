@@ -4,6 +4,7 @@ import {
   Button,
   Card,
   Col,
+  Collapse,
   DatePicker,
   Form,
   Input,
@@ -29,6 +30,7 @@ import {
   ArrowDownOutlined,
   SwapOutlined,
   LoadingOutlined,
+  FilterOutlined,
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -46,6 +48,7 @@ import { accountsService, type Account } from '@/services/accounts.service';
 import { categoriesService, type Category } from '@/services/categories.service';
 import { formatCurrency, formatDate } from '@/lib/formatters';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useIsMobile } from '@/hooks/useIsMobile';
 import CategoryIcon from '@/components/common/CategoryIcon';
 
 const { Title, Text } = Typography;
@@ -139,11 +142,74 @@ function getTypeLabel(type: string): string {
 // Component
 // ---------------------------------------------------------------------------
 
+function TransactionCard({
+  transaction,
+  canWrite,
+  onEdit,
+  onDelete,
+}: {
+  transaction: Transaction;
+  canWrite: boolean;
+  onEdit: (t: Transaction) => void;
+  onDelete: (t: Transaction) => void;
+}) {
+  const currency = transaction.account?.currency ?? 'USD';
+  const color = transaction.type === 'INCOME' ? '#52c41a' : transaction.type === 'EXPENSE' ? '#ff4d4f' : '#1677ff';
+  const prefix = transaction.type === 'INCOME' ? '+' : transaction.type === 'EXPENSE' ? '-' : '';
+
+  return (
+    <Card
+      size="small"
+      style={{ marginBottom: 8 }}
+      onClick={() => canWrite && onEdit(transaction)}
+      hoverable={canWrite}
+    >
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <Text strong ellipsis style={{ display: 'block', marginBottom: 4 }}>
+            {transaction.description}
+          </Text>
+          <Space size={4} wrap>
+            <Tag color={getTypeColor(transaction.type)}>{getTypeLabel(transaction.type)}</Tag>
+            {transaction.category && <Tag>{transaction.category.name}</Tag>}
+          </Space>
+          <div style={{ marginTop: 4 }}>
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              {formatDate(transaction.date)}
+              {transaction.account && ` · ${transaction.account.name}`}
+            </Text>
+          </div>
+        </div>
+        <div style={{ textAlign: 'right', marginLeft: 8, flexShrink: 0 }}>
+          <Text strong style={{ color, fontSize: 15 }}>
+            {prefix}{formatCurrency(Math.abs(transaction.amount), currency)}
+          </Text>
+          {canWrite && (
+            <div style={{ marginTop: 4 }}>
+              <Button
+                type="text"
+                size="small"
+                danger
+                icon={<DeleteOutlined />}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete(transaction);
+                }}
+              />
+            </div>
+          )}
+        </div>
+      </div>
+    </Card>
+  );
+}
+
 export default function TransactionsPage() {
   const { t } = useTranslation();
   const { message } = App.useApp();
   const queryClient = useQueryClient();
   const { canWrite } = usePermissions();
+  const isMobile = useIsMobile();
   const [form] = Form.useForm<TransactionFormValues>();
   const watchedType = Form.useWatch('type', form);
 
@@ -473,20 +539,16 @@ export default function TransactionsPage() {
   return (
     <div>
       {/* Page Header */}
-      <Row justify="space-between" align="middle" style={{ marginBottom: 24 }}>
-        <Col>
-          <Title level={2} style={{ margin: 0 }}>
-            {t('nav.transactions')}
-          </Title>
-        </Col>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 8 }}>
+        <Title level={isMobile ? 3 : 2} style={{ margin: 0 }}>
+          {t('nav.transactions')}
+        </Title>
         {canWrite && (
-          <Col>
-            <Button type="primary" icon={<PlusOutlined />} onClick={openCreateModal}>
-              Nueva transaccion
-            </Button>
-          </Col>
+          <Button type="primary" icon={<PlusOutlined />} onClick={openCreateModal}>
+            {isMobile ? 'Nueva' : 'Nueva transaccion'}
+          </Button>
         )}
-      </Row>
+      </div>
 
       {/* Summary Cards */}
       <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
@@ -555,77 +617,119 @@ export default function TransactionsPage() {
       </Row>
 
       {/* Filter Bar */}
-      <Card style={{ marginBottom: 24 }}>
-        <Row gutter={[12, 12]} align="middle">
-          <Col xs={24} sm={12} md={6}>
-            <RangePicker
-              style={{ width: '100%' }}
-              placeholder={['Fecha inicio', 'Fecha fin']}
-              value={filters.dateRange}
-              onChange={handleDateRangeChange}
-              allowClear
-            />
-          </Col>
-          <Col xs={24} sm={12} md={5}>
-            <Select
-              style={{ width: '100%' }}
-              placeholder="Tipo"
-              value={filters.type}
-              onChange={handleTypeChange}
-              allowClear
-              options={[
-                { label: 'Ingreso', value: 'INCOME' },
-                { label: 'Gasto', value: 'EXPENSE' },
-                { label: 'Transferencia', value: 'TRANSFER' },
-              ]}
-            />
-          </Col>
-          <Col xs={24} sm={12} md={5}>
-            <Select
-              style={{ width: '100%' }}
-              placeholder="Cuenta"
-              value={filters.accountId}
-              onChange={handleAccountChange}
-              allowClear
-              loading={accountsQuery.isLoading}
-              options={accounts.map((acc) => ({
-                label: acc.name,
-                value: acc.id,
-              }))}
-            />
-          </Col>
-          <Col xs={24} sm={12} md={5}>
-            <TreeSelect
-              style={{ width: '100%' }}
-              placeholder="Categoria"
-              value={filters.categoryId}
-              onChange={handleCategoryChange}
-              allowClear
-              treeData={categoryTree}
-              loading={categoriesQuery.isLoading}
-              treeDefaultExpandAll
-            />
-          </Col>
-          <Col xs={24} md={3}>
-            <Button
-              block
-              onClick={() =>
-                setFilters({
-                  dateRange: null,
-                  type: undefined,
-                  accountId: undefined,
-                  categoryId: undefined,
-                })
-              }
-            >
-              Limpiar
-            </Button>
-          </Col>
-        </Row>
-      </Card>
+      {isMobile ? (
+        <Collapse
+          ghost
+          style={{ marginBottom: 16 }}
+          items={[{
+            key: 'filters',
+            label: <Space><FilterOutlined />Filtros</Space>,
+            children: (
+              <Row gutter={[12, 12]}>
+                <Col span={24}>
+                  <RangePicker
+                    style={{ width: '100%' }}
+                    placeholder={['Fecha inicio', 'Fecha fin']}
+                    value={filters.dateRange}
+                    onChange={handleDateRangeChange}
+                    allowClear
+                  />
+                </Col>
+                <Col span={24}>
+                  <Select style={{ width: '100%' }} placeholder="Tipo" value={filters.type} onChange={handleTypeChange} allowClear
+                    options={[{ label: 'Ingreso', value: 'INCOME' }, { label: 'Gasto', value: 'EXPENSE' }, { label: 'Transferencia', value: 'TRANSFER' }]}
+                  />
+                </Col>
+                <Col span={24}>
+                  <Select style={{ width: '100%' }} placeholder="Cuenta" value={filters.accountId} onChange={handleAccountChange} allowClear loading={accountsQuery.isLoading}
+                    options={accounts.map((acc) => ({ label: acc.name, value: acc.id }))}
+                  />
+                </Col>
+                <Col span={24}>
+                  <TreeSelect style={{ width: '100%' }} placeholder="Categoria" value={filters.categoryId} onChange={handleCategoryChange} allowClear treeData={categoryTree} loading={categoriesQuery.isLoading} treeDefaultExpandAll />
+                </Col>
+                <Col span={24}>
+                  <Button block onClick={() => setFilters({ dateRange: null, type: undefined, accountId: undefined, categoryId: undefined })}>
+                    Limpiar
+                  </Button>
+                </Col>
+              </Row>
+            ),
+          }]}
+        />
+      ) : (
+        <Card style={{ marginBottom: 24 }}>
+          <Row gutter={[12, 12]} align="middle">
+            <Col xs={24} sm={12} md={6}>
+              <RangePicker
+                style={{ width: '100%' }}
+                placeholder={['Fecha inicio', 'Fecha fin']}
+                value={filters.dateRange}
+                onChange={handleDateRangeChange}
+                allowClear
+              />
+            </Col>
+            <Col xs={24} sm={12} md={5}>
+              <Select
+                style={{ width: '100%' }}
+                placeholder="Tipo"
+                value={filters.type}
+                onChange={handleTypeChange}
+                allowClear
+                options={[
+                  { label: 'Ingreso', value: 'INCOME' },
+                  { label: 'Gasto', value: 'EXPENSE' },
+                  { label: 'Transferencia', value: 'TRANSFER' },
+                ]}
+              />
+            </Col>
+            <Col xs={24} sm={12} md={5}>
+              <Select
+                style={{ width: '100%' }}
+                placeholder="Cuenta"
+                value={filters.accountId}
+                onChange={handleAccountChange}
+                allowClear
+                loading={accountsQuery.isLoading}
+                options={accounts.map((acc) => ({
+                  label: acc.name,
+                  value: acc.id,
+                }))}
+              />
+            </Col>
+            <Col xs={24} sm={12} md={5}>
+              <TreeSelect
+                style={{ width: '100%' }}
+                placeholder="Categoria"
+                value={filters.categoryId}
+                onChange={handleCategoryChange}
+                allowClear
+                treeData={categoryTree}
+                loading={categoriesQuery.isLoading}
+                treeDefaultExpandAll
+              />
+            </Col>
+            <Col xs={24} md={3}>
+              <Button
+                block
+                onClick={() =>
+                  setFilters({
+                    dateRange: null,
+                    type: undefined,
+                    accountId: undefined,
+                    categoryId: undefined,
+                  })
+                }
+              >
+                Limpiar
+              </Button>
+            </Col>
+          </Row>
+        </Card>
+      )}
 
-      {/* Transactions Table */}
-      <Card>
+      {/* Transactions Table / Cards */}
+      <Card bodyStyle={isMobile ? { padding: 12 } : undefined}>
         {isError && (
           <div style={{ textAlign: 'center', padding: 24 }}>
             <Text type="danger">Error al cargar las transacciones. Intente de nuevo.</Text>
@@ -639,25 +743,43 @@ export default function TransactionsPage() {
           </div>
         )}
 
-        <Table<Transaction>
-          dataSource={allTransactions}
-          columns={columns}
-          rowKey="id"
-          loading={isLoading}
-          pagination={false}
-          scroll={{ x: 800 }}
-          locale={{
-            emptyText: isLoading ? 'Cargando...' : 'No hay transacciones',
-          }}
-          onRow={(record) => ({
-            style: { cursor: 'pointer' },
-            onClick: () => {
-              if (canWrite) {
-                openEditModal(record);
-              }
-            },
-          })}
-        />
+        {isMobile ? (
+          isLoading ? (
+            <div style={{ textAlign: 'center', padding: 24 }}><Spin /></div>
+          ) : allTransactions.length === 0 ? (
+            <Text type="secondary">No hay transacciones</Text>
+          ) : (
+            allTransactions.map((tx) => (
+              <TransactionCard
+                key={tx.id}
+                transaction={tx}
+                canWrite={canWrite}
+                onEdit={openEditModal}
+                onDelete={handleDelete}
+              />
+            ))
+          )
+        ) : (
+          <Table<Transaction>
+            dataSource={allTransactions}
+            columns={columns}
+            rowKey="id"
+            loading={isLoading}
+            pagination={false}
+            scroll={{ x: 800 }}
+            locale={{
+              emptyText: isLoading ? 'Cargando...' : 'No hay transacciones',
+            }}
+            onRow={(record) => ({
+              style: { cursor: 'pointer' },
+              onClick: () => {
+                if (canWrite) {
+                  openEditModal(record);
+                }
+              },
+            })}
+          />
+        )}
 
         {/* Load More */}
         {hasMore && (
@@ -683,7 +805,7 @@ export default function TransactionsPage() {
         cancelText={t('common.cancel')}
         confirmLoading={isSaving}
         destroyOnClose
-        width={560}
+        width={isMobile ? '100%' : 560}
       >
         <Spin spinning={isSaving}>
           <Form
@@ -696,7 +818,7 @@ export default function TransactionsPage() {
             }}
           >
             <Row gutter={16}>
-              <Col span={12}>
+              <Col xs={24} sm={12}>
                 <Form.Item
                   name="date"
                   label="Fecha"
@@ -705,7 +827,7 @@ export default function TransactionsPage() {
                   <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" />
                 </Form.Item>
               </Col>
-              <Col span={12}>
+              <Col xs={24} sm={12}>
                 <Form.Item
                   name="type"
                   label="Tipo"
@@ -734,7 +856,7 @@ export default function TransactionsPage() {
             </Form.Item>
 
             <Row gutter={16}>
-              <Col span={12}>
+              <Col xs={24} sm={12}>
                 <Form.Item
                   name="amount"
                   label="Monto ($)"
@@ -757,7 +879,7 @@ export default function TransactionsPage() {
                   />
                 </Form.Item>
               </Col>
-              <Col span={12}>
+              <Col xs={24} sm={12}>
                 <Form.Item
                   name="accountId"
                   label="Cuenta"

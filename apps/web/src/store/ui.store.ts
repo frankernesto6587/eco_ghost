@@ -25,8 +25,10 @@ interface UIState {
   sidebarCollapsed: boolean;
   themeMode: ThemeMode;
   isDark: boolean;
+  isMobile: boolean;
   toggleSidebar: () => void;
   setThemeMode: (mode: ThemeMode) => void;
+  setIsMobile: (value: boolean) => void;
 }
 
 const initialMode = loadThemeMode();
@@ -35,6 +37,7 @@ export const useUIStore = create<UIState>((set) => ({
   sidebarCollapsed: false,
   themeMode: initialMode,
   isDark: resolveIsDark(initialMode),
+  isMobile: false,
 
   toggleSidebar: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
 
@@ -42,6 +45,8 @@ export const useUIStore = create<UIState>((set) => ({
     localStorage.setItem('ecoghost_theme', mode);
     set({ themeMode: mode, isDark: resolveIsDark(mode) });
   },
+
+  setIsMobile: (value) => set({ isMobile: value }),
 }));
 
 // Listen for system theme changes when mode is 'system'

@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import {
   Typography,
   Button,
+  Card,
   Table,
   Tag,
   Space,
@@ -35,6 +36,7 @@ import { debtsService, type CreateDebtDto, type AddPaymentDto } from '@/services
 import { accountsService } from '@/services/accounts.service';
 import type { Account } from '@/services/accounts.service';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useIsMobile } from '@/hooks/useIsMobile';
 import { formatCurrency, formatDate } from '@/lib/formatters';
 import { DebtType, DebtStatus } from '@ecoghost/shared';
 
@@ -87,9 +89,97 @@ const TYPE_CONFIG: Record<string, { color: string; label: string }> = {
   [DebtType.PAYABLE]: { color: 'red', label: 'Debo' },
 };
 
+function DebtCard({
+  debt,
+  canWrite,
+  onView,
+  onEdit,
+  onDelete,
+}: {
+  debt: Debt;
+  canWrite: boolean;
+  onView: (id: string) => void;
+  onEdit: (debt: Debt) => void;
+  onDelete: (id: string) => void;
+}) {
+  const remaining = debt.totalAmount - debt.paidAmount;
+  const statusCfg = STATUS_CONFIG[debt.status];
+  const typeCfg = TYPE_CONFIG[debt.type];
+
+  return (
+    <Card
+      size="small"
+      style={{ marginBottom: 8 }}
+      onClick={() => onView(debt.id)}
+      hoverable
+    >
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <Text strong ellipsis style={{ display: 'block', marginBottom: 4 }}>
+            {debt.personName}
+          </Text>
+          <Space size={4} wrap>
+            <Tag color={typeCfg?.color}>{typeCfg?.label ?? debt.type}</Tag>
+            <Tag color={statusCfg?.color}>{statusCfg?.label ?? debt.status}</Tag>
+          </Space>
+          {debt.dueDate && (
+            <div style={{ marginTop: 4 }}>
+              <Text
+                type={dayjs(debt.dueDate).isBefore(dayjs(), 'day') ? 'danger' : 'secondary'}
+                style={{ fontSize: 12 }}
+              >
+                Vence: {formatDate(debt.dueDate)}
+              </Text>
+            </div>
+          )}
+        </div>
+        <div style={{ textAlign: 'right', marginLeft: 8, flexShrink: 0 }}>
+          <Text strong style={{ fontSize: 14 }}>
+            {formatCurrency(debt.totalAmount, debt.currency)}
+          </Text>
+          {remaining > 0 && (
+            <div>
+              <Text type="warning" style={{ fontSize: 12 }}>
+                Resta: {formatCurrency(remaining, debt.currency)}
+              </Text>
+            </div>
+          )}
+          {canWrite && (
+            <Space size={4} style={{ marginTop: 4 }}>
+              <Button
+                type="text"
+                size="small"
+                icon={<EditOutlined />}
+                onClick={(e) => { e.stopPropagation(); onEdit(debt); }}
+              />
+              <Popconfirm
+                title="Eliminar deuda"
+                description="Esta accion no se puede deshacer."
+                onConfirm={() => onDelete(debt.id)}
+                okText="Eliminar"
+                cancelText="Cancelar"
+                okButtonProps={{ danger: true }}
+              >
+                <Button
+                  type="text"
+                  size="small"
+                  danger
+                  icon={<DeleteOutlined />}
+                  onClick={(e) => e.stopPropagation()}
+                />
+              </Popconfirm>
+            </Space>
+          )}
+        </div>
+      </div>
+    </Card>
+  );
+}
+
 export default function DebtsPage() {
   const { message } = App.useApp();
   const { canWrite } = usePermissions();
+  const isMobile = useIsMobile();
   const queryClient = useQueryClient();
 
   const [activeFilter, setActiveFilter] = useState<FilterTab>('ALL');
@@ -412,13 +502,13 @@ export default function DebtsPage() {
   return (
     <div>
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <Title level={2} style={{ margin: 0 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 8 }}>
+        <Title level={isMobile ? 3 : 2} style={{ margin: 0 }}>
           Deudas
         </Title>
         {canWrite && (
           <Button type="primary" icon={<PlusOutlined />} onClick={openCreateModal}>
-            Nueva Deuda
+            {isMobile ? 'Nueva' : 'Nueva Deuda'}
           </Button>
         )}
       </div>
@@ -436,27 +526,46 @@ export default function DebtsPage() {
         />
       </div>
 
-      {/* Debts table */}
-      <Table<Debt>
-        columns={columns}
-        dataSource={filteredDebts}
-        rowKey="id"
-        loading={isLoading}
-        pagination={{
-          pageSize: 20,
-          showSizeChanger: true,
-          showTotal: (total) => `${total} deudas`,
-        }}
-        locale={{
-          emptyText: (
-            <Empty
-              image={Empty.PRESENTED_IMAGE_SIMPLE}
-              description="No hay deudas registradas"
+      {/* Debts table / cards */}
+      {isMobile ? (
+        isLoading ? (
+          <div style={{ textAlign: 'center', padding: 24 }}><Spin /></div>
+        ) : filteredDebts.length === 0 ? (
+          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No hay deudas registradas" />
+        ) : (
+          filteredDebts.map((debt) => (
+            <DebtCard
+              key={debt.id}
+              debt={debt}
+              canWrite={canWrite}
+              onView={openDrawer}
+              onEdit={openEditModal}
+              onDelete={handleDelete}
             />
-          ),
-        }}
-        scroll={{ x: 800 }}
-      />
+          ))
+        )
+      ) : (
+        <Table<Debt>
+          columns={columns}
+          dataSource={filteredDebts}
+          rowKey="id"
+          loading={isLoading}
+          pagination={{
+            pageSize: 20,
+            showSizeChanger: true,
+            showTotal: (total) => `${total} deudas`,
+          }}
+          locale={{
+            emptyText: (
+              <Empty
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description="No hay deudas registradas"
+              />
+            ),
+          }}
+          scroll={{ x: 800 }}
+        />
+      )}
 
       {/* Create / Edit Debt Modal */}
       <Modal
@@ -555,7 +664,7 @@ export default function DebtsPage() {
         title="Detalle de deuda"
         open={drawerOpen}
         onClose={closeDrawer}
-        width={520}
+        width={isMobile ? '100%' : 520}
         destroyOnClose
       >
         {isLoadingDetail ? (

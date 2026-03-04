@@ -271,6 +271,7 @@ export default function OrganizationPage() {
       title: t('organization.memberEmail'),
       dataIndex: ['user', 'email'],
       key: 'email',
+      responsive: ['md'] as any,
     },
     {
       title: t('organization.memberRole'),
@@ -298,6 +299,7 @@ export default function OrganizationPage() {
       title: t('organization.memberJoined'),
       dataIndex: 'createdAt',
       key: 'createdAt',
+      responsive: ['md'] as any,
       render: (date: string) => formatDate(date),
     },
     ...(canManageMembers
@@ -337,6 +339,7 @@ export default function OrganizationPage() {
       rowKey="id"
       loading={membersLoading}
       pagination={false}
+      scroll={{ x: 600 }}
     />
   );
 

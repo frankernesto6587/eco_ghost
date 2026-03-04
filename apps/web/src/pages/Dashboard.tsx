@@ -23,8 +23,9 @@ import { TransactionType } from '@ecoghost/shared';
 import type { DashboardOverview } from '@ecoghost/shared';
 import { dashboardService } from '@/services/dashboard.service';
 import { formatCurrency, formatDate } from '@/lib/formatters';
+import { useIsMobile } from '@/hooks/useIsMobile';
 
-const { Title } = Typography;
+const { Title, Text } = Typography;
 
 /** Shape of a transaction coming from the API overview endpoint. */
 interface RecentTransaction {
@@ -56,8 +57,32 @@ const TYPE_COLORS: Record<TransactionType, string> = {
   [TransactionType.TRANSFER]: 'blue',
 };
 
+function RecentTransactionCard({ tx }: { tx: RecentTransaction }) {
+  const currency = tx.account?.currency ?? 'USD';
+  const color = tx.type === TransactionType.INCOME ? '#52c41a' : tx.type === TransactionType.EXPENSE ? '#ff4d4f' : '#1677ff';
+  const prefix = tx.type === TransactionType.INCOME ? '+' : '-';
+
+  return (
+    <Card size="small" style={{ marginBottom: 8 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <Text strong ellipsis style={{ display: 'block' }}>{tx.description}</Text>
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            {formatDate(tx.date)}
+            {tx.account && ` · ${tx.account.name}`}
+          </Text>
+        </div>
+        <Text strong style={{ color, marginLeft: 8, flexShrink: 0 }}>
+          {prefix}{formatCurrency(tx.amount, currency)}
+        </Text>
+      </div>
+    </Card>
+  );
+}
+
 export default function DashboardPage() {
   const { t } = useTranslation();
+  const isMobile = useIsMobile();
 
   const { data: overview, isLoading } = useQuery<DashboardOverview>({
     queryKey: ['dashboard', 'overview'],
@@ -193,7 +218,7 @@ export default function DashboardPage() {
 
   return (
     <div>
-      <Title level={2} style={{ marginBottom: 24 }}>
+      <Title level={isMobile ? 3 : 2} style={{ marginBottom: 24 }}>
         {t('dashboard.overview')}
       </Title>
 
@@ -307,7 +332,7 @@ export default function DashboardPage() {
         style={{ marginBottom: 24 }}
       >
         {chartData.length > 0 ? (
-          <Column {...chartConfig} height={300} />
+          <Column {...chartConfig} height={isMobile ? 200 : 300} />
         ) : (
           <div style={{ textAlign: 'center', padding: 40, color: '#8c8c8c' }}>
             {t('dashboard.noData')}
@@ -315,17 +340,27 @@ export default function DashboardPage() {
         )}
       </Card>
 
-      {/* ---- Recent Transactions Table ---- */}
+      {/* ---- Recent Transactions Table / Cards ---- */}
       <Card title={t('dashboard.recentTransactions')}>
-        <Table<RecentTransaction>
-          columns={columns}
-          dataSource={transactions.slice(0, 10)}
-          rowKey="id"
-          pagination={false}
-          size="middle"
-          scroll={{ x: 700 }}
-          locale={{ emptyText: t('dashboard.noData') }}
-        />
+        {isMobile ? (
+          transactions.length === 0 ? (
+            <Text type="secondary">{t('dashboard.noData')}</Text>
+          ) : (
+            transactions.slice(0, 10).map((tx) => (
+              <RecentTransactionCard key={tx.id} tx={tx} />
+            ))
+          )
+        ) : (
+          <Table<RecentTransaction>
+            columns={columns}
+            dataSource={transactions.slice(0, 10)}
+            rowKey="id"
+            pagination={false}
+            size="middle"
+            scroll={{ x: 700 }}
+            locale={{ emptyText: t('dashboard.noData') }}
+          />
+        )}
       </Card>
     </div>
   );

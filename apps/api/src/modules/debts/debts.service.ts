@@ -25,10 +25,9 @@ export class DebtsService {
       });
 
       // Create initial transaction linked to the debt.
-      // RECEIVABLE = someone owes us, so it's INCOME when they pay.
-      // PAYABLE = we owe someone, so it's EXPENSE when we pay.
-      // The initial transaction records the debt creation itself.
-      const transactionType = dto.type === 'RECEIVABLE' ? 'INCOME' : 'EXPENSE';
+      // RECEIVABLE = we lent money, so money goes OUT (EXPENSE).
+      // PAYABLE = we borrowed money, so money comes IN (INCOME).
+      const transactionType = dto.type === 'RECEIVABLE' ? 'EXPENSE' : 'INCOME';
 
       await tx.transaction.create({
         data: {

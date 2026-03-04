@@ -21,8 +21,12 @@ function processQueue(error: unknown, token: string | null = null): void {
   failedQueue = [];
 }
 
+const API_BASE = import.meta.env.VITE_API_URL
+  ? `${import.meta.env.VITE_API_URL}/api/v1`
+  : '/api/v1';
+
 export const api = axios.create({
-  baseURL: '/api/v1',
+  baseURL: API_BASE,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -86,7 +90,7 @@ api.interceptors.response.use(
     }
 
     try {
-      const { data } = await axios.post('/api/v1/auth/refresh', {
+      const { data } = await axios.post(`${API_BASE}/auth/refresh`, {
         refreshToken: tokens.refreshToken,
       });
 

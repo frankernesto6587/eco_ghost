@@ -538,6 +538,12 @@ export default function TransactionsPage() {
         dataIndex: 'description',
         key: 'description',
         ellipsis: true,
+        render: (_: string, record: Transaction) => (
+          <span>
+            {record.description}
+            {record.notes && <Text type="secondary" style={{ fontSize: 12 }}> ({record.notes})</Text>}
+          </span>
+        ),
       },
       {
         title: 'Monto',

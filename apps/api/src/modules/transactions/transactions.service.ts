@@ -83,7 +83,8 @@ export class TransactionsService {
       ]);
       const dstAccount = result.linkedTransaction?.account;
       const fmt = (n: number) => (n / 100).toFixed(2);
-      this.telegram.notify(orgId, `🔄 *Transferencia*\n${dto.description}\nMonto: ${fmt(dto.amount)} ${result.account.currency}\nDe: ${result.account.name} → Saldo: ${fmt(srcBalance)} ${result.account.currency}\nA: ${dstAccount?.name ?? '?'} → Saldo: ${fmt(dstBalance)} ${dstAccount?.currency ?? ''}`);
+      const noteLine = dto.notes ? `\nNota: ${dto.notes}` : '';
+      this.telegram.notify(orgId, `🔄 *Transferencia*\n${dto.description}\nMonto: ${fmt(dto.amount)} ${result.account.currency}\nDe: ${result.account.name} → Saldo: ${fmt(srcBalance)} ${result.account.currency}\nA: ${dstAccount?.name ?? '?'} → Saldo: ${fmt(dstBalance)} ${dstAccount?.currency ?? ''}${noteLine}`);
 
       return result;
     }
@@ -154,7 +155,8 @@ export class TransactionsService {
       ]);
       const dstAccount = result.linkedTransaction?.account;
       const fmt = (n: number) => (n / 100).toFixed(2);
-      this.telegram.notify(orgId, `💱 *Cambio de divisa*\n${dto.description}\nOrigen: ${fmt(dto.amount)} ${result.account.currency} → ${result.account.name} (Saldo: ${fmt(srcBalance)} ${result.account.currency})\nDestino: ${fmt(dto.toAmount)} ${dstAccount?.currency ?? ''} → ${dstAccount?.name ?? '?'} (Saldo: ${fmt(dstBalance)} ${dstAccount?.currency ?? ''})`);
+      const noteLine = dto.notes ? `\nNota: ${dto.notes}` : '';
+      this.telegram.notify(orgId, `💱 *Cambio de divisa*\n${dto.description}\nOrigen: ${fmt(dto.amount)} ${result.account.currency} → ${result.account.name} (Saldo: ${fmt(srcBalance)} ${result.account.currency})\nDestino: ${fmt(dto.toAmount)} ${dstAccount?.currency ?? ''} → ${dstAccount?.name ?? '?'} (Saldo: ${fmt(dstBalance)} ${dstAccount?.currency ?? ''})${noteLine}`);
 
       return result;
     }
@@ -187,7 +189,8 @@ export class TransactionsService {
     const balance = await this.computeBalance(dto.accountId, orgId);
     const fmt = (n: number) => (n / 100).toFixed(2);
     const catLine = tx.category ? `\nCategoria: ${tx.category.name}` : '';
-    this.telegram.notify(orgId, `${icon} *Nuevo ${label}*\n${dto.description}\nMonto: ${fmt(dto.amount)} ${tx.account.currency}${catLine}\nCuenta: ${tx.account.name} → Saldo: ${fmt(balance)} ${tx.account.currency}`);
+    const noteLine = dto.notes ? `\nNota: ${dto.notes}` : '';
+    this.telegram.notify(orgId, `${icon} *Nuevo ${label}*\n${dto.description}\nMonto: ${fmt(dto.amount)} ${tx.account.currency}${catLine}\nCuenta: ${tx.account.name} → Saldo: ${fmt(balance)} ${tx.account.currency}${noteLine}`);
 
     return tx;
   }

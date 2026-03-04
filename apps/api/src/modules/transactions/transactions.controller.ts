@@ -53,7 +53,7 @@ export class TransactionsController {
   }
 
   @Patch(':id')
-  @Roles(Role.OWNER, Role.ADMIN, Role.ACCOUNTANT)
+  @Roles(Role.OWNER)
   update(
     @OrgId() orgId: string,
     @Param('id') id: string,
@@ -63,7 +63,7 @@ export class TransactionsController {
   }
 
   @Delete(':id')
-  @Roles(Role.OWNER, Role.ADMIN, Role.ACCOUNTANT)
+  @Roles(Role.OWNER)
   remove(@OrgId() orgId: string, @Param('id') id: string) {
     return this.transactionsService.remove(orgId, id);
   }

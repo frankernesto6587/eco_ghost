@@ -144,12 +144,12 @@ function getTypeLabel(type: string): string {
 
 function TransactionCard({
   transaction,
-  canWrite,
+  canEdit,
   onEdit,
   onDelete,
 }: {
   transaction: Transaction;
-  canWrite: boolean;
+  canEdit: boolean;
   onEdit: (t: Transaction) => void;
   onDelete: (t: Transaction) => void;
 }) {
@@ -161,8 +161,8 @@ function TransactionCard({
     <Card
       size="small"
       style={{ marginBottom: 8 }}
-      onClick={() => canWrite && onEdit(transaction)}
-      hoverable={canWrite}
+      onClick={() => canEdit && onEdit(transaction)}
+      hoverable={canEdit}
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -184,7 +184,7 @@ function TransactionCard({
           <Text strong style={{ color, fontSize: 15 }}>
             {prefix}{formatCurrency(Math.abs(transaction.amount), currency)}
           </Text>
-          {canWrite && (
+          {canEdit && (
             <div style={{ marginTop: 4 }}>
               <Button
                 type="text"
@@ -208,7 +208,7 @@ export default function TransactionsPage() {
   const { t } = useTranslation();
   const { message } = App.useApp();
   const queryClient = useQueryClient();
-  const { canWrite } = usePermissions();
+  const { canWrite, canManageOrg } = usePermissions();
   const isMobile = useIsMobile();
   const [form] = Form.useForm<TransactionFormValues>();
   const watchedType = Form.useWatch('type', form);
@@ -491,7 +491,7 @@ export default function TransactionsPage() {
         render: (_: unknown, record: Transaction) =>
           record.account ? record.account.name : <Text type="secondary">--</Text>,
       },
-      ...(canWrite
+      ...(canManageOrg
         ? [
             {
               title: 'Acciones',
@@ -526,7 +526,7 @@ export default function TransactionsPage() {
           ]
         : []),
     ],
-    [canWrite, openEditModal, handleDelete, deleteMutation.isPending],
+    [canManageOrg, openEditModal, handleDelete, deleteMutation.isPending],
   );
 
   // ---- Render ----
@@ -753,7 +753,7 @@ export default function TransactionsPage() {
               <TransactionCard
                 key={tx.id}
                 transaction={tx}
-                canWrite={canWrite}
+                canEdit={canManageOrg}
                 onEdit={openEditModal}
                 onDelete={handleDelete}
               />
@@ -771,9 +771,9 @@ export default function TransactionsPage() {
               emptyText: isLoading ? 'Cargando...' : 'No hay transacciones',
             }}
             onRow={(record) => ({
-              style: { cursor: 'pointer' },
+              style: { cursor: canManageOrg ? 'pointer' : 'default' },
               onClick: () => {
-                if (canWrite) {
+                if (canManageOrg) {
                   openEditModal(record);
                 }
               },

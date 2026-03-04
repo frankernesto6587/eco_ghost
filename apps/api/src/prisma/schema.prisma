@@ -1,0 +1,315 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────
+
+enum AuthProvider {
+  LOCAL
+  GOOGLE
+  GITHUB
+}
+
+enum Role {
+  OWNER
+  ADMIN
+  ACCOUNTANT
+  VIEWER
+}
+
+enum Plan {
+  FREE
+  PRO
+  BUSINESS
+}
+
+enum AccountType {
+  CASH
+  BANK
+  DIGITAL
+  OTHER
+}
+
+enum TransactionType {
+  INCOME
+  EXPENSE
+  TRANSFER
+}
+
+enum DebtType {
+  RECEIVABLE
+  PAYABLE
+}
+
+enum DebtStatus {
+  PENDING
+  PARTIAL
+  PAID
+}
+
+enum ProjectStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+// ─── Auth & Users ────────────────────────────────────────────────────
+
+model User {
+  id           String       @id @default(cuid())
+  email        String       @unique
+  name         String
+  passwordHash String?
+  avatarUrl    String?
+  provider     AuthProvider @default(LOCAL)
+  providerId   String?
+  isVerified   Boolean      @default(false)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  memberships   OrgMember[]
+  refreshTokens RefreshToken[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+// ─── Organizations & Members ─────────────────────────────────────────
+
+model Organization {
+  id           String   @id @default(cuid())
+  name         String
+  slug         String   @unique
+  plan         Plan     @default(FREE)
+  baseCurrency String   @default("USD")
+  inviteToken    String   @unique @default(uuid())
+  telegramChatId BigInt?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  members       OrgMember[]
+  accounts      Account[]
+  transactions  Transaction[]
+  categories    Category[]
+  debts         Debt[]
+  projects      Project[]
+  cashCounts    CashCount[]
+  exchangeRates ExchangeRate[]
+  integrations  Integration[]
+  notifications Notification[]
+
+  @@map("organizations")
+}
+
+model OrgMember {
+  id       String   @id @default(cuid())
+  role     Role     @default(VIEWER)
+  joinedAt DateTime @default(now())
+
+  userId String
+  user   User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orgId  String
+  org    Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, orgId])
+  @@index([orgId])
+  @@index([userId])
+  @@map("org_members")
+}
+
+// ─── Financial Data ──────────────────────────────────────────────────
+
+model Account {
+  id       String      @id @default(cuid())
+  name     String
+  type     AccountType
+  currency String
+  icon     String?
+  isActive Boolean     @default(true)
+
+  orgId        String
+  org          Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+  cashCounts   CashCount[]
+
+  @@index([orgId])
+  @@map("accounts")
+}
+
+model Transaction {
+  id          String          @id @default(cuid())
+  date        DateTime
+  description String
+  amount      Int
+  type        TransactionType
+  notes       String?
+
+  categoryId String?
+  category   Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  accountId  String
+  account    Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  projectId  String?
+  project    Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  debtId     String?
+  debt       Debt?     @relation(fields: [debtId], references: [id], onDelete: SetNull)
+
+  linkedTransactionId String?      @unique
+  linkedTransaction   Transaction? @relation("TransferLink", fields: [linkedTransactionId], references: [id])
+  linkedBy            Transaction? @relation("TransferLink")
+
+  orgId     String
+  org       Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  createdBy String
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  @@index([orgId])
+  @@index([orgId, date])
+  @@index([orgId, accountId])
+  @@index([orgId, categoryId])
+  @@index([orgId, projectId])
+  @@index([orgId, debtId])
+  @@map("transactions")
+}
+
+model Category {
+  id       String  @id @default(cuid())
+  name     String
+  icon     String?
+  color    String?
+  parentId String?
+  parent   Category?  @relation("CategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children Category[] @relation("CategoryTree")
+
+  orgId        String
+  org          Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+
+  @@index([orgId])
+  @@index([orgId, parentId])
+  @@map("categories")
+}
+
+model Debt {
+  id          String     @id @default(cuid())
+  personName  String
+  description String
+  totalAmount Int
+  paidAmount  Int        @default(0)
+  type        DebtType
+  status      DebtStatus @default(PENDING)
+  dueDate     DateTime?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  orgId        String
+  org          Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+
+  @@index([orgId])
+  @@index([orgId, status])
+  @@map("debts")
+}
+
+model Project {
+  id          String        @id @default(cuid())
+  name        String
+  description String?
+  budget      Int
+  startDate   DateTime
+  endDate     DateTime?
+  status      ProjectStatus @default(ACTIVE)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  orgId        String
+  org          Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+
+  @@index([orgId])
+  @@map("projects")
+}
+
+model CashCount {
+  id            String   @id @default(cuid())
+  date          DateTime
+  denominations Json
+  countedTotal  Int
+  systemBalance Int
+  difference    Int
+  notes         String?
+  createdAt     DateTime @default(now())
+
+  accountId String
+  account   Account      @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  orgId     String
+  org       Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+  @@index([orgId, accountId])
+  @@map("cash_counts")
+}
+
+model ExchangeRate {
+  id           String   @id @default(cuid())
+  fromCurrency String
+  toCurrency   String
+  rate         Decimal  @db.Decimal(16, 6)
+  date         DateTime
+  source       String   @default("MANUAL")
+
+  orgId String
+  org   Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, fromCurrency, toCurrency, date])
+  @@index([orgId])
+  @@map("exchange_rates")
+}
+
+model Integration {
+  id       String  @id @default(cuid())
+  type     String
+  config   Json
+  isActive Boolean @default(true)
+
+  orgId String
+  org   Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+  @@map("integrations")
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  title     String
+  message   String
+  type      String
+  isRead    Boolean  @default(false)
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  userId String
+  orgId  String
+  org    Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, userId])
+  @@index([userId, isRead])
+  @@map("notifications")
+}

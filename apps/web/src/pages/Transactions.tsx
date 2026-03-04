@@ -206,7 +206,7 @@ function TransactionCard({
 
 export default function TransactionsPage() {
   const { t } = useTranslation();
-  const { message } = App.useApp();
+  const { message, modal } = App.useApp();
   const queryClient = useQueryClient();
   const { canWrite, canManageOrg } = usePermissions();
   const isMobile = useIsMobile();
@@ -368,7 +368,7 @@ export default function TransactionsPage() {
 
   const handleDelete = useCallback(
     (transaction: Transaction) => {
-      Modal.confirm({
+      modal.confirm({
         title: 'Eliminar transaccion',
         content: `Estas seguro de que deseas eliminar "${transaction.description}"? Esta accion no se puede deshacer.`,
         okText: t('common.delete'),
@@ -377,7 +377,7 @@ export default function TransactionsPage() {
         onOk: () => deleteMutation.mutateAsync(transaction.id),
       });
     },
-    [deleteMutation, t],
+    [deleteMutation, t, modal],
   );
 
   const handleFormSubmit = useCallback(async () => {

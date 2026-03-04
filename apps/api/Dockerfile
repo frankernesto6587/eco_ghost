@@ -39,7 +39,7 @@ RUN npx tsc -p tsconfig.json
 # Generate Prisma client & build API
 WORKDIR /app/apps/api
 RUN npx prisma generate --schema=src/prisma/schema.prisma
-RUN npx nest build --webpack
+RUN npx nest build
 
 # ── Stage 3: Production ───────────────────────────────────────────
 FROM node:20-alpine AS production

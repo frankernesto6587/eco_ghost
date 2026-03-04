@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
+import { randomInt } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UpdateProfileDto, ChangePasswordDto } from './dto';
 
@@ -88,5 +89,38 @@ export class UsersService {
     });
 
     return { message: 'Contrasena actualizada' };
+  }
+
+  /** Generate a 6-digit code to link Telegram account (expires in 10 min) */
+  async generateTelegramLinkToken(userId: string) {
+    // Delete any existing tokens for this user
+    await this.prisma.telegramLinkToken.deleteMany({ where: { userId } });
+
+    const code = String(randomInt(100000, 999999));
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+    await this.prisma.telegramLinkToken.create({
+      data: { code, expiresAt, userId },
+    });
+
+    return { code, expiresAt };
+  }
+
+  /** Get current Telegram link status */
+  async getTelegramStatus(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { telegramId: true },
+    });
+    return { linked: !!user?.telegramId };
+  }
+
+  /** Unlink Telegram account */
+  async unlinkTelegram(userId: string) {
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { telegramId: null },
+    });
+    return { message: 'Telegram desvinculado' };
   }
 }

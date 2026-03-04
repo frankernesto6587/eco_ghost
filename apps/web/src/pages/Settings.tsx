@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   Typography,
   Card,
@@ -9,8 +9,10 @@ import {
   Space,
   Spin,
   Segmented,
+  Alert,
+  Tag,
 } from 'antd';
-import { UserOutlined, SunOutlined, MoonOutlined, DesktopOutlined, LockOutlined } from '@ant-design/icons';
+import { UserOutlined, SunOutlined, MoonOutlined, DesktopOutlined, LockOutlined, SendOutlined, CopyOutlined, DisconnectOutlined, CheckOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { App } from 'antd';
@@ -38,6 +40,20 @@ async function changePassword(payload: { currentPassword: string; newPassword: s
   return data;
 }
 
+async function getTelegramStatus(): Promise<{ linked: boolean }> {
+  const { data } = await api.get('/users/telegram-link');
+  return data;
+}
+
+async function generateTelegramLink(): Promise<{ code: string; expiresAt: string }> {
+  const { data } = await api.post('/users/telegram-link');
+  return data;
+}
+
+async function unlinkTelegram(): Promise<void> {
+  await api.delete('/users/telegram-link');
+}
+
 // ---------- Component ----------
 
 export default function SettingsPage() {
@@ -50,12 +66,19 @@ export default function SettingsPage() {
   const [passwordForm] = Form.useForm<{ currentPassword: string; newPassword: string; confirmPassword: string }>();
 
   const isOAuthUser = (storeUser as UserProfile & { provider?: string })?.provider !== 'LOCAL';
+  const [telegramCode, setTelegramCode] = useState<{ code: string; expiresAt: string } | null>(null);
+  const [copied, setCopied] = useState(false);
 
   // ---------- Queries ----------
 
   const { data: profile, isLoading } = useQuery<UserProfile>({
     queryKey: ['profile'],
     queryFn: fetchProfile,
+  });
+
+  const { data: telegramStatus, refetch: refetchTelegram } = useQuery({
+    queryKey: ['telegram-status'],
+    queryFn: getTelegramStatus,
   });
 
   const user = profile ?? storeUser;
@@ -87,6 +110,29 @@ export default function SettingsPage() {
     },
     onError: () => {
       message.error(t('settings.updateError'));
+    },
+  });
+
+  const telegramLinkMutation = useMutation({
+    mutationFn: generateTelegramLink,
+    onSuccess: (data) => {
+      setTelegramCode(data);
+      setCopied(false);
+    },
+    onError: () => {
+      message.error('Error al generar codigo');
+    },
+  });
+
+  const telegramUnlinkMutation = useMutation({
+    mutationFn: unlinkTelegram,
+    onSuccess: () => {
+      setTelegramCode(null);
+      refetchTelegram();
+      message.success('Telegram desvinculado');
+    },
+    onError: () => {
+      message.error('Error al desvincular');
     },
   });
 
@@ -202,6 +248,95 @@ export default function SettingsPage() {
             </Button>
           </Form.Item>
         </Form>
+      </Card>
+
+      {/* Telegram card */}
+      <Card
+        title={
+          <Space>
+            <SendOutlined />
+            Vincular Telegram
+          </Space>
+        }
+        style={{ maxWidth: 560, marginBottom: 24 }}
+      >
+        {telegramStatus?.linked ? (
+          <Space direction="vertical" style={{ width: '100%' }}>
+            <Space>
+              <Tag color="green">Vinculado</Tag>
+              <Text>Tu cuenta esta vinculada a Telegram</Text>
+            </Space>
+            <Button
+              danger
+              icon={<DisconnectOutlined />}
+              onClick={() => telegramUnlinkMutation.mutate()}
+              loading={telegramUnlinkMutation.isPending}
+            >
+              Desvincular
+            </Button>
+          </Space>
+        ) : (
+          <Space direction="vertical" style={{ width: '100%' }}>
+            <Text type="secondary">
+              Vincula tu cuenta para registrar gastos desde el grupo de Telegram.
+            </Text>
+            <Alert
+              type="info"
+              showIcon
+              message="Como vincular"
+              description={
+                <ol style={{ paddingLeft: 20, margin: '8px 0 0' }}>
+                  <li>Genera un codigo aqui abajo</li>
+                  <li>Ve al grupo de Telegram conectado a tu organizacion</li>
+                  <li>Pega el codigo de 6 digitos en el grupo</li>
+                  <li>El bot confirmara la vinculacion</li>
+                </ol>
+              }
+            />
+            {telegramCode ? (
+              <Space direction="vertical" align="center" style={{ width: '100%', marginTop: 16 }}>
+                <Text type="secondary">Tu codigo (expira en 10 minutos):</Text>
+                <Space>
+                  <Text
+                    strong
+                    copyable={false}
+                    style={{ fontSize: 32, letterSpacing: 8, fontFamily: 'monospace' }}
+                  >
+                    {telegramCode.code}
+                  </Text>
+                  <Button
+                    icon={copied ? <CheckOutlined /> : <CopyOutlined />}
+                    type={copied ? 'default' : 'primary'}
+                    onClick={() => {
+                      navigator.clipboard.writeText(telegramCode.code);
+                      setCopied(true);
+                      message.success('Codigo copiado');
+                    }}
+                  >
+                    {copied ? 'Copiado' : 'Copiar'}
+                  </Button>
+                </Space>
+                <Button
+                  type="link"
+                  onClick={() => telegramLinkMutation.mutate()}
+                  loading={telegramLinkMutation.isPending}
+                >
+                  Generar nuevo codigo
+                </Button>
+              </Space>
+            ) : (
+              <Button
+                type="primary"
+                icon={<SendOutlined />}
+                onClick={() => telegramLinkMutation.mutate()}
+                loading={telegramLinkMutation.isPending}
+                style={{ marginTop: 12 }}
+              >
+                Generar codigo de vinculacion
+              </Button>
+            )}
+          </Space>
+        )}
       </Card>
 
       {/* Password card (only for LOCAL auth users) */}

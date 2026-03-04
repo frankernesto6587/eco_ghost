@@ -46,7 +46,7 @@ export class DebtsService {
       const balance = await this.computeBalance(dto.accountId, orgId);
       const fmt = (n: number) => (n / 100).toFixed(2);
       const cur = account?.currency ?? '';
-      this.telegram.notify(orgId, `📋 *Nueva deuda*\n${debt.personName}: ${dto.description}\nMonto: ${fmt(dto.totalAmount)} ${cur}\nTipo: ${dto.type === 'RECEIVABLE' ? 'Por cobrar' : 'Por pagar'}\nCuenta: ${account?.name ?? '?'} → Saldo: ${fmt(balance)} ${cur}`);
+      this.telegram.notify(orgId, `📋 *Nueva deuda*\n━━━━━━━━━━━━━━━━━━\n👤 Persona       : ${debt.personName}\n📋 Descripcion : ${dto.description}\n💰 Monto          : ${fmt(dto.totalAmount)} ${cur}\n🔖 Tipo              : ${dto.type === 'RECEIVABLE' ? 'Por cobrar' : 'Por pagar'}\n🏦 Cuenta        : ${account?.name ?? '?'}\n💵 Saldo           : ${fmt(balance)} ${cur}\n━━━━━━━━━━━━━━━━━━`);
 
       return debt;
     });
@@ -130,7 +130,7 @@ export class DebtsService {
       where: { id },
     });
 
-    this.telegram.notify(orgId, `🗑 *Deuda eliminada*\n${debt.personName}: ${debt.description}`);
+    this.telegram.notify(orgId, `🗑 *Deuda eliminada*\n━━━━━━━━━━━━━━━━━━\n👤 Persona       : ${debt.personName}\n📋 Descripcion : ${debt.description}\n━━━━━━━━━━━━━━━━━━`);
 
     return deleted;
   }
@@ -193,8 +193,8 @@ export class DebtsService {
       const balance = await this.computeBalance(dto.accountId, orgId);
       const fmt = (n: number) => (n / 100).toFixed(2);
       const cur = account?.currency ?? '';
-      const statusLabel = newStatus === 'PAID' ? ' ✅ Pagada completa' : '';
-      this.telegram.notify(orgId, `💰 *Pago registrado*\n${debt.personName}: ${debt.description}\nMonto: ${fmt(dto.amount)} ${cur}${statusLabel}\nPagado: ${fmt(newPaidAmount)} / ${fmt(debt.totalAmount)} ${cur}\nCuenta: ${account?.name ?? '?'} → Saldo: ${fmt(balance)} ${cur}`);
+      const statusLabel = newStatus === 'PAID' ? '\n✅ Estado         : Pagada completa' : '';
+      this.telegram.notify(orgId, `💰 *Pago registrado*\n━━━━━━━━━━━━━━━━━━\n👤 Persona       : ${debt.personName}\n📋 Descripcion : ${debt.description}\n💰 Monto          : ${fmt(dto.amount)} ${cur}\n📊 Pagado        : ${fmt(newPaidAmount)} / ${fmt(debt.totalAmount)} ${cur}${statusLabel}\n🏦 Cuenta        : ${account?.name ?? '?'}\n💵 Saldo           : ${fmt(balance)} ${cur}\n━━━━━━━━━━━━━━━━━━`);
 
       return transaction;
     });

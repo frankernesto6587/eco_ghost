@@ -83,8 +83,8 @@ export class TransactionsService {
       ]);
       const dstAccount = result.linkedTransaction?.account;
       const fmt = (n: number) => (n / 100).toFixed(2);
-      const noteLine = dto.notes ? `\nNota: ${dto.notes}` : '';
-      this.telegram.notify(orgId, `🔄 *Transferencia*\n${dto.description}\nMonto: ${fmt(dto.amount)} ${result.account.currency}\nDe: ${result.account.name} → Saldo: ${fmt(srcBalance)} ${result.account.currency}\nA: ${dstAccount?.name ?? '?'} → Saldo: ${fmt(dstBalance)} ${dstAccount?.currency ?? ''}${noteLine}`);
+      const noteLine = dto.notes ? `\n📝 Nota          : ${dto.notes}` : '';
+      this.telegram.notify(orgId, `🔄 *Transferencia*\n━━━━━━━━━━━━━━━━━━\n📋 Descripcion : ${dto.description}\n💰 Monto          : ${fmt(dto.amount)} ${result.account.currency}\n🏦 Origen         : ${result.account.name}\n💵 Saldo           : ${fmt(srcBalance)} ${result.account.currency}\n🏦 Destino       : ${dstAccount?.name ?? '?'}\n💵 Saldo           : ${fmt(dstBalance)} ${dstAccount?.currency ?? ''}${noteLine}\n━━━━━━━━━━━━━━━━━━`);
 
       return result;
     }
@@ -155,8 +155,8 @@ export class TransactionsService {
       ]);
       const dstAccount = result.linkedTransaction?.account;
       const fmt = (n: number) => (n / 100).toFixed(2);
-      const noteLine = dto.notes ? `\nNota: ${dto.notes}` : '';
-      this.telegram.notify(orgId, `💱 *Cambio de divisa*\n${dto.description}\nOrigen: ${fmt(dto.amount)} ${result.account.currency} → ${result.account.name} (Saldo: ${fmt(srcBalance)} ${result.account.currency})\nDestino: ${fmt(dto.toAmount)} ${dstAccount?.currency ?? ''} → ${dstAccount?.name ?? '?'} (Saldo: ${fmt(dstBalance)} ${dstAccount?.currency ?? ''})${noteLine}`);
+      const noteLine = dto.notes ? `\n📝 Nota          : ${dto.notes}` : '';
+      this.telegram.notify(orgId, `💱 *Cambio de divisa*\n━━━━━━━━━━━━━━━━━━\n📋 Descripcion : ${dto.description}\n🏦 Origen         : ${result.account.name}\n💰 Monto          : ${fmt(dto.amount)} ${result.account.currency}\n💵 Saldo           : ${fmt(srcBalance)} ${result.account.currency}\n🏦 Destino       : ${dstAccount?.name ?? '?'}\n💰 Monto          : ${fmt(dto.toAmount)} ${dstAccount?.currency ?? ''}\n💵 Saldo           : ${fmt(dstBalance)} ${dstAccount?.currency ?? ''}${noteLine}\n━━━━━━━━━━━━━━━━━━`);
 
       return result;
     }
@@ -188,9 +188,9 @@ export class TransactionsService {
     const label = dto.type === 'INCOME' ? 'Ingreso' : 'Gasto';
     const balance = await this.computeBalance(dto.accountId, orgId);
     const fmt = (n: number) => (n / 100).toFixed(2);
-    const catLine = tx.category ? `\nCategoria: ${tx.category.name}` : '';
-    const noteLine = dto.notes ? `\nNota: ${dto.notes}` : '';
-    this.telegram.notify(orgId, `${icon} *Nuevo ${label}*\n${dto.description}\nMonto: ${fmt(dto.amount)} ${tx.account.currency}${catLine}\nCuenta: ${tx.account.name} → Saldo: ${fmt(balance)} ${tx.account.currency}${noteLine}`);
+    const catLine = tx.category ? `\n📂 Categoria   : ${tx.category.name}` : '';
+    const noteLine = dto.notes ? `\n📝 Nota          : ${dto.notes}` : '';
+    this.telegram.notify(orgId, `${icon} *Nuevo ${label}*\n━━━━━━━━━━━━━━━━━━\n📋 Descripcion : ${dto.description}\n💰 Monto          : ${fmt(dto.amount)} ${tx.account.currency}${catLine}\n🏦 Cuenta        : ${tx.account.name}\n💵 Saldo           : ${fmt(balance)} ${tx.account.currency}${noteLine}\n━━━━━━━━━━━━━━━━━━`);
 
     return tx;
   }
@@ -329,8 +329,8 @@ export class TransactionsService {
 
     const balance = await this.computeBalance(transaction.accountId, orgId);
     const fmt = (n: number) => (n / 100).toFixed(2);
-    const catLine = transaction.category ? `\nCategoria: ${transaction.category.name}` : '';
-    this.telegram.notify(orgId, `🗑 *Transaccion eliminada*\n${transaction.description}\nMonto: ${fmt(transaction.amount)} ${transaction.account.currency}${catLine}\nCuenta: ${transaction.account.name} → Saldo: ${fmt(balance)} ${transaction.account.currency}\nMotivo: ${reason}`);
+    const catLine = transaction.category ? `\n📂 Categoria   : ${transaction.category.name}` : '';
+    this.telegram.notify(orgId, `🗑 *Transaccion eliminada*\n━━━━━━━━━━━━━━━━━━\n📋 Descripcion : ${transaction.description}\n💰 Monto          : ${fmt(transaction.amount)} ${transaction.account.currency}${catLine}\n🏦 Cuenta        : ${transaction.account.name}\n💵 Saldo           : ${fmt(balance)} ${transaction.account.currency}\n⚠️ Motivo        : ${reason}\n━━━━━━━━━━━━━━━━━━`);
 
     return transaction;
   }

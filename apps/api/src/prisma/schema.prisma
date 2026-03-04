@@ -73,8 +73,11 @@ model User {
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 
-  memberships   OrgMember[]
-  refreshTokens RefreshToken[]
+  telegramId BigInt? @unique
+
+  memberships        OrgMember[]
+  refreshTokens      RefreshToken[]
+  telegramLinkTokens TelegramLinkToken[]
 
   @@map("users")
 }
@@ -92,6 +95,19 @@ model RefreshToken {
   @@map("refresh_tokens")
 }
 
+model TelegramLinkToken {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([code])
+  @@map("telegram_link_tokens")
+}
+
 // ─── Organizations & Members ─────────────────────────────────────────
 
 model Organization {
@@ -101,8 +117,10 @@ model Organization {
   plan         Plan     @default(FREE)
   baseCurrency String   @default("USD")
   inviteToken    String   @unique @default(uuid())
-  telegramChatId BigInt?
-  createdAt      DateTime @default(now())
+  telegramChatId   BigInt?
+  defaultAccountId String?
+  defaultAccount   Account? @relation("DefaultAccount", fields: [defaultAccountId], references: [id], onDelete: SetNull)
+  createdAt        DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
   members       OrgMember[]
@@ -149,6 +167,7 @@ model Account {
   org          Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
   transactions Transaction[]
   cashCounts   CashCount[]
+  defaultForOrgs Organization[] @relation("DefaultAccount")
 
   @@index([orgId])
   @@map("accounts")
@@ -182,6 +201,7 @@ model Transaction {
   updatedAt    DateTime     @updatedAt
   deletedAt    DateTime?
   deleteReason String?
+  source       String?
 
   @@index([orgId])
   @@index([orgId, date])

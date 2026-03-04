@@ -1,4 +1,4 @@
-import { Controller, Get, Patch, Post, Body } from '@nestjs/common';
+import { Controller, Delete, Get, Patch, Post, Body } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { UpdateProfileDto, ChangePasswordDto } from './dto';
@@ -32,5 +32,23 @@ export class UsersController {
     @Body() dto: ChangePasswordDto,
   ) {
     return this.usersService.changePassword(userId, dto);
+  }
+
+  @Post('telegram-link')
+  @ApiOperation({ summary: 'Generate a 6-digit code to link Telegram account' })
+  generateTelegramLink(@CurrentUser('id') userId: string) {
+    return this.usersService.generateTelegramLinkToken(userId);
+  }
+
+  @Get('telegram-link')
+  @ApiOperation({ summary: 'Get Telegram link status' })
+  getTelegramStatus(@CurrentUser('id') userId: string) {
+    return this.usersService.getTelegramStatus(userId);
+  }
+
+  @Delete('telegram-link')
+  @ApiOperation({ summary: 'Unlink Telegram account' })
+  unlinkTelegram(@CurrentUser('id') userId: string) {
+    return this.usersService.unlinkTelegram(userId);
   }
 }

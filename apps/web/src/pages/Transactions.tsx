@@ -3,11 +3,11 @@ import {
   App,
   Button,
   DatePicker,
+  Drawer,
   Dropdown,
   Form,
   Input,
   InputNumber,
-  Modal,
   Select,
   Spin,
   TreeSelect,
@@ -1178,25 +1178,28 @@ export default function TransactionsPage() {
         )}
       </div>
 
-      {/* ═══════ CREATE / EDIT MODAL ═══════ */}
-      <Modal
-        title={null}
+      {/* ═══════ CREATE / EDIT DRAWER ═══════ */}
+      <Drawer
         open={modalOpen}
-        onCancel={closeFormModal}
-        onOk={handleFormSubmit}
-        okText={editingTransaction ? t('common.save') : t('common.create')}
-        cancelText={t('common.cancel')}
-        confirmLoading={isSaving}
+        onClose={closeFormModal}
+        width={isMobile ? '100%' : 480}
+        closable={false}
         destroyOnClose
-        width={isMobile ? '100%' : 560}
+        styles={{ body: { padding: 0, background: 'var(--eco-surface)', color: 'var(--eco-fg)' }, header: { display: 'none' } }}
       >
-        <div style={{ marginBottom: 18 }}>
-          <h2 style={{ fontSize: 17, fontWeight: 500, letterSpacing: '-0.01em', marginBottom: 14 }}>
+        {/* Drawer header */}
+        <div className={s.formDrawerHead}>
+          <h2 className={s.formDrawerTitle}>
             {editingTransaction ? 'Editar transaccion' : 'Nueva transaccion'}
           </h2>
+          <button className={s.formDrawerClose} onClick={closeFormModal} type="button">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 6l12 12M18 6 6 18" /></svg>
+          </button>
+        </div>
 
-          {/* Type tabs */}
-          {!editingTransaction && (
+        {/* Type tabs */}
+        {!editingTransaction && (
+          <div style={{ padding: '0 20px 12px' }}>
             <div className={s.typeTabs}>
               {(['INCOME', 'EXPENSE', 'TRANSFER', 'EXCHANGE'] as const).map((type) => (
                 <button
@@ -1211,163 +1214,174 @@ export default function TransactionsPage() {
                 </button>
               ))}
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
-        <Spin spinning={isSaving}>
-          <Form
-            form={form}
-            layout="vertical"
-            requiredMark="optional"
-            initialValues={{
-              date: dayjs(),
-              type: 'EXPENSE',
-            }}
-          >
-            {/* Hidden type field when using tabs */}
-            <Form.Item name="type" hidden>
-              <Input />
-            </Form.Item>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <Form.Item
-                name="amount"
-                label="Monto ($)"
-                rules={[
-                  { required: true, message: 'El monto es requerido' },
-                  { type: 'number', min: 0.01, message: 'El monto debe ser mayor a 0' },
-                ]}
-              >
-                <InputNumber
-                  style={{ width: '100%' }}
-                  placeholder="0.00"
-                  min={0.01}
-                  step={0.01}
-                  precision={2}
-                  prefix="$"
-                />
-              </Form.Item>
-              <Form.Item
-                name="date"
-                label="Fecha"
-                rules={[{ required: true, message: 'La fecha es requerida' }]}
-              >
-                <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" />
-              </Form.Item>
-            </div>
-
-            <Form.Item
-              name="description"
-              label="Descripcion"
-              rules={[
-                { required: true, message: 'La descripcion es requerida' },
-                { max: 255, message: 'Maximo 255 caracteres' },
-              ]}
+        <div style={{ padding: '0 20px 20px' }}>
+          <Spin spinning={isSaving}>
+            <Form
+              form={form}
+              layout="vertical"
+              requiredMark="optional"
+              initialValues={{
+                date: dayjs(),
+                type: 'EXPENSE',
+              }}
             >
-              <Input placeholder="Ej: Compra de supermercado" />
-            </Form.Item>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <Form.Item
-                name="accountId"
-                label={watchedType === 'INCOME' ? 'Cuenta destino' : 'Cuenta origen'}
-                rules={[{ required: true, message: 'La cuenta es requerida' }]}
-              >
-                <Select
-                  placeholder="Seleccionar cuenta"
-                  loading={accountsQuery.isLoading}
-                  onChange={() => form.setFieldValue('toAccountId', undefined)}
-                  options={accounts.map((acc) => ({
-                    label: `${acc.name} (${acc.currency})`,
-                    value: acc.id,
-                  }))}
-                />
+              <Form.Item name="type" hidden>
+                <Input />
               </Form.Item>
-              <Form.Item name="categoryId" label="Categoria">
-                <TreeSelect
-                  placeholder="Seleccionar"
-                  allowClear
-                  showSearch
-                  treeNodeFilterProp="label"
-                  filterTreeNode={(input, node) =>
-                    String((node as any)?.name ?? '').toLowerCase().includes(input.toLowerCase())
-                  }
-                  treeData={categoryTree}
-                  loading={categoriesQuery.isLoading}
-                  treeDefaultExpandAll
-                />
-              </Form.Item>
-            </div>
 
-            {(watchedType === 'TRANSFER' || watchedType === 'EXCHANGE') && (
-              <>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <Form.Item
-                  name="toAccountId"
-                  label="Cuenta destino"
-                  rules={[{ required: true, message: 'La cuenta destino es requerida' }]}
+                  name="amount"
+                  label="Monto ($)"
+                  rules={[
+                    { required: true, message: 'El monto es requerido' },
+                    { type: 'number', min: 0.01, message: 'El monto debe ser mayor a 0' },
+                  ]}
                 >
-                  <Select
-                    placeholder="Seleccionar cuenta destino"
-                    loading={accountsQuery.isLoading}
-                    options={accounts
-                      .filter((acc) => {
-                        if (acc.id === watchedAccountId) return false;
-                        if (watchedType === 'TRANSFER') {
-                          const srcAccount = accounts.find((a) => a.id === watchedAccountId);
-                          return srcAccount ? acc.currency === srcAccount.currency : true;
-                        }
-                        return true;
-                      })
-                      .map((acc) => ({
-                        label: `${acc.name} (${acc.currency})`,
-                        value: acc.id,
-                      }))}
+                  <InputNumber
+                    style={{ width: '100%' }}
+                    placeholder="0.00"
+                    min={0.01}
+                    step={0.01}
+                    precision={2}
+                    prefix="$"
                   />
                 </Form.Item>
-                {watchedType === 'EXCHANGE' && (
+                <Form.Item
+                  name="date"
+                  label="Fecha"
+                  rules={[{ required: true, message: 'La fecha es requerida' }]}
+                >
+                  <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" />
+                </Form.Item>
+              </div>
+
+              <Form.Item
+                name="description"
+                label="Descripcion"
+                rules={[
+                  { required: true, message: 'La descripcion es requerida' },
+                  { max: 255, message: 'Maximo 255 caracteres' },
+                ]}
+              >
+                <Input placeholder="Ej: Compra de supermercado" />
+              </Form.Item>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <Form.Item
+                  name="accountId"
+                  label={watchedType === 'INCOME' ? 'Cuenta destino' : 'Cuenta origen'}
+                  rules={[{ required: true, message: 'La cuenta es requerida' }]}
+                >
+                  <Select
+                    placeholder="Seleccionar cuenta"
+                    loading={accountsQuery.isLoading}
+                    onChange={() => form.setFieldValue('toAccountId', undefined)}
+                    options={accounts.map((acc) => ({
+                      label: `${acc.name} (${acc.currency})`,
+                      value: acc.id,
+                    }))}
+                  />
+                </Form.Item>
+                <Form.Item name="categoryId" label="Categoria">
+                  <TreeSelect
+                    placeholder="Seleccionar"
+                    allowClear
+                    showSearch
+                    treeNodeFilterProp="label"
+                    filterTreeNode={(input, node) =>
+                      String((node as any)?.name ?? '').toLowerCase().includes(input.toLowerCase())
+                    }
+                    treeData={categoryTree}
+                    loading={categoriesQuery.isLoading}
+                    treeDefaultExpandAll
+                  />
+                </Form.Item>
+              </div>
+
+              {(watchedType === 'TRANSFER' || watchedType === 'EXCHANGE') && (
+                <>
                   <Form.Item
-                    name="toAmount"
-                    label="Monto destino ($)"
-                    rules={[
-                      { required: true, message: 'El monto destino es requerido' },
-                      { type: 'number', min: 0.01, message: 'El monto debe ser mayor a 0' },
-                    ]}
+                    name="toAccountId"
+                    label="Cuenta destino"
+                    rules={[{ required: true, message: 'La cuenta destino es requerida' }]}
                   >
-                    <InputNumber
-                      style={{ width: '100%' }}
-                      placeholder="0.00"
-                      min={0.01}
-                      step={0.01}
-                      precision={2}
-                      prefix="$"
+                    <Select
+                      placeholder="Seleccionar cuenta destino"
+                      loading={accountsQuery.isLoading}
+                      options={accounts
+                        .filter((acc) => {
+                          if (acc.id === watchedAccountId) return false;
+                          if (watchedType === 'TRANSFER') {
+                            const srcAccount = accounts.find((a) => a.id === watchedAccountId);
+                            return srcAccount ? acc.currency === srcAccount.currency : true;
+                          }
+                          return true;
+                        })
+                        .map((acc) => ({
+                          label: `${acc.name} (${acc.currency})`,
+                          value: acc.id,
+                        }))}
                     />
                   </Form.Item>
-                )}
-              </>
-            )}
+                  {watchedType === 'EXCHANGE' && (
+                    <Form.Item
+                      name="toAmount"
+                      label="Monto destino ($)"
+                      rules={[
+                        { required: true, message: 'El monto destino es requerido' },
+                        { type: 'number', min: 0.01, message: 'El monto debe ser mayor a 0' },
+                      ]}
+                    >
+                      <InputNumber
+                        style={{ width: '100%' }}
+                        placeholder="0.00"
+                        min={0.01}
+                        step={0.01}
+                        precision={2}
+                        prefix="$"
+                      />
+                    </Form.Item>
+                  )}
+                </>
+              )}
 
-            <Form.Item name="notes" label="Notas">
-              <TextArea
-                rows={2}
-                placeholder="Notas adicionales (opcional)"
-                maxLength={500}
-                showCount
-              />
-            </Form.Item>
-
-            {!editingTransaction && (
-              <label className={s.saveAnother}>
-                <input
-                  type="checkbox"
-                  checked={saveAnother}
-                  onChange={(e) => setSaveAnother(e.target.checked)}
+              <Form.Item name="notes" label="Notas">
+                <TextArea
+                  rows={2}
+                  placeholder="Notas adicionales (opcional)"
+                  maxLength={500}
+                  showCount
                 />
-                Guardar y crear otra
-              </label>
-            )}
-          </Form>
-        </Spin>
-      </Modal>
+              </Form.Item>
+
+              {!editingTransaction && (
+                <label className={s.saveAnother}>
+                  <input
+                    type="checkbox"
+                    checked={saveAnother}
+                    onChange={(e) => setSaveAnother(e.target.checked)}
+                  />
+                  Guardar y crear otra
+                </label>
+              )}
+            </Form>
+          </Spin>
+        </div>
+
+        {/* Footer actions */}
+        <div className={s.formDrawerFoot}>
+          <Button onClick={closeFormModal}>
+            {t('common.cancel')}
+          </Button>
+          <Button type="primary" onClick={handleFormSubmit} loading={isSaving}>
+            {editingTransaction ? t('common.save') : t('common.create')}
+          </Button>
+        </div>
+      </Drawer>
 
       {/* ═══════ DETAIL DRAWER ═══════ */}
       <TransactionDrawer

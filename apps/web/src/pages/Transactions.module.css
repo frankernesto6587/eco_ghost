@@ -776,6 +776,57 @@
   color: var(--eco-fg);
 }
 
+/* ═══════ FORM DRAWER ═══════ */
+.formDrawerHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--eco-line-soft);
+  background: var(--eco-surface2);
+}
+
+.formDrawerTitle {
+  font-size: 16px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--eco-fg);
+  margin: 0;
+}
+
+.formDrawerClose {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  border: 1px solid var(--eco-line);
+  background: var(--eco-surface);
+  color: var(--eco-fg3);
+  cursor: pointer;
+  transition: all 0.12s;
+  flex-shrink: 0;
+}
+
+.formDrawerClose:hover {
+  background: var(--eco-surface3);
+  color: var(--eco-fg);
+  border-color: var(--eco-fg4);
+}
+
+.formDrawerFoot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 16px 20px;
+  border-top: 1px dashed var(--eco-line);
+  background: var(--eco-surface);
+  position: sticky;
+  bottom: 0;
+}
+
 /* ═══════ SAVE & CREATE ANOTHER ═══════ */
 .saveAnother {
   display: flex;

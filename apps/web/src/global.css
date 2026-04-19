@@ -38,3 +38,365 @@
   --eco-radius: 14px;
   --eco-radius-sm: 10px;
 }
+
+/* ═══════ Ant Design — Ember Dark Overrides ═══════ */
+
+/* Modal */
+.ant-modal .ant-modal-content {
+  background: var(--eco-surface) !important;
+  border: 1px solid var(--eco-line) !important;
+  border-radius: 14px !important;
+  color: var(--eco-fg) !important;
+  box-shadow: var(--eco-shadow2) !important;
+}
+
+.ant-modal .ant-modal-header {
+  background: transparent !important;
+  border-bottom: 1px solid var(--eco-line-soft) !important;
+}
+
+.ant-modal .ant-modal-title {
+  color: var(--eco-fg) !important;
+}
+
+.ant-modal .ant-modal-close {
+  color: var(--eco-fg3) !important;
+}
+
+.ant-modal .ant-modal-close:hover {
+  color: var(--eco-fg) !important;
+  background: var(--eco-surface2) !important;
+}
+
+.ant-modal .ant-modal-footer {
+  border-top: 1px solid var(--eco-line-soft) !important;
+}
+
+.ant-modal-mask {
+  background: oklch(0 0 0 / 0.65) !important;
+}
+
+/* Drawer */
+.ant-drawer .ant-drawer-content {
+  background: var(--eco-surface) !important;
+  color: var(--eco-fg) !important;
+}
+
+.ant-drawer .ant-drawer-header {
+  background: var(--eco-surface2) !important;
+  border-bottom: 1px solid var(--eco-line-soft) !important;
+}
+
+.ant-drawer .ant-drawer-title {
+  color: var(--eco-fg) !important;
+}
+
+.ant-drawer .ant-drawer-close {
+  color: var(--eco-fg3) !important;
+}
+
+.ant-drawer-mask {
+  background: oklch(0 0 0 / 0.55) !important;
+}
+
+/* Form labels & inputs */
+.ant-form-item .ant-form-item-label > label {
+  color: var(--eco-fg2) !important;
+  font-family: 'Geist Mono', monospace !important;
+  font-size: 11px !important;
+  letter-spacing: 0.06em !important;
+  text-transform: uppercase !important;
+}
+
+.ant-input,
+.ant-input-number,
+.ant-picker,
+.ant-select .ant-select-selector,
+.ant-input-number-input,
+.ant-tree-select .ant-select-selector {
+  background: var(--eco-surface2) !important;
+  border-color: var(--eco-line) !important;
+  color: var(--eco-fg) !important;
+  border-radius: 8px !important;
+}
+
+.ant-input:hover,
+.ant-input-number:hover,
+.ant-picker:hover,
+.ant-select:hover .ant-select-selector,
+.ant-tree-select:hover .ant-select-selector {
+  border-color: var(--eco-fg4) !important;
+}
+
+.ant-input:focus,
+.ant-input-focused,
+.ant-input-number:focus,
+.ant-input-number-focused,
+.ant-picker-focused,
+.ant-select-focused .ant-select-selector,
+.ant-tree-select-focused .ant-select-selector {
+  border-color: var(--eco-accent) !important;
+  box-shadow: 0 0 0 2px var(--eco-accent-soft) !important;
+}
+
+.ant-input::placeholder,
+.ant-input-number-input::placeholder {
+  color: var(--eco-fg4) !important;
+}
+
+.ant-input-number-handler-wrap {
+  background: var(--eco-surface3) !important;
+  border-color: var(--eco-line) !important;
+}
+
+.ant-input-number-handler {
+  border-color: var(--eco-line-soft) !important;
+  color: var(--eco-fg3) !important;
+}
+
+textarea.ant-input {
+  border-radius: 8px !important;
+}
+
+/* Select dropdown */
+.ant-select-dropdown,
+.ant-tree-select-dropdown {
+  background: var(--eco-surface) !important;
+  border: 1px solid var(--eco-line) !important;
+  border-radius: 10px !important;
+  box-shadow: var(--eco-shadow2) !important;
+}
+
+.ant-select-item {
+  color: var(--eco-fg) !important;
+}
+
+.ant-select-item-option-active:not(.ant-select-item-option-disabled) {
+  background: var(--eco-surface2) !important;
+}
+
+.ant-select-item-option-selected:not(.ant-select-item-option-disabled) {
+  background: var(--eco-accent-weak) !important;
+  color: var(--eco-accent) !important;
+}
+
+.ant-select-selection-item {
+  color: var(--eco-fg) !important;
+}
+
+.ant-select-arrow {
+  color: var(--eco-fg3) !important;
+}
+
+.ant-select-clear {
+  background: var(--eco-surface2) !important;
+  color: var(--eco-fg3) !important;
+}
+
+/* DatePicker */
+.ant-picker-dropdown {
+  background: transparent !important;
+}
+
+.ant-picker-panel-container {
+  background: var(--eco-surface) !important;
+  border: 1px solid var(--eco-line) !important;
+  border-radius: 10px !important;
+  box-shadow: var(--eco-shadow2) !important;
+}
+
+.ant-picker-header {
+  color: var(--eco-fg) !important;
+  border-bottom-color: var(--eco-line-soft) !important;
+}
+
+.ant-picker-header button {
+  color: var(--eco-fg3) !important;
+}
+
+.ant-picker-header button:hover {
+  color: var(--eco-fg) !important;
+}
+
+.ant-picker-content th {
+  color: var(--eco-fg3) !important;
+}
+
+.ant-picker-cell {
+  color: var(--eco-fg3) !important;
+}
+
+.ant-picker-cell-in-view {
+  color: var(--eco-fg) !important;
+}
+
+.ant-picker-cell:hover:not(.ant-picker-cell-selected) .ant-picker-cell-inner {
+  background: var(--eco-surface2) !important;
+}
+
+.ant-picker-cell-selected .ant-picker-cell-inner {
+  background: var(--eco-accent) !important;
+  color: oklch(0.15 0.01 80) !important;
+}
+
+.ant-picker-cell-today .ant-picker-cell-inner::before {
+  border-color: var(--eco-accent) !important;
+}
+
+.ant-picker-footer {
+  border-top-color: var(--eco-line-soft) !important;
+}
+
+.ant-picker-today-btn {
+  color: var(--eco-accent) !important;
+}
+
+.ant-picker-input > input {
+  color: var(--eco-fg) !important;
+}
+
+.ant-picker-suffix,
+.ant-picker-separator {
+  color: var(--eco-fg3) !important;
+}
+
+/* Popconfirm / Popover */
+.ant-popover .ant-popover-inner,
+.ant-popconfirm .ant-popover-inner {
+  background: var(--eco-surface) !important;
+  border: 1px solid var(--eco-line) !important;
+  border-radius: 10px !important;
+  box-shadow: var(--eco-shadow2) !important;
+  color: var(--eco-fg) !important;
+}
+
+.ant-popover .ant-popover-arrow::before,
+.ant-popconfirm .ant-popover-arrow::before {
+  background: var(--eco-surface) !important;
+}
+
+.ant-popover .ant-popover-arrow::after,
+.ant-popconfirm .ant-popover-arrow::after {
+  border-color: var(--eco-line) !important;
+}
+
+.ant-popconfirm-title {
+  color: var(--eco-fg) !important;
+}
+
+.ant-popconfirm-description {
+  color: var(--eco-fg2) !important;
+}
+
+/* Buttons */
+.ant-btn-primary {
+  background: var(--eco-accent) !important;
+  border-color: var(--eco-accent) !important;
+  color: oklch(0.15 0.01 80) !important;
+  font-weight: 500 !important;
+  border-radius: 8px !important;
+}
+
+.ant-btn-primary:hover {
+  opacity: 0.9 !important;
+}
+
+.ant-btn-default {
+  background: var(--eco-surface2) !important;
+  border-color: var(--eco-line) !important;
+  color: var(--eco-fg) !important;
+  border-radius: 8px !important;
+}
+
+.ant-btn-default:hover {
+  border-color: var(--eco-fg4) !important;
+  color: var(--eco-fg) !important;
+}
+
+.ant-btn-dangerous {
+  color: var(--eco-neg) !important;
+  border-color: color-mix(in oklab, var(--eco-neg) 40%, transparent) !important;
+}
+
+.ant-btn-dangerous:hover {
+  background: var(--eco-neg-soft) !important;
+  border-color: var(--eco-neg) !important;
+}
+
+/* Spin */
+.ant-spin .ant-spin-dot-item {
+  background: var(--eco-accent) !important;
+}
+
+/* Message */
+.ant-message .ant-message-notice-content {
+  background: var(--eco-surface) !important;
+  border: 1px solid var(--eco-line) !important;
+  box-shadow: var(--eco-shadow2) !important;
+  color: var(--eco-fg) !important;
+  border-radius: 10px !important;
+}
+
+/* Color picker */
+.ant-color-picker-trigger {
+  border-color: var(--eco-line) !important;
+  background: var(--eco-surface2) !important;
+}
+
+/* TreeSelect tree */
+.ant-tree .ant-tree-node-content-wrapper:hover {
+  background: var(--eco-surface2) !important;
+}
+
+.ant-tree .ant-tree-node-content-wrapper.ant-tree-node-selected {
+  background: var(--eco-accent-weak) !important;
+  color: var(--eco-accent) !important;
+}
+
+.ant-tree .ant-tree-title {
+  color: var(--eco-fg) !important;
+}
+
+.ant-tree .ant-tree-switcher {
+  color: var(--eco-fg3) !important;
+}
+
+/* Input character count */
+.ant-input-textarea-show-count::after,
+.ant-input-show-count-suffix {
+  color: var(--eco-fg4) !important;
+}
+
+/* Dropdown menu */
+.ant-dropdown .ant-dropdown-menu {
+  background: var(--eco-surface) !important;
+  border: 1px solid var(--eco-line) !important;
+  border-radius: 10px !important;
+  box-shadow: var(--eco-shadow2) !important;
+  padding: 4px !important;
+}
+
+.ant-dropdown .ant-dropdown-menu-item {
+  color: var(--eco-fg) !important;
+  border-radius: 6px !important;
+}
+
+.ant-dropdown .ant-dropdown-menu-item:hover {
+  background: var(--eco-surface2) !important;
+}
+
+.ant-dropdown .ant-dropdown-menu-item-selected {
+  background: var(--eco-accent-weak) !important;
+  color: var(--eco-accent) !important;
+}
+
+/* Tooltip */
+.ant-tooltip .ant-tooltip-inner {
+  background: var(--eco-surface3) !important;
+  color: var(--eco-fg) !important;
+  border-radius: 6px !important;
+}
+
+.ant-tooltip .ant-tooltip-arrow::before {
+  background: var(--eco-surface3) !important;
+}

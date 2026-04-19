@@ -332,8 +332,6 @@ export default function DashboardPage() {
   const totalBalance = overview?.totalBalance ?? {};
   const monthIncome = overview?.monthIncome ?? {};
   const monthExpense = overview?.monthExpense ?? {};
-  const pendingDebtsReceivable = overview?.pendingDebtsReceivable ?? {};
-  const pendingDebtsPayable = overview?.pendingDebtsPayable ?? {};
 
   // Per-currency flow data for donut charts
   const flowByCurrency = useMemo(() => {
@@ -581,35 +579,6 @@ export default function DashboardPage() {
           }) : <span style={{ color: 'var(--eco-fg3)', fontSize: 13 }}>Sin movimientos</span>}
         </article>
 
-        {/* Stat: Debts */}
-        <article className={s.statCard}>
-          <div className={s.cardLabel}>
-            <span className={s.cardDot} />
-            deudas abiertas
-          </div>
-          <div className={s.statNum}>
-            {Object.keys(pendingDebtsReceivable).length > 0 || Object.keys(pendingDebtsPayable).length > 0
-              ? <span style={{ fontSize: 20 }}>neto</span>
-              : <span style={{ color: 'var(--eco-fg3)' }}>—</span>
-            }
-          </div>
-          <div className={s.statNote}>
-            {Object.entries(pendingDebtsReceivable).map(([cur, amt]) => (
-              <span key={`r-${cur}`} style={{ color: 'var(--eco-pos)' }}>cobro {formatCurrency(amt, cur)}</span>
-            ))}
-            {Object.entries(pendingDebtsPayable).map(([cur, amt]) => (
-              <span key={`p-${cur}`} style={{ color: 'var(--eco-neg)' }}>pago {formatCurrency(amt, cur)}</span>
-            ))}
-          </div>
-          <div className={s.statBar}>
-            <div className={s.statBarFill} style={{ width: '62%' }} />
-          </div>
-          <div className={s.multiCur}>
-            {Object.entries(pendingDebtsReceivable).map(([cur, amt]) => (
-              <span key={cur}>{formatCurrency(amt, cur)} {cur.toLowerCase()}</span>
-            ))}
-          </div>
-        </article>
       </section>
 
       {/* ═══════ ACCOUNT BALANCES ═══════ */}

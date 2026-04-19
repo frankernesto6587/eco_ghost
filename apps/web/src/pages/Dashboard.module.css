@@ -84,7 +84,7 @@
 /* ═══════ HERO GRID ═══════ */
 .heroGrid {
   display: grid;
-  grid-template-columns: 1.6fr 1fr 1fr;
+  grid-template-columns: 1.6fr 1fr;
   gap: 12px;
   margin-bottom: 12px;
 }

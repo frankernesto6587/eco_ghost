@@ -1130,9 +1130,8 @@ export default function TransactionsPage() {
             </div>
             <div className={s.hdr}>Categoria</div>
             <div className={s.hdr}>Cuenta</div>
-            <div className={s.hdrSortRight} onClick={() => handleSort('amount')}>
+            <div className={s.hdrRight}>
               Monto
-              {sortBy === 'amount' && <span className={s.sortArrow}>{sortOrder === 'asc' ? '▲' : '▼'}</span>}
             </div>
 
             {/* Rows */}

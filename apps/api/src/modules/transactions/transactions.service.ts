@@ -19,7 +19,7 @@ const TRANSACTION_INCLUDE = {
   tags: { include: { tag: true } },
 };
 
-const ALLOWED_SORT_FIELDS = ['date', 'amount', 'description', 'createdAt'];
+const ALLOWED_SORT_FIELDS = ['date', 'description', 'createdAt'];
 
 @Injectable()
 export class TransactionsService {
@@ -278,50 +278,6 @@ export class TransactionsService {
 
     // Build orderBy from sortBy/sortOrder, default to createdAt desc
     const dir = sortOrder ?? 'desc';
-
-    // For amount sort, we need signed amounts (expenses/outgoing negative)
-    // Use two queries: raw-sorted IDs + findMany with includes
-    if (sortBy === 'amount') {
-      const totalPromise = this.prisma.transaction.count({ where });
-
-      // Get sorted IDs using raw SQL with signed amount
-      const ids = await this.prisma.$queryRaw<{ id: string }[]>`
-        SELECT id FROM transactions
-        WHERE org_id = ${orgId}
-          AND ${deleted ? Prisma.sql`deleted_at IS NOT NULL` : Prisma.sql`deleted_at IS NULL`}
-          ${from ? Prisma.sql`AND date >= ${new Date(from)}` : Prisma.empty}
-          ${to ? Prisma.sql`AND date <= ${new Date(to)}` : Prisma.empty}
-          ${type?.length ? Prisma.sql`AND type::text = ANY(${type})` : Prisma.empty}
-          ${categoryId?.length ? Prisma.sql`AND category_id = ANY(${categoryId})` : Prisma.empty}
-          ${accountId?.length ? Prisma.sql`AND account_id = ANY(${accountId})` : Prisma.empty}
-          ${currency ? Prisma.sql`AND account_id IN (SELECT id FROM accounts WHERE currency = ${currency})` : Prisma.empty}
-        ORDER BY
-          CASE WHEN type IN ('EXPENSE') OR (type IN ('TRANSFER', 'EXCHANGE') AND linked_transaction_id IS NOT NULL)
-            THEN -amount ELSE amount END
-          ${dir === 'asc' ? Prisma.sql`ASC` : Prisma.sql`DESC`}
-        LIMIT ${limit} OFFSET ${(page - 1) * limit}
-      `;
-
-      const sortedIds = ids.map((r) => r.id);
-      const [transactions, total] = await Promise.all([
-        sortedIds.length > 0
-          ? this.prisma.transaction.findMany({
-              where: { id: { in: sortedIds } },
-              include: TRANSACTION_INCLUDE,
-            }).then((txs) => {
-              // Preserve the raw SQL order
-              const map = new Map(txs.map((t) => [t.id, t]));
-              return sortedIds.map((id) => map.get(id)!).filter(Boolean);
-            })
-          : Promise.resolve([]),
-        totalPromise,
-      ]);
-
-      return {
-        data: transactions,
-        meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
-      };
-    }
 
     let orderBy: Prisma.TransactionOrderByWithRelationInput = { createdAt: 'desc' };
     if (sortBy && ALLOWED_SORT_FIELDS.includes(sortBy)) {

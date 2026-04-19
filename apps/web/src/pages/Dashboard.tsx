@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { Button, DatePicker, Dropdown, Spin } from 'antd';
@@ -195,17 +195,15 @@ export default function DashboardPage() {
   }, [transactions]);
 
   // Daily balance chart data per currency
+  const chartRef = useRef<HTMLDivElement>(null);
+  const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+
   const dailyChartData = useMemo(() => {
     const daily = (overview as any)?.dailyBalance as { date: string; balances: Record<string, number> }[] | undefined;
     if (!daily || daily.length < 2) return null;
 
-    // Get all currencies present
-    const currencies = new Set<string>();
-    for (const d of daily) {
-      for (const cur of Object.keys(d.balances)) currencies.add(cur);
-    }
+    const currencies = [...new Set(daily.flatMap((d) => Object.keys(d.balances)))].sort();
 
-    // Find global min/max across all currencies for shared Y axis
     let globalMin = Infinity;
     let globalMax = -Infinity;
     for (const d of daily) {
@@ -214,27 +212,76 @@ export default function DashboardPage() {
         if (val > globalMax) globalMax = val;
       }
     }
-    const range = globalMax - globalMin || 1;
+    // Add 10% padding to Y range
+    const yPad = (globalMax - globalMin) * 0.1 || 100;
+    globalMin -= yPad;
+    globalMax += yPad;
+    const yRange = globalMax - globalMin || 1;
 
+    const marginLeft = 60;
+    const marginRight = 16;
+    const marginTop = 12;
+    const marginBottom = 24;
     const w = 600;
-    const h = 100;
-    const pad = 8;
+    const h = 180;
+    const plotW = w - marginLeft - marginRight;
+    const plotH = h - marginTop - marginBottom;
 
-    const lines: { currency: string; path: string; color: string; lastX: number; lastY: number }[] = [];
-
-    for (const cur of currencies) {
+    // Per-currency line data with points
+    const lines = currencies.map((cur) => {
       const values = daily.map((d) => d.balances[cur] ?? 0);
       const points = values.map((v, i) => ({
-        x: (i / (daily.length - 1)) * w,
-        y: pad + ((globalMax - v) / range) * (h - 2 * pad),
+        x: marginLeft + (i / (daily.length - 1)) * plotW,
+        y: marginTop + ((globalMax - v) / yRange) * plotH,
       }));
-      const path = smoothPath(points);
-      const last = points[points.length - 1];
-      lines.push({ currency: cur, path, color: getCurrencyColor(cur), lastX: last.x, lastY: last.y });
+      return { currency: cur, path: smoothPath(points), color: getCurrencyColor(cur), points, values };
+    });
+
+    // Y-axis ticks (4-5 nice values)
+    const yTicks: { value: number; y: number; label: string }[] = [];
+    const step = (globalMax - globalMin) / 4;
+    for (let i = 0; i <= 4; i++) {
+      const val = globalMin + step * i;
+      const y = marginTop + ((globalMax - val) / yRange) * plotH;
+      const abs = Math.abs(val / 100);
+      const label = abs >= 1000 ? `${(abs / 1000).toFixed(0)}k` : abs.toFixed(0);
+      yTicks.push({ value: val, y, label: val < 0 ? `-${label}` : label });
     }
 
-    return { lines, w, h };
+    // X-axis date labels (show ~5-7 evenly spaced)
+    const xLabels: { x: number; label: string }[] = [];
+    const labelCount = Math.min(daily.length, 7);
+    const labelStep = Math.max(1, Math.floor((daily.length - 1) / (labelCount - 1)));
+    for (let i = 0; i < daily.length; i += labelStep) {
+      xLabels.push({
+        x: marginLeft + (i / (daily.length - 1)) * plotW,
+        label: dayjs(daily[i].date).format('DD/MM'),
+      });
+    }
+    // Always include last date
+    const lastIdx = daily.length - 1;
+    if (xLabels[xLabels.length - 1]?.label !== dayjs(daily[lastIdx].date).format('DD/MM')) {
+      xLabels.push({
+        x: marginLeft + plotW,
+        label: dayjs(daily[lastIdx].date).format('DD/MM'),
+      });
+    }
+
+    return { lines, w, h, daily, currencies, marginLeft, marginRight, marginTop, marginBottom, plotW, plotH, yTicks, xLabels };
   }, [overview]);
+
+  const handleChartMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (!dailyChartData || !chartRef.current) return;
+    const rect = chartRef.current.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const ratio = mouseX / rect.width;
+    const svgX = ratio * dailyChartData.w;
+    // Find nearest index
+    const idx = Math.round(((svgX - dailyChartData.marginLeft) / dailyChartData.plotW) * (dailyChartData.daily.length - 1));
+    setHoverIndex(Math.max(0, Math.min(idx, dailyChartData.daily.length - 1)));
+  }, [dailyChartData]);
+
+  const handleChartMouseLeave = useCallback(() => setHoverIndex(null), []);
 
   // Account balances from overview (grouped by currency)
   const accountBalances = (overview as any)?.accountBalances ?? [];
@@ -339,30 +386,106 @@ export default function DashboardPage() {
             }
           </div>
           {dailyChartData && (
-            <div className={s.heroChart}>
-              <svg viewBox={`0 0 ${dailyChartData.w} ${dailyChartData.h}`} preserveAspectRatio="none">
-                <g stroke="var(--eco-line-soft)" strokeDasharray="2 4" strokeWidth="0.5" opacity="0.4">
-                  <line x1="0" x2={dailyChartData.w} y1="25" y2="25" />
-                  <line x1="0" x2={dailyChartData.w} y1="50" y2="50" />
-                  <line x1="0" x2={dailyChartData.w} y1="75" y2="75" />
-                </g>
+            <div
+              className={s.heroChart}
+              ref={chartRef}
+              onMouseMove={handleChartMouseMove}
+              onMouseLeave={handleChartMouseLeave}
+            >
+              <svg viewBox={`0 0 ${dailyChartData.w} ${dailyChartData.h}`}>
                 <defs>
                   {dailyChartData.lines.map((line) => (
                     <linearGradient key={`grad-${line.currency}`} id={`grad-${line.currency}`} x1="0" x2="0" y1="0" y2="1">
-                      <stop offset="0" stopColor={line.color} stopOpacity="0.2" />
+                      <stop offset="0" stopColor={line.color} stopOpacity="0.15" />
                       <stop offset="1" stopColor={line.color} stopOpacity="0" />
                     </linearGradient>
                   ))}
                 </defs>
-                {dailyChartData.lines.map((line) => (
-                  <g key={line.currency}>
-                    <path d={`${line.path} L${dailyChartData.w},${dailyChartData.h} L0,${dailyChartData.h} Z`} fill={`url(#grad-${line.currency})`} />
-                    <path d={line.path} fill="none" stroke={line.color} strokeWidth="1.75" />
-                    <circle cx={line.lastX} cy={line.lastY} r="3" fill={line.color} />
-                    <circle cx={line.lastX} cy={line.lastY} r="6" fill={line.color} opacity="0.2" />
+
+                {/* Y-axis grid lines + labels */}
+                {dailyChartData.yTicks.map((tick, i) => (
+                  <g key={i}>
+                    <line
+                      x1={dailyChartData.marginLeft} x2={dailyChartData.w - dailyChartData.marginRight}
+                      y1={tick.y} y2={tick.y}
+                      stroke="var(--eco-line-soft)" strokeDasharray="3 3" strokeWidth="0.5" opacity="0.5"
+                    />
+                    <text
+                      x={dailyChartData.marginLeft - 8} y={tick.y + 3.5}
+                      textAnchor="end" fontSize="9" fontFamily="Geist Mono, monospace"
+                      fill="var(--eco-fg4)"
+                    >{tick.label}</text>
                   </g>
                 ))}
+
+                {/* X-axis date labels */}
+                {dailyChartData.xLabels.map((label, i) => (
+                  <text
+                    key={i} x={label.x} y={dailyChartData.h - 4}
+                    textAnchor="middle" fontSize="9" fontFamily="Geist Mono, monospace"
+                    fill="var(--eco-fg4)"
+                  >{label.label}</text>
+                ))}
+
+                {/* Area fills + lines */}
+                {dailyChartData.lines.map((line) => {
+                  const lastPt = line.points[line.points.length - 1];
+                  const firstPt = line.points[0];
+                  const bottomY = dailyChartData.marginTop + dailyChartData.plotH;
+                  return (
+                    <g key={line.currency}>
+                      <path
+                        d={`${line.path} L${lastPt.x},${bottomY} L${firstPt.x},${bottomY} Z`}
+                        fill={`url(#grad-${line.currency})`}
+                      />
+                      <path d={line.path} fill="none" stroke={line.color} strokeWidth="1.5" />
+                    </g>
+                  );
+                })}
+
+                {/* Hover crosshair */}
+                {hoverIndex !== null && dailyChartData.lines[0] && (() => {
+                  const x = dailyChartData.lines[0].points[hoverIndex].x;
+                  return (
+                    <g>
+                      <line
+                        x1={x} x2={x}
+                        y1={dailyChartData.marginTop} y2={dailyChartData.marginTop + dailyChartData.plotH}
+                        stroke="var(--eco-fg4)" strokeWidth="0.75" strokeDasharray="3 2"
+                      />
+                      {dailyChartData.lines.map((line) => (
+                        <g key={line.currency}>
+                          <circle cx={x} cy={line.points[hoverIndex].y} r="4" fill={line.color} />
+                          <circle cx={x} cy={line.points[hoverIndex].y} r="7" fill={line.color} opacity="0.2" />
+                        </g>
+                      ))}
+                    </g>
+                  );
+                })()}
               </svg>
+
+              {/* Tooltip */}
+              {hoverIndex !== null && dailyChartData.daily[hoverIndex] && (
+                <div
+                  className={s.chartTooltip}
+                  style={{
+                    left: `${(dailyChartData.lines[0].points[hoverIndex].x / dailyChartData.w) * 100}%`,
+                  }}
+                >
+                  <div className={s.tooltipDate}>
+                    {dayjs(dailyChartData.daily[hoverIndex].date).format('ddd DD MMM')}
+                  </div>
+                  {dailyChartData.lines.map((line) => (
+                    <div key={line.currency} className={s.tooltipRow}>
+                      <span className={s.tooltipDot} style={{ background: line.color }} />
+                      <span className={s.tooltipCur}>{line.currency}</span>
+                      <span className={s.tooltipVal}>{formatCurrency(line.values[hoverIndex], line.currency)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Legend */}
               <div className={s.heroChartLegend}>
                 {dailyChartData.lines.map((line) => (
                   <span key={line.currency} className={s.heroLegendItem}>

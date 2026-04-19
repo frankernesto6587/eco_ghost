@@ -75,8 +75,8 @@ interface TransactionFormValues {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function buildParams(filters: Filters, page: number, pageSize: number, deleted?: boolean): TransactionFilters {
-  const params: TransactionFilters = { page, limit: pageSize };
+function buildParams(filters: Filters, page: number, pageSize: number, sortBy: string, sortOrder: 'asc' | 'desc', deleted?: boolean): TransactionFilters {
+  const params: TransactionFilters = { page, limit: pageSize, sortBy, sortOrder };
   if (filters.types.length > 0) params.type = filters.types.join(',');
   if (filters.accountIds.length > 0) params.accountId = filters.accountIds.join(',');
   if (filters.categoryIds.length > 0) params.categoryId = filters.categoryIds.join(',');
@@ -219,9 +219,9 @@ export default function TransactionsPage() {
 
   // ---- Data fetching ----
   const transactionsQuery = useQuery<TransactionListResponse>({
-    queryKey: ['transactions', filters, viewDeleted, page, pageSize],
+    queryKey: ['transactions', filters, viewDeleted, page, pageSize, sortBy, sortOrder],
     queryFn: async () => {
-      const params = buildParams(filters, page, pageSize, viewDeleted);
+      const params = buildParams(filters, page, pageSize, sortBy, sortOrder, viewDeleted);
       return transactionsService.getAll(params);
     },
   });
@@ -351,6 +351,7 @@ export default function TransactionsPage() {
   }, []);
 
   const handleSort = useCallback((field: string) => {
+    setPage(1);
     setSortBy((prev) => {
       if (prev === field) {
         setSortOrder((o) => (o === 'desc' ? 'asc' : 'desc'));
@@ -550,30 +551,17 @@ export default function TransactionsPage() {
   const activeFilterCount = [filters.dateRange, filters.types.length > 0, filters.accountIds.length > 0, filters.categoryIds.length > 0, filters.currency].filter(Boolean).length;
 
   // Local search filtering + sorting
+  // Local search only (sorting handled by backend)
   const displayedTransactions = useMemo(() => {
-    let result = allTransactions;
-    if (searchText.trim()) {
-      const q = searchText.toLowerCase();
-      result = result.filter((tx) =>
-        tx.description.toLowerCase().includes(q) ||
-        tx.notes?.toLowerCase().includes(q) ||
-        tx.category?.name.toLowerCase().includes(q) ||
-        tx.account?.name.toLowerCase().includes(q)
-      );
-    }
-    // Client-side sorting
-    const sorted = [...result].sort((a, b) => {
-      let cmp = 0;
-      switch (sortBy) {
-        case 'date': cmp = new Date(a.date).getTime() - new Date(b.date).getTime(); break;
-        case 'amount': cmp = a.amount - b.amount; break;
-        case 'description': cmp = a.description.localeCompare(b.description); break;
-        default: cmp = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(); break;
-      }
-      return sortOrder === 'asc' ? cmp : -cmp;
-    });
-    return sorted;
-  }, [allTransactions, searchText, sortBy, sortOrder]);
+    if (!searchText.trim()) return allTransactions;
+    const q = searchText.toLowerCase();
+    return allTransactions.filter((tx) =>
+      tx.description.toLowerCase().includes(q) ||
+      tx.notes?.toLowerCase().includes(q) ||
+      tx.category?.name.toLowerCase().includes(q) ||
+      tx.account?.name.toLowerCase().includes(q)
+    );
+  }, [allTransactions, searchText]);
 
   const toggleSelectAll = useCallback(() => {
     setSelectedIds((prev) => {

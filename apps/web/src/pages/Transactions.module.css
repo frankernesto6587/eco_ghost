@@ -42,77 +42,7 @@
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 10px;
-  margin-bottom: 10px;
-}
-
-.accountsCard {
-  background: var(--eco-surface);
-  border: 1px solid var(--eco-line);
-  border-radius: 12px;
-  padding: 12px 14px;
   margin-bottom: 16px;
-}
-
-.accountsCardLabel {
-  font-family: 'Geist Mono', monospace;
-  font-size: 10px;
-  letter-spacing: 0.12em;
-  color: var(--eco-fg3);
-  text-transform: uppercase;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 8px;
-}
-
-.accountsList {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 0;
-}
-
-.accountItem {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 6px 8px;
-  font-family: 'Geist Mono', monospace;
-  font-feature-settings: 'tnum';
-  border-bottom: 1px solid var(--eco-line-subtle, oklch(0.5 0 0 / 0.08));
-}
-
-.accountItem:last-child {
-  border-bottom: none;
-}
-
-.accountName {
-  font-size: 12px;
-  color: var(--eco-fg2);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  margin-right: 8px;
-}
-
-.accountBal {
-  font-size: 13px;
-  font-weight: 500;
-  white-space: nowrap;
-}
-
-.accountCurDivider {
-  grid-column: 1 / -1;
-  padding: 4px 8px 2px;
-  font-family: 'Geist Mono', monospace;
-  font-size: 10px;
-  letter-spacing: 0.1em;
-  color: var(--eco-fg4);
-  text-transform: uppercase;
-  border-top: 1px solid var(--eco-line-subtle, oklch(0.5 0 0 / 0.08));
-}
-
-.accountCurDivider:first-child {
-  border-top: none;
 }
 
 .qStat {

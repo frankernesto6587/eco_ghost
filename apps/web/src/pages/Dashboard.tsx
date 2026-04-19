@@ -6,6 +6,7 @@ import { PlusOutlined } from '@ant-design/icons';
 import { TransactionType } from '@ecoghost/shared';
 import type { DashboardOverview } from '@ecoghost/shared';
 import { dashboardService } from '@/services/dashboard.service';
+import { accountsService, type Account } from '@/services/accounts.service';
 import { formatCurrency, formatDate } from '@/lib/formatters';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { useNavigate } from 'react-router-dom';
@@ -114,6 +115,22 @@ export default function DashboardPage() {
     queryFn: dashboardService.getOverview,
   });
 
+  const { data: accountsData } = useQuery<Account[]>({
+    queryKey: ['accounts'],
+    queryFn: () => accountsService.getAll(),
+  });
+
+  const accountsByCurrency = useMemo(() => {
+    const accs = (accountsData ?? []).filter((a) => a.balance !== 0);
+    const grouped = new Map<string, Account[]>();
+    for (const acc of accs) {
+      const list = grouped.get(acc.currency) ?? [];
+      list.push(acc);
+      grouped.set(acc.currency, list);
+    }
+    return [...grouped.entries()].sort(([a], [b]) => a.localeCompare(b));
+  }, [accountsData]);
+
   const transactions = useMemo(
     () => (overview?.recentTransactions ?? []) as unknown as RecentTransaction[],
     [overview],
@@ -202,14 +219,13 @@ export default function DashboardPage() {
           </div>
           <div className={s.heroNum}>
             {Object.keys(totalBalance).length > 0
-              ? Object.entries(totalBalance).map(([cur, amt], i) => (
-                  <span key={cur}>
-                    {i > 0 && <span style={{ color: 'var(--eco-fg4)', fontSize: 18, margin: '0 8px' }}>·</span>}
+              ? Object.entries(totalBalance).map(([cur, amt]) => (
+                  <div key={cur}>
                     <span className={s.heroCur}>{cur}</span>
                     {' '}{formatCurrency(amt, cur)}
-                  </span>
+                  </div>
                 ))
-              : <span style={{ color: 'var(--eco-fg3)' }}>$0.00</span>
+              : <span style={{ color: 'var(--eco-fg3)' }}>$0</span>
             }
           </div>
           {sparklinePath && (
@@ -325,6 +341,29 @@ export default function DashboardPage() {
           </div>
         </article>
       </section>
+
+      {/* ═══════ ACCOUNT BALANCES ═══════ */}
+      {accountsByCurrency.length > 0 && (
+        <article className={s.accountsCard}>
+          <div className={s.accountsCardLabel}>
+            <span className={s.cardDot} />
+            saldo por cuentas
+          </div>
+          <div className={s.accountsList}>
+            {accountsByCurrency.map(([currency, accs], idx) => (
+              <div key={currency} style={{ display: 'contents' }}>
+                <div className={s.accountCurDivider} style={idx === 0 ? { borderTop: 'none' } : undefined}>{currency}</div>
+                {accs.map((acc) => (
+                  <div key={acc.id} className={s.accountItem}>
+                    <span className={s.accountName}>{acc.name}</span>
+                    <span className={s.accountBal}>{formatCurrency(acc.balance, acc.currency)}</span>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        </article>
+      )}
 
       {/* ═══════ LEDGER ═══════ */}
       <section className={s.ledgerCard}>

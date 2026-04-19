@@ -1,0 +1,142 @@
+/* ═══════ Logo Mark (matches Login page) ═══════ */
+.logoMark {
+  font-size: 22px;
+  font-weight: 500;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  position: relative;
+  padding-top: 8px;
+  color: var(--eco-fg);
+  cursor: default;
+}
+
+.logoMark::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 18px;
+  height: 7px;
+  border-top: 2px solid var(--eco-accent);
+  border-radius: 50% / 100% 100% 0 0;
+}
+
+.logoMark::before {
+  content: '';
+  position: absolute;
+  top: -3px;
+  right: 2px;
+  width: 12px;
+  height: 6px;
+  border-top: 1.5px solid color-mix(in oklab, var(--eco-accent) 55%, transparent);
+  border-radius: 50% / 100% 100% 0 0;
+}
+
+/* Smaller variant for collapsed sidebar */
+.logoMarkSm {
+  font-size: 16px;
+  padding-top: 6px;
+}
+
+.logoMarkSm::after {
+  width: 14px;
+  height: 5px;
+}
+
+.logoMarkSm::before {
+  top: -2px;
+  right: 2px;
+  width: 9px;
+  height: 5px;
+}
+
+/* ═══════ Mobile Nav Drawer ═══════ */
+.navDrawerItem {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 20px;
+  color: var(--eco-fg2);
+  font-size: 15px;
+  font-weight: 400;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+  border-radius: 10px;
+  margin: 2px 8px;
+}
+
+.navDrawerItem:hover {
+  background: var(--eco-surface2);
+  color: var(--eco-fg);
+}
+
+.navDrawerItemActive {
+  background: var(--eco-accent-weak);
+  color: var(--eco-accent);
+  font-weight: 500;
+}
+
+.navDrawerItemActive:hover {
+  background: var(--eco-accent-soft);
+}
+
+.navDrawerIcon {
+  font-size: 18px;
+  width: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.navDrawerDivider {
+  height: 1px;
+  background: var(--eco-line-soft);
+  margin: 8px 20px;
+}
+
+.navDrawerHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--eco-line-soft);
+}
+
+.navDrawerClose {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--eco-fg3);
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.navDrawerClose:hover {
+  background: var(--eco-surface2);
+  color: var(--eco-fg);
+}
+
+/* Menu button in mobile header */
+.menuBtn {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--eco-fg2);
+  cursor: pointer;
+  font-size: 18px;
+  transition: background 0.12s;
+}
+
+.menuBtn:hover {
+  background: var(--eco-surface2);
+}

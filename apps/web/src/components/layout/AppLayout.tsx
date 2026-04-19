@@ -14,13 +14,14 @@ import {
   LogoutOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
+  MenuOutlined,
   SunOutlined,
   MoonOutlined,
   PlusOutlined,
   CheckOutlined,
   LoginOutlined,
-  EllipsisOutlined,
   HomeOutlined,
+  CloseOutlined,
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -30,7 +31,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { authService } from '@/services/auth.service';
 import { organizationsService } from '@/services/organizations.service';
-import { APP_NAME, SIDEBAR_WIDTH, SIDEBAR_COLLAPSED_WIDTH, MOBILE_TAB_BAR_HEIGHT } from '@/lib/constants';
+import { APP_NAME, SIDEBAR_WIDTH, SIDEBAR_COLLAPSED_WIDTH } from '@/lib/constants';
+import css from './AppLayout.module.css';
 
 const { Header, Sider, Content, Footer } = Layout;
 const { Text } = Typography;
@@ -47,7 +49,7 @@ export function AppLayout() {
   const { sidebarCollapsed, toggleSidebar, isDark, setThemeMode, setIsMobile } = useUIStore();
   const setCurrentOrg = useAuthStore((state) => state.setCurrentOrg);
   const isMobile = useIsMobile();
-  const [moreDrawerOpen, setMoreDrawerOpen] = useState(false);
+  const [navDrawerOpen, setNavDrawerOpen] = useState(false);
 
   const queryClient = useQueryClient();
 
@@ -212,36 +214,19 @@ export function AppLayout() {
     setIsMobile(isMobile);
   }, [isMobile, setIsMobile]);
 
-  // Mobile tab bar items
-  const mobileTabItems = useMemo(
+  // All nav items for mobile drawer
+  const allNavItems = useMemo(
     () => [
       { key: '/dashboard', icon: <HomeOutlined />, label: t('nav.dashboard') },
       { key: '/transactions', icon: <SwapOutlined />, label: t('nav.transactions') },
       { key: '/accounts', icon: <WalletOutlined />, label: t('nav.accounts') },
-      { key: '__more__', icon: <EllipsisOutlined />, label: 'Mas' },
-    ],
-    [t],
-  );
-
-  const moreMenuItems = useMemo(
-    () => [
-      { key: '/categories', icon: <AppstoreOutlined />, label: t('nav.categories') },
       { key: '/debts', icon: <TeamOutlined />, label: t('nav.debts') },
-      { key: '/organization', icon: <BankOutlined />, label: t('nav.organization') },
+      { key: '/categories', icon: <AppstoreOutlined />, label: t('nav.categories') },
       { key: '/settings', icon: <SettingOutlined />, label: t('nav.settings') },
+      { key: '/organization', icon: <BankOutlined />, label: t('nav.organization') },
     ],
     [t],
   );
-
-  const activeTabKey = useMemo(() => {
-    const primary = mobileTabItems.find(
-      (item) => item.key !== '__more__' && location.pathname.startsWith(item.key),
-    );
-    if (primary) return primary.key;
-    const secondary = moreMenuItems.find((item) => location.pathname.startsWith(item.key));
-    if (secondary) return '__more__';
-    return '/dashboard';
-  }, [location.pathname, mobileTabItems, moreMenuItems]);
 
   // ---------- Mobile Layout ----------
   if (isMobile) {
@@ -263,9 +248,12 @@ export function AppLayout() {
             background: themeToken.colorBgContainer,
           }}
         >
-          <Text strong style={{ fontSize: 16, color: themeToken.colorPrimary }}>
-            {APP_NAME}
-          </Text>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <button className={css.menuBtn} onClick={() => setNavDrawerOpen(true)} type="button">
+              <MenuOutlined />
+            </button>
+            <span className={css.logoMark}>{APP_NAME}</span>
+          </div>
           <Space size="small">
             <Button
               type="text"
@@ -292,80 +280,47 @@ export function AppLayout() {
           style={{
             padding: 12,
             minHeight: 280,
-            paddingBottom: MOBILE_TAB_BAR_HEIGHT + 12,
           }}
         >
           <Outlet />
         </Content>
 
-        {/* Bottom Tab Bar */}
-        <div
-          style={{
-            position: 'fixed',
-            bottom: 0,
-            left: 0,
-            right: 0,
-            height: MOBILE_TAB_BAR_HEIGHT,
-            paddingBottom: 'var(--safe-area-bottom)',
-            background: themeToken.colorBgContainer,
-            borderTop: `1px solid ${themeToken.colorBorderSecondary}`,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-around',
-            zIndex: 100,
+        {/* Nav Drawer */}
+        <Drawer
+          placement="left"
+          open={navDrawerOpen}
+          onClose={() => setNavDrawerOpen(false)}
+          width={280}
+          closable={false}
+          styles={{
+            body: { padding: 0, background: 'var(--eco-surface)', color: 'var(--eco-fg)' },
+            header: { display: 'none' },
           }}
         >
-          {mobileTabItems.map((item) => {
-            const isActive = activeTabKey === item.key;
-            return (
-              <div
-                key={item.key}
-                onClick={() => {
-                  if (item.key === '__more__') {
-                    setMoreDrawerOpen(true);
-                  } else {
+          <div className={css.navDrawerHeader}>
+            <span className={css.logoMark}>{APP_NAME}</span>
+            <button className={css.navDrawerClose} onClick={() => setNavDrawerOpen(false)} type="button">
+              <CloseOutlined />
+            </button>
+          </div>
+          <nav style={{ padding: '8px 0' }}>
+            {allNavItems.map((item) => {
+              const isActive = location.pathname.startsWith(item.key);
+              return (
+                <div
+                  key={item.key}
+                  className={`${css.navDrawerItem} ${isActive ? css.navDrawerItemActive : ''}`}
+                  onClick={() => {
                     navigate(item.key);
-                  }
-                }}
-                style={{
-                  flex: 1,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                  color: isActive ? themeToken.colorPrimary : themeToken.colorTextSecondary,
-                  fontSize: 20,
-                  gap: 2,
-                  paddingTop: 4,
-                }}
-              >
-                {item.icon}
-                <span style={{ fontSize: 10, lineHeight: 1 }}>{item.label}</span>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* More Drawer */}
-        <Drawer
-          title="Mas opciones"
-          placement="bottom"
-          open={moreDrawerOpen}
-          onClose={() => setMoreDrawerOpen(false)}
-          height="auto"
-          styles={{ body: { padding: 0 } }}
-        >
-          <Menu
-            mode="vertical"
-            selectedKeys={selectedKeys}
-            items={moreMenuItems}
-            onClick={({ key }) => {
-              navigate(key);
-              setMoreDrawerOpen(false);
-            }}
-            style={{ border: 'none' }}
-          />
+                    setNavDrawerOpen(false);
+                  }}
+                >
+                  <span className={css.navDrawerIcon}>{item.icon}</span>
+                  {item.label}
+                </div>
+              );
+            })}
+          </nav>
         </Drawer>
 
         {/* Join Organization Modal */}
@@ -465,15 +420,9 @@ export function AppLayout() {
             borderBottom: `1px solid ${themeToken.colorBorderSecondary}`,
           }}
         >
-          <Text
-            strong
-            style={{
-              fontSize: sidebarCollapsed ? 16 : 20,
-              color: themeToken.colorPrimary,
-            }}
-          >
-            {sidebarCollapsed ? 'EG' : APP_NAME}
-          </Text>
+          <span className={`${css.logoMark} ${sidebarCollapsed ? css.logoMarkSm : ''}`}>
+            {APP_NAME}
+          </span>
         </div>
 
         <Menu

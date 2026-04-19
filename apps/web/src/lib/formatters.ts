@@ -22,8 +22,8 @@ export function formatCurrency(amount: number, currency: string): string {
   const symbol = symbolMap[currency] ?? '$';
 
   const formatted = new Intl.NumberFormat('en-US', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
   }).format(Math.abs(value));
 
   const sign = value < 0 ? '-' : '';

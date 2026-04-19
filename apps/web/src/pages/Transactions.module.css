@@ -80,7 +80,7 @@
 .qStatDot.acc { background: var(--eco-accent); }
 
 .qStatNum {
-  font-size: 22px;
+  font-size: 18px;
   font-weight: 500;
   letter-spacing: -0.02em;
   font-feature-settings: 'tnum';
@@ -865,7 +865,7 @@
   .quickStats { grid-template-columns: 1fr 1fr; gap: 8px; }
 
   .qStat { padding: 10px 12px; }
-  .qStatNum { font-size: 18px; }
+  .qStatNum { font-size: 15px; }
 
   .toolbar {
     flex-wrap: wrap;

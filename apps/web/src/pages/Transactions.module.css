@@ -3,6 +3,7 @@
   max-width: 1440px;
   font-family: 'Geist', 'Inter', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
 }
 
 /* ═══════ PAGE HEADER ═══════ */
@@ -52,6 +53,8 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
+  overflow: hidden;
+  min-width: 0;
 }
 
 .qStatLabel {
@@ -82,6 +85,9 @@
   letter-spacing: -0.02em;
   font-feature-settings: 'tnum';
   font-family: 'Geist Mono', monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .qStatNumPos { color: var(--eco-pos); }
@@ -359,7 +365,7 @@
   font-size: 11px;
   letter-spacing: 0.02em;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: flex-start !important;
   gap: 1px;
 }
 
@@ -380,7 +386,7 @@
 
 .cDesc {
   flex-direction: column;
-  align-items: flex-start;
+  align-items: flex-start !important;
   gap: 2px;
   overflow: hidden;
   min-width: 0;
@@ -858,6 +864,9 @@
 @media (max-width: 900px) {
   .quickStats { grid-template-columns: 1fr 1fr; gap: 8px; }
 
+  .qStat { padding: 10px 12px; }
+  .qStatNum { font-size: 18px; }
+
   .toolbar {
     flex-wrap: wrap;
     padding: 10px 12px;
@@ -878,4 +887,6 @@
   .formDrawerFoot {
     padding: 14px 16px;
   }
+
+  .tableWrap { overflow-x: hidden; }
 }

@@ -1,11 +1,6 @@
 import { useState, useCallback } from 'react';
 import {
-  Typography,
-  Tabs,
-  Table,
-  Tag,
   Button,
-  Space,
   Modal,
   Form,
   Input,
@@ -13,8 +8,6 @@ import {
   Popconfirm,
   Spin,
   Avatar,
-  Card,
-  Collapse,
   Checkbox,
 } from 'antd';
 import {
@@ -29,15 +22,13 @@ import {
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { App } from 'antd';
-import type { ColumnsType } from 'antd/es/table';
 import { Role, CURRENCIES } from '@ecoghost/shared';
 import { organizationsService, telegramService } from '@/services/organizations.service';
 import type { CreateOrganizationDto } from '@/services/organizations.service';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useAuthStore } from '@/store/auth.store';
 import { formatDate } from '@/lib/formatters';
-
-const { Title, Text, Paragraph } = Typography;
+import css from './Organization.module.css';
 
 // ---------- Types ----------
 
@@ -69,11 +60,11 @@ interface OrgDetails {
 
 // ---------- Role display helpers ----------
 
-const ROLE_COLOR: Record<string, string> = {
-  [Role.OWNER]: 'gold',
-  [Role.ADMIN]: 'blue',
-  [Role.ACCOUNTANT]: 'green',
-  [Role.VIEWER]: 'default',
+const ROLE_CLASS: Record<string, string> = {
+  [Role.OWNER]: css.roleOwner,
+  [Role.ADMIN]: css.roleAdmin,
+  [Role.ACCOUNTANT]: css.roleAccountant,
+  [Role.VIEWER]: css.roleViewer,
 };
 
 const ROLE_OPTIONS = [
@@ -92,6 +83,15 @@ const getRoleLabel = (role: string, t: (key: string) => string): string => {
   return map[role] ?? role;
 };
 
+function getInitials(name: string): string {
+  return name
+    .split(' ')
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join('')
+    .toUpperCase();
+}
+
 // ---------- Component ----------
 
 export default function OrganizationPage() {
@@ -104,6 +104,9 @@ export default function OrganizationPage() {
   const [settingsForm] = Form.useForm<CreateOrganizationDto>();
   const [regenerateModalOpen, setRegenerateModalOpen] = useState(false);
   const [selectedExpelIds, setSelectedExpelIds] = useState<string[]>([]);
+  const [activeTab, setActiveTab] = useState<'members' | 'settings'>('members');
+  const [showInviteHelp, setShowInviteHelp] = useState(false);
+  const [showTelegramHelp, setShowTelegramHelp] = useState(false);
 
   const orgId = currentOrg?.id ?? '';
 
@@ -249,214 +252,214 @@ export default function OrganizationPage() {
     );
   }, [regenerateTokenMutation, selectedExpelIds]);
 
-  // ---------- Table columns ----------
+  // Non-owner members for the regenerate modal checklist
+  const nonOwnerMembers = members.filter((m) => m.role !== Role.OWNER);
 
-  const columns: ColumnsType<Member> = [
-    {
-      title: t('organization.memberName'),
-      dataIndex: ['user', 'name'],
-      key: 'name',
-      render: (_: unknown, record: Member) => (
-        <Space>
-          <Avatar
-            src={record.user.avatarUrl}
-            icon={!record.user.avatarUrl ? <UserOutlined /> : undefined}
-            size="small"
-          />
-          {record.user.name}
-        </Space>
-      ),
-    },
-    {
-      title: t('organization.memberEmail'),
-      dataIndex: ['user', 'email'],
-      key: 'email',
-      responsive: ['md'] as any,
-    },
-    {
-      title: t('organization.memberRole'),
-      dataIndex: 'role',
-      key: 'role',
-      render: (role: Role, record: Member) => {
-        if (canManageMembers && role !== Role.OWNER) {
-          return (
-            <Select
-              value={role}
-              size="small"
-              style={{ width: 140 }}
-              onChange={(value) => handleRoleChange(record.id, value)}
-              options={ROLE_OPTIONS.map((opt) => ({
-                label: t(opt.translationKey),
-                value: opt.value,
-              }))}
-            />
-          );
-        }
-        return <Tag color={ROLE_COLOR[role]}>{getRoleLabel(role, t)}</Tag>;
-      },
-    },
-    {
-      title: t('organization.memberJoined'),
-      dataIndex: 'createdAt',
-      key: 'createdAt',
-      responsive: ['md'] as any,
-      render: (date: string) => formatDate(date),
-    },
-    ...(canManageMembers
-      ? [
-          {
-            title: t('common.actions'),
-            key: 'actions',
-            width: 80,
-            render: (_: unknown, record: Member) => {
-              if (record.role === Role.OWNER) return null;
-              return (
+  // ---------- Loading ----------
+
+  if (!orgId) {
+    return (
+      <div className={css.loading}>
+        <Spin size="large" />
+      </div>
+    );
+  }
+
+  // ---------- Tab content: Members ----------
+
+  const membersContent = (
+    <div className={css.section}>
+      <div className={css.sectionHead}>
+        <h3 className={css.sectionTitle}>{t('organization.membersTab')}</h3>
+        <span className={css.sectionCount}>{members.length}</span>
+      </div>
+
+      {membersLoading ? (
+        <div className={css.emptyState}>
+          <Spin />
+        </div>
+      ) : members.length === 0 ? (
+        <div className={css.emptyState}>Sin miembros</div>
+      ) : (
+        members.map((member) => (
+          <div key={member.id} className={css.memberRow}>
+            <div className={css.memberAvatar}>
+              {member.user.avatarUrl ? (
+                <img src={member.user.avatarUrl} alt={member.user.name} />
+              ) : (
+                getInitials(member.user.name)
+              )}
+            </div>
+
+            <div className={css.memberInfo}>
+              <div className={css.memberName}>{member.user.name}</div>
+              <div className={css.memberEmail}>{member.user.email}</div>
+            </div>
+
+            <div className={css.memberMeta}>
+              <span className={css.memberJoined}>{formatDate(member.createdAt)}</span>
+              {canManageMembers && member.role !== Role.OWNER ? (
+                <Select
+                  value={member.role}
+                  size="small"
+                  style={{ width: 140 }}
+                  onChange={(value) => handleRoleChange(member.id, value)}
+                  options={ROLE_OPTIONS.map((opt) => ({
+                    label: t(opt.translationKey),
+                    value: opt.value,
+                  }))}
+                />
+              ) : (
+                <span className={ROLE_CLASS[member.role]}>
+                  {getRoleLabel(member.role, t)}
+                </span>
+              )}
+            </div>
+
+            <div className={css.memberActions}>
+              {canManageMembers && member.role !== Role.OWNER && (
                 <Popconfirm
                   title={t('organization.removeMember')}
                   description={t('organization.removeMemberConfirm')}
-                  onConfirm={() => handleRemoveMember(record.id)}
+                  onConfirm={() => handleRemoveMember(member.id)}
                   okText={t('common.confirm')}
                   cancelText={t('common.cancel')}
                 >
                   <Button type="text" size="small" danger icon={<DeleteOutlined />} />
                 </Popconfirm>
-              );
-            },
-          } as ColumnsType<Member>[number],
-        ]
-      : []),
-  ];
-
-  // Non-owner members for the regenerate modal checklist
-  const nonOwnerMembers = members.filter((m) => m.role !== Role.OWNER);
-
-  // ---------- Tab content ----------
-
-  const membersContent = (
-    <Table<Member>
-      columns={columns}
-      dataSource={members}
-      rowKey="id"
-      loading={membersLoading}
-      pagination={false}
-      scroll={{ x: 600 }}
-    />
+              )}
+            </div>
+          </div>
+        ))
+      )}
+    </div>
   );
 
+  // ---------- Tab content: Settings ----------
+
   const settingsContent = canManageOrg ? (
-    <div style={{ maxWidth: 560 }}>
-      <Card style={{ marginBottom: 24 }}>
-        <Form
-          form={settingsForm}
-          layout="vertical"
-          initialValues={{
-            name: currentOrg?.name ?? '',
-            baseCurrency: currentOrg?.baseCurrency ?? 'USD',
-          }}
-        >
-          <Form.Item
-            name="name"
-            label={t('organization.orgName')}
-            rules={[{ required: true, message: t('organization.orgName') }]}
-          >
-            <Input />
-          </Form.Item>
-
-          <Form.Item
-            name="baseCurrency"
-            label={t('organization.baseCurrency')}
-            rules={[{ required: true, message: t('organization.baseCurrency') }]}
-          >
-            <Select
-              options={CURRENCIES.map((c) => ({
-                label: `${c.symbol} ${c.name} (${c.code})`,
-                value: c.code,
-              }))}
-            />
-          </Form.Item>
-
-          <Form.Item>
-            <Button
-              type="primary"
-              onClick={handleSaveSettings}
-              loading={updateOrgMutation.isPending}
+    <>
+      {/* General settings */}
+      <div className={css.section}>
+        <div className={css.sectionHead}>
+          <h3 className={css.sectionTitle}>General</h3>
+        </div>
+        <div className={css.sectionBody}>
+          <div className={css.settingsForm}>
+            <Form
+              form={settingsForm}
+              layout="vertical"
+              initialValues={{
+                name: currentOrg?.name ?? '',
+                baseCurrency: currentOrg?.baseCurrency ?? 'USD',
+              }}
             >
-              {t('common.save')}
-            </Button>
-          </Form.Item>
-        </Form>
-      </Card>
+              <Form.Item
+                name="name"
+                label={t('organization.orgName')}
+                rules={[{ required: true, message: t('organization.orgName') }]}
+              >
+                <Input />
+              </Form.Item>
 
-      {/* Invite Token Section — only for OWNER */}
+              <Form.Item
+                name="baseCurrency"
+                label={t('organization.baseCurrency')}
+                rules={[{ required: true, message: t('organization.baseCurrency') }]}
+              >
+                <Select
+                  options={CURRENCIES.map((c) => ({
+                    label: `${c.symbol} ${c.name} (${c.code})`,
+                    value: c.code,
+                  }))}
+                />
+              </Form.Item>
+
+              <Form.Item>
+                <Button
+                  type="primary"
+                  onClick={handleSaveSettings}
+                  loading={updateOrgMutation.isPending}
+                >
+                  {t('common.save')}
+                </Button>
+              </Form.Item>
+            </Form>
+          </div>
+        </div>
+      </div>
+
+      {/* Invite Token Section */}
       {orgDetails?.inviteToken && (
-        <Card title="Token de invitacion" style={{ marginBottom: 24 }}>
-          <Space.Compact style={{ width: '100%', marginBottom: 16 }}>
-            <Input
-              value={orgDetails.inviteToken}
-              readOnly
-              style={{ fontFamily: 'monospace' }}
-            />
-            <Button icon={<CopyOutlined />} onClick={handleCopyToken}>
-              Copiar
+        <div className={css.section}>
+          <div className={css.sectionHead}>
+            <h3 className={css.sectionTitle}>Token de invitacion</h3>
+          </div>
+          <div className={css.sectionBody}>
+            <div className={css.tokenRow}>
+              <div className={css.tokenInput}>
+                <Input value={orgDetails.inviteToken} readOnly />
+              </div>
+              <Button icon={<CopyOutlined />} onClick={handleCopyToken}>
+                Copiar
+              </Button>
+            </div>
+
+            <Button
+              icon={<ReloadOutlined />}
+              onClick={() => {
+                setSelectedExpelIds([]);
+                setRegenerateModalOpen(true);
+              }}
+              style={{ marginBottom: 12 }}
+            >
+              Regenerar token
             </Button>
-          </Space.Compact>
 
-          <Button
-            icon={<ReloadOutlined />}
-            onClick={() => {
-              setSelectedExpelIds([]);
-              setRegenerateModalOpen(true);
-            }}
-          >
-            Regenerar token
-          </Button>
-
-          <Collapse
-            ghost
-            style={{ marginTop: 16 }}
-            items={[
-              {
-                key: 'help',
-                label: (
-                  <Space>
-                    <InfoCircleOutlined />
-                    Como invitar miembros
-                  </Space>
-                ),
-                children: (
-                  <div>
-                    <Paragraph>
-                      <strong>1.</strong> Copia el token de invitacion usando el boton &quot;Copiar&quot;.
-                    </Paragraph>
-                    <Paragraph>
-                      <strong>2.</strong> Comparte el token con la persona que deseas invitar (por WhatsApp, correo, en persona, etc.).
-                    </Paragraph>
-                    <Paragraph>
-                      <strong>3.</strong> La persona pega el token en su panel usando &quot;Unirse a organizacion&quot; en el menu de organizaciones del header.
-                    </Paragraph>
-                    <Paragraph type="secondary">
-                      Los nuevos miembros ingresan como Viewer. Puedes cambiar su rol desde la tabla de miembros.
-                    </Paragraph>
+            <div>
+              <button
+                className={css.helpToggle}
+                onClick={() => setShowInviteHelp(!showInviteHelp)}
+              >
+                <InfoCircleOutlined />
+                Como invitar miembros
+              </button>
+              {showInviteHelp && (
+                <div className={css.helpContent}>
+                  <div className={css.helpStep}>
+                    <strong>1.</strong> Copia el token de invitacion usando el boton &quot;Copiar&quot;.
                   </div>
-                ),
-              },
-            ]}
-          />
-        </Card>
+                  <div className={css.helpStep}>
+                    <strong>2.</strong> Comparte el token con la persona que deseas invitar (por WhatsApp, correo, en persona, etc.).
+                  </div>
+                  <div className={css.helpStep}>
+                    <strong>3.</strong> La persona pega el token en su panel usando &quot;Unirse a organizacion&quot; en el menu de organizaciones del header.
+                  </div>
+                  <div className={css.helpNote}>
+                    Los nuevos miembros ingresan como Viewer. Puedes cambiar su rol desde la tabla de miembros.
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
-      {/* Telegram Section — only for OWNER */}
+      {/* Telegram Section */}
       {orgDetails?.inviteToken && (
-        <Card title="Telegram" style={{ marginBottom: 24 }}>
-          {orgDetails.telegramConnected ? (
-            <div>
-              <Space style={{ marginBottom: 16 }}>
-                <Tag color="green">Conectado</Tag>
-                <Text type="secondary">
-                  Las notificaciones se envian al grupo de Telegram vinculado.
-                </Text>
-              </Space>
+        <div className={css.section}>
+          <div className={css.sectionHead}>
+            <h3 className={css.sectionTitle}>Telegram</h3>
+          </div>
+          <div className={css.sectionBody}>
+            {orgDetails.telegramConnected ? (
               <div>
+                <div className={css.telegramStatus}>
+                  <span className={css.statusConnected}>Conectado</span>
+                  <span className={css.statusText}>
+                    Las notificaciones se envian al grupo de Telegram vinculado.
+                  </span>
+                </div>
                 <Popconfirm
                   title="Desconectar Telegram"
                   description="El grupo dejara de recibir notificaciones. Puedes reconectar cuando quieras."
@@ -473,122 +476,122 @@ export default function OrganizationPage() {
                   </Button>
                 </Popconfirm>
               </div>
-            </div>
-          ) : (
-            <div>
-              <Paragraph type="secondary">
-                Conecta un grupo de Telegram para recibir notificaciones de todas las operaciones.
-              </Paragraph>
-              <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+            ) : (
+              <div>
+                <p className={css.statusText} style={{ marginBottom: 12 }}>
+                  Conecta un grupo de Telegram para recibir notificaciones de todas las operaciones.
+                </p>
                 <Button
                   type="primary"
                   icon={<LinkOutlined />}
                   href={`https://t.me/${import.meta.env.VITE_TELEGRAM_BOT_USERNAME}?startgroup=${orgDetails.inviteToken}`}
                   target="_blank"
+                  style={{ marginBottom: 12 }}
                 >
                   Conectar grupo de Telegram
                 </Button>
-                <Collapse
-                  ghost
-                  items={[
-                    {
-                      key: 'telegram-help',
-                      label: (
-                        <Space>
-                          <InfoCircleOutlined />
-                          Como conectar Telegram
-                        </Space>
-                      ),
-                      children: (
-                        <div>
-                          <Paragraph>
-                            <strong>1.</strong> Haz clic en &quot;Conectar grupo de Telegram&quot;.
-                          </Paragraph>
-                          <Paragraph>
-                            <strong>2.</strong> Selecciona el grupo donde quieres recibir notificaciones.
-                          </Paragraph>
-                          <Paragraph>
-                            <strong>3.</strong> El bot se conectara automaticamente a esta organizacion.
-                          </Paragraph>
-                          <Paragraph type="secondary">
-                            Comandos disponibles en el grupo: /balance, /resumen, /deudas, /desconectar
-                          </Paragraph>
-                        </div>
-                      ),
-                    },
-                  ]}
-                />
-              </Space>
-            </div>
-          )}
-
-          {/* Webhook config */}
-          <div style={{ marginTop: 24, borderTop: '1px solid #f0f0f0', paddingTop: 16 }}>
-            <Text strong>Webhook</Text>
-            {webhookInfo?.url ? (
-              <Paragraph type="secondary" style={{ margin: '8px 0' }}>
-                Actual: <Text code>{webhookInfo.url}</Text>
-              </Paragraph>
-            ) : (
-              <Paragraph type="secondary" style={{ margin: '8px 0' }}>
-                No hay webhook configurado.
-              </Paragraph>
+                <div>
+                  <button
+                    className={css.helpToggle}
+                    onClick={() => setShowTelegramHelp(!showTelegramHelp)}
+                  >
+                    <InfoCircleOutlined />
+                    Como conectar Telegram
+                  </button>
+                  {showTelegramHelp && (
+                    <div className={css.helpContent}>
+                      <div className={css.helpStep}>
+                        <strong>1.</strong> Haz clic en &quot;Conectar grupo de Telegram&quot;.
+                      </div>
+                      <div className={css.helpStep}>
+                        <strong>2.</strong> Selecciona el grupo donde quieres recibir notificaciones.
+                      </div>
+                      <div className={css.helpStep}>
+                        <strong>3.</strong> El bot se conectara automaticamente a esta organizacion.
+                      </div>
+                      <div className={css.helpNote}>
+                        Comandos disponibles en el grupo: /balance, /resumen, /deudas, /desconectar
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
             )}
-            <Space.Compact style={{ width: '100%' }}>
-              <Input
-                placeholder="https://tu-url.ngrok-free.app"
-                value={webhookUrl}
-                onChange={(e) => setWebhookUrl(e.target.value)}
-              />
-              <Button
-                type="primary"
-                onClick={() => setWebhookMutation.mutate(webhookUrl)}
-                loading={setWebhookMutation.isPending}
-                disabled={!webhookUrl}
-              >
-                Configurar
-              </Button>
-            </Space.Compact>
+
+            {/* Webhook config */}
+            <div className={css.webhookDivider}>
+              <div className={css.webhookLabel}>Webhook</div>
+              {webhookInfo?.url ? (
+                <div className={css.webhookCurrent}>
+                  Actual: <span className={css.webhookUrl}>{webhookInfo.url}</span>
+                </div>
+              ) : (
+                <div className={css.webhookCurrent}>No hay webhook configurado.</div>
+              )}
+              <div className={css.webhookRow}>
+                <Input
+                  placeholder="https://tu-url.ngrok-free.app"
+                  value={webhookUrl}
+                  onChange={(e) => setWebhookUrl(e.target.value)}
+                />
+                <Button
+                  type="primary"
+                  onClick={() => setWebhookMutation.mutate(webhookUrl)}
+                  loading={setWebhookMutation.isPending}
+                  disabled={!webhookUrl}
+                >
+                  Configurar
+                </Button>
+              </div>
+            </div>
           </div>
-        </Card>
+        </div>
       )}
-    </div>
+    </>
   ) : null;
 
-  // ---------- Main render ----------
+  // ---------- Tab definitions ----------
 
-  if (!orgId) {
-    return (
-      <div style={{ textAlign: 'center', padding: 64 }}>
-        <Spin size="large" />
-      </div>
-    );
-  }
-
-  const tabItems = [
-    {
-      key: 'members',
-      label: t('organization.membersTab'),
-      children: membersContent,
-    },
+  const tabs = [
+    { key: 'members' as const, label: t('organization.membersTab') },
     ...(canManageOrg
-      ? [
-          {
-            key: 'settings',
-            label: t('organization.settingsTab'),
-            children: settingsContent,
-          },
-        ]
+      ? [{ key: 'settings' as const, label: t('organization.settingsTab') }]
       : []),
   ];
 
-  return (
-    <div>
-      <Title level={2} style={{ marginBottom: 24 }}>
-        {currentOrg?.name ?? t('organization.title')}
-      </Title>
+  // ---------- Main render ----------
 
-      <Tabs items={tabItems} />
+  return (
+    <div className={css.page}>
+      <div className={css.pageHead}>
+        <div>
+          <h1 className={css.pageTitle}>
+            {currentOrg?.name ?? t('organization.title')}
+          </h1>
+          {orgDetails && (
+            <div className={css.pageSub}>
+              {orgDetails.slug} &middot; {orgDetails.plan}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Segmented tab bar */}
+      <div className={css.seg}>
+        {tabs.map((tab) => (
+          <button
+            key={tab.key}
+            className={activeTab === tab.key ? css.segBtnOn : css.segBtn}
+            onClick={() => setActiveTab(tab.key)}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Tab content */}
+      {activeTab === 'members' && membersContent}
+      {activeTab === 'settings' && settingsContent}
 
       {/* Regenerate Token Modal */}
       <Modal
@@ -604,15 +607,13 @@ export default function OrganizationPage() {
         confirmLoading={regenerateTokenMutation.isPending}
         destroyOnClose
       >
-        <Paragraph>
-          Se generara un nuevo token. El token anterior dejara de funcionar.
-        </Paragraph>
+        <p>Se generara un nuevo token. El token anterior dejara de funcionar.</p>
 
         {nonOwnerMembers.length > 0 && (
           <>
-            <Paragraph type="secondary">
+            <p style={{ color: 'var(--eco-fg3)' }}>
               Opcionalmente, selecciona miembros para expulsar:
-            </Paragraph>
+            </p>
             <Checkbox.Group
               value={selectedExpelIds}
               onChange={(values) => setSelectedExpelIds(values as string[])}
@@ -620,15 +621,15 @@ export default function OrganizationPage() {
             >
               {nonOwnerMembers.map((m) => (
                 <Checkbox key={m.id} value={m.id}>
-                  <Space>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
                     <Avatar
                       size="small"
                       src={m.user.avatarUrl}
                       icon={!m.user.avatarUrl ? <UserOutlined /> : undefined}
                     />
-                    <Text>{m.user.name}</Text>
-                    <Text type="secondary">({m.user.email})</Text>
-                  </Space>
+                    <span>{m.user.name}</span>
+                    <span style={{ color: 'var(--eco-fg3)' }}>({m.user.email})</span>
+                  </span>
                 </Checkbox>
               ))}
             </Checkbox.Group>

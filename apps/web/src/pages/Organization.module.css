@@ -1,0 +1,424 @@
+/* ═══════ PAGE ═══════ */
+.page {
+  max-width: 1360px;
+  font-family: 'Geist', 'Inter', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ═══════ PAGE HEADER ═══════ */
+.pageHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 28px;
+}
+
+.pageTitle {
+  font-size: 28px;
+  font-weight: 500;
+  letter-spacing: -0.022em;
+  line-height: 1.1;
+  color: var(--eco-fg);
+  margin: 0;
+}
+
+.pageSub {
+  color: var(--eco-fg3);
+  font-size: 13px;
+  margin-top: 4px;
+  font-family: 'Geist Mono', monospace;
+  letter-spacing: 0.02em;
+}
+
+/* ═══════ SEGMENTED TABS ═══════ */
+.seg {
+  display: inline-flex;
+  background: var(--eco-surface2);
+  border: 1px solid var(--eco-line);
+  border-radius: 8px;
+  padding: 2px;
+  margin-bottom: 24px;
+}
+
+.segBtn {
+  padding: 6px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--eco-fg3);
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.12s;
+}
+
+.segBtn:hover {
+  color: var(--eco-fg2);
+}
+
+.segBtnOn {
+  composes: segBtn;
+  background: var(--eco-surface);
+  color: var(--eco-fg);
+  box-shadow: var(--eco-shadow1);
+}
+
+/* ═══════ SECTION (card-like) ═══════ */
+.section {
+  background: var(--eco-surface);
+  border: 1px solid var(--eco-line);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.section + .section {
+  margin-top: 16px;
+}
+
+.sectionHead {
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--eco-line-soft);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sectionTitle {
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  margin: 0;
+  color: var(--eco-fg);
+}
+
+.sectionCount {
+  font-family: 'Geist Mono', monospace;
+  font-size: 11px;
+  color: var(--eco-fg3);
+  padding: 2px 8px;
+  background: var(--eco-surface2);
+  border-radius: 6px;
+}
+
+.sectionBody {
+  padding: 18px 20px;
+}
+
+/* ═══════ MEMBER ROW ═══════ */
+.memberRow {
+  display: grid;
+  grid-template-columns: 40px 1fr auto auto;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--eco-line-soft);
+  transition: background 0.1s;
+}
+
+.memberRow:last-child {
+  border-bottom: 0;
+}
+
+.memberRow:hover {
+  background: var(--eco-surface2);
+}
+
+.memberAvatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 500;
+  background: linear-gradient(135deg, var(--eco-accent), color-mix(in oklab, var(--eco-accent) 60%, #3d3730));
+  color: oklch(0.15 0.01 80);
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.memberAvatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.memberInfo {
+  min-width: 0;
+}
+
+.memberName {
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  color: var(--eco-fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.memberEmail {
+  font-family: 'Geist Mono', monospace;
+  font-size: 11px;
+  color: var(--eco-fg3);
+  letter-spacing: 0.02em;
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.memberMeta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.memberJoined {
+  font-family: 'Geist Mono', monospace;
+  font-size: 11px;
+  color: var(--eco-fg4);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+/* ═══════ ROLE BADGE ═══════ */
+.roleBadge {
+  font-family: 'Geist Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.roleOwner {
+  composes: roleBadge;
+  background: var(--eco-accent-weak);
+  color: var(--eco-accent);
+}
+
+.roleAdmin {
+  composes: roleBadge;
+  background: color-mix(in oklab, var(--eco-accent) 12%, transparent);
+  color: var(--eco-accent-ink);
+}
+
+.roleAccountant {
+  composes: roleBadge;
+  background: color-mix(in oklab, var(--eco-pos) 12%, transparent);
+  color: var(--eco-pos);
+}
+
+.roleViewer {
+  composes: roleBadge;
+  background: var(--eco-surface2);
+  color: var(--eco-fg3);
+}
+
+/* ═══════ MEMBER ACTIONS ═══════ */
+.memberActions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ═══════ TOKEN SECTION ═══════ */
+.tokenRow {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.tokenInput {
+  flex: 1;
+  min-width: 0;
+}
+
+.tokenInput input {
+  font-family: 'Geist Mono', monospace !important;
+  font-size: 13px !important;
+  letter-spacing: 0.02em;
+}
+
+/* ═══════ HELP / COLLAPSIBLE ═══════ */
+.helpToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 0;
+  font-size: 12px;
+  color: var(--eco-fg3);
+  cursor: pointer;
+  background: none;
+  border: none;
+  font-family: inherit;
+  transition: color 0.12s;
+}
+
+.helpToggle:hover {
+  color: var(--eco-fg2);
+}
+
+.helpContent {
+  padding: 12px 0 4px;
+  font-size: 13px;
+  color: var(--eco-fg2);
+  line-height: 1.6;
+}
+
+.helpStep {
+  margin-bottom: 6px;
+}
+
+.helpNote {
+  color: var(--eco-fg3);
+  font-size: 12px;
+  margin-top: 8px;
+}
+
+/* ═══════ TELEGRAM SECTION ═══════ */
+.telegramStatus {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.statusConnected {
+  font-family: 'Geist Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 500;
+  background: color-mix(in oklab, var(--eco-pos) 12%, transparent);
+  color: var(--eco-pos);
+}
+
+.statusText {
+  font-size: 13px;
+  color: var(--eco-fg3);
+}
+
+.webhookDivider {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--eco-line-soft);
+}
+
+.webhookLabel {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--eco-fg);
+  margin-bottom: 8px;
+}
+
+.webhookCurrent {
+  font-size: 12px;
+  color: var(--eco-fg3);
+  margin-bottom: 10px;
+}
+
+.webhookUrl {
+  font-family: 'Geist Mono', monospace;
+  font-size: 12px;
+  background: var(--eco-surface2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: var(--eco-fg2);
+}
+
+.webhookRow {
+  display: flex;
+  gap: 8px;
+}
+
+.webhookRow input {
+  flex: 1;
+}
+
+/* ═══════ SETTINGS FORM ═══════ */
+.settingsForm {
+  max-width: 480px;
+}
+
+/* ═══════ LOADING / EMPTY ═══════ */
+.loading {
+  display: flex;
+  justify-content: center;
+  padding-top: 120px;
+}
+
+.emptyState {
+  text-align: center;
+  padding: 40px;
+  color: var(--eco-fg3);
+  font-size: 14px;
+}
+
+/* ═══════ RESPONSIVE ═══════ */
+@media (max-width: 900px) {
+  .pageHead {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .memberRow {
+    grid-template-columns: 36px 1fr auto;
+    gap: 10px;
+    padding: 12px 16px;
+  }
+
+  .memberAvatar {
+    width: 36px;
+    height: 36px;
+    font-size: 12px;
+  }
+
+  .memberMeta {
+    display: none;
+  }
+
+  .memberEmail {
+    display: none;
+  }
+
+  .sectionHead {
+    padding: 12px 16px;
+  }
+
+  .sectionBody {
+    padding: 14px 16px;
+  }
+
+  .seg {
+    width: 100%;
+  }
+
+  .segBtn, .segBtnOn {
+    flex: 1;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .memberRow {
+    grid-template-columns: 32px 1fr auto;
+    gap: 8px;
+    padding: 10px 14px;
+  }
+
+  .tokenRow {
+    flex-direction: column;
+  }
+}

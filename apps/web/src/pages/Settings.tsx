@@ -1,16 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
-  Typography,
-  Card,
   Form,
   Input,
   Button,
   Avatar,
-  Space,
   Spin,
   Segmented,
-  Alert,
-  Tag,
 } from 'antd';
 import { UserOutlined, SunOutlined, MoonOutlined, DesktopOutlined, LockOutlined, SendOutlined, CopyOutlined, DisconnectOutlined, CheckOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -20,8 +15,7 @@ import { api } from '@/services/api';
 import { useAuthStore } from '@/store/auth.store';
 import { useUIStore } from '@/store/ui.store';
 import type { UserProfile } from '@ecoghost/shared';
-
-const { Title, Text } = Typography;
+import s from './Settings.module.css';
 
 // ---------- Inline service calls ----------
 
@@ -175,232 +169,222 @@ export default function SettingsPage() {
 
   if (isLoading) {
     return (
-      <div style={{ textAlign: 'center', padding: 64 }}>
+      <div className={s.loading}>
         <Spin size="large" />
       </div>
     );
   }
 
   return (
-    <div>
-      <Title level={2} style={{ marginBottom: 24 }}>
-        {t('settings.title')}
-      </Title>
-
-      {/* Appearance card */}
-      <Card
-        title={t('settings.appearance')}
-        style={{ maxWidth: 560, marginBottom: 24 }}
-      >
+    <div className={s.page}>
+      {/* Page header */}
+      <div className={s.pageHead}>
         <div>
-          <Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>
-            {t('settings.themeDescription')}
-          </Text>
-          <Segmented
-            value={themeMode}
-            onChange={(val) => setThemeMode(val as 'light' | 'dark' | 'system')}
-            options={[
-              { label: t('settings.lightMode'), value: 'light', icon: <SunOutlined /> },
-              { label: t('settings.darkMode'), value: 'dark', icon: <MoonOutlined /> },
-              { label: t('settings.systemMode'), value: 'system', icon: <DesktopOutlined /> },
-            ]}
-          />
+          <h1 className={s.pageTitle}>{t('settings.title')}</h1>
+          {user?.email && <p className={s.pageSub}>{user.email}</p>}
         </div>
-      </Card>
+      </div>
 
-      {/* Profile card */}
-      <Card
-        title={t('settings.profile')}
-        style={{ maxWidth: 560, marginBottom: 24 }}
-      >
-        <Space direction="vertical" align="center" style={{ width: '100%', marginBottom: 24 }}>
-          <Avatar
-            size={80}
-            src={user?.avatarUrl}
-            icon={!user?.avatarUrl ? <UserOutlined /> : undefined}
-          />
-          <Title level={4} style={{ margin: 0 }}>
-            {user?.name}
-          </Title>
-          <Text type="secondary">{user?.email}</Text>
-        </Space>
+      <div className={s.sections}>
+        {/* ── Appearance ── */}
+        <div className={s.section}>
+          <div className={s.sectionHead}>
+            <span className={s.sectionIcon}><SunOutlined /></span>
+            <h2 className={s.sectionTitle}>{t('settings.appearance')}</h2>
+          </div>
+          <div className={s.themeWrap}>
+            <span className={s.themeDesc}>{t('settings.themeDescription')}</span>
+            <Segmented
+              value={themeMode}
+              onChange={(val) => setThemeMode(val as 'light' | 'dark' | 'system')}
+              options={[
+                { label: t('settings.lightMode'), value: 'light', icon: <SunOutlined /> },
+                { label: t('settings.darkMode'), value: 'dark', icon: <MoonOutlined /> },
+                { label: t('settings.systemMode'), value: 'system', icon: <DesktopOutlined /> },
+              ]}
+            />
+          </div>
+        </div>
 
-        <Form form={form} layout="vertical">
-          <Form.Item
-            name="name"
-            label={t('settings.profileName')}
-            rules={[{ required: true, message: t('settings.profileName') }]}
-          >
-            <Input />
-          </Form.Item>
+        {/* ── Profile ── */}
+        <div className={s.section}>
+          <div className={s.sectionHead}>
+            <span className={s.sectionIcon}><UserOutlined /></span>
+            <h2 className={s.sectionTitle}>{t('settings.profile')}</h2>
+          </div>
 
-          <Form.Item name="email" label={t('settings.profileEmail')}>
-            <Input disabled />
-          </Form.Item>
+          <div className={s.avatarArea}>
+            <Avatar
+              size={72}
+              src={user?.avatarUrl}
+              icon={!user?.avatarUrl ? <UserOutlined /> : undefined}
+            />
+            <span className={s.avatarName}>{user?.name}</span>
+            <span className={s.avatarEmail}>{user?.email}</span>
+          </div>
 
-          <Form.Item>
-            <Button
-              type="primary"
-              onClick={handleSave}
-              loading={updateMutation.isPending}
+          <Form form={form} layout="vertical">
+            <Form.Item
+              name="name"
+              label={t('settings.profileName')}
+              rules={[{ required: true, message: t('settings.profileName') }]}
             >
-              {t('common.save')}
-            </Button>
-          </Form.Item>
-        </Form>
-      </Card>
+              <Input />
+            </Form.Item>
 
-      {/* Telegram card */}
-      <Card
-        title={
-          <Space>
-            <SendOutlined />
-            Vincular Telegram
-          </Space>
-        }
-        style={{ maxWidth: 560, marginBottom: 24 }}
-      >
-        {telegramStatus?.linked ? (
-          <Space direction="vertical" style={{ width: '100%' }}>
-            <Space>
-              <Tag color="green">Vinculado</Tag>
-              <Text>Tu cuenta esta vinculada a Telegram</Text>
-            </Space>
-            <Button
-              danger
-              icon={<DisconnectOutlined />}
-              onClick={() => telegramUnlinkMutation.mutate()}
-              loading={telegramUnlinkMutation.isPending}
-            >
-              Desvincular
-            </Button>
-          </Space>
-        ) : (
-          <Space direction="vertical" style={{ width: '100%' }}>
-            <Text type="secondary">
-              Vincula tu cuenta para registrar gastos desde el grupo de Telegram.
-            </Text>
-            <Alert
-              type="info"
-              showIcon
-              message="Como vincular"
-              description={
-                <ol style={{ paddingLeft: 20, margin: '8px 0 0' }}>
+            <Form.Item name="email" label={t('settings.profileEmail')}>
+              <Input disabled />
+            </Form.Item>
+
+            <Form.Item style={{ marginBottom: 0 }}>
+              <Button
+                type="primary"
+                onClick={handleSave}
+                loading={updateMutation.isPending}
+              >
+                {t('common.save')}
+              </Button>
+            </Form.Item>
+          </Form>
+        </div>
+
+        {/* ── Telegram ── */}
+        <div className={s.section}>
+          <div className={s.sectionHead}>
+            <span className={s.sectionIcon}><SendOutlined /></span>
+            <h2 className={s.sectionTitle}>Vincular Telegram</h2>
+          </div>
+
+          {telegramStatus?.linked ? (
+            <div>
+              <div className={s.telegramStatus}>
+                <span className={s.statusDot} />
+                <span className={s.statusText}>Tu cuenta esta vinculada a Telegram</span>
+              </div>
+              <Button
+                danger
+                icon={<DisconnectOutlined />}
+                onClick={() => telegramUnlinkMutation.mutate()}
+                loading={telegramUnlinkMutation.isPending}
+              >
+                Desvincular
+              </Button>
+            </div>
+          ) : (
+            <div>
+              <p className={s.telegramInfo}>
+                Vincula tu cuenta para registrar gastos desde el grupo de Telegram.
+              </p>
+
+              <div className={s.telegramHelp}>
+                <h3 className={s.telegramHelpTitle}>Como vincular</h3>
+                <ol className={s.telegramHelpList}>
                   <li>Genera un codigo aqui abajo</li>
                   <li>Ve al grupo de Telegram conectado a tu organizacion</li>
                   <li>Pega el codigo de 6 digitos en el grupo</li>
                   <li>El bot confirmara la vinculacion</li>
                 </ol>
-              }
-            />
-            {telegramCode ? (
-              <Space direction="vertical" align="center" style={{ width: '100%', marginTop: 16 }}>
-                <Text type="secondary">Tu codigo (expira en 10 minutos):</Text>
-                <Space>
-                  <Text
-                    strong
-                    copyable={false}
-                    style={{ fontSize: 32, letterSpacing: 8, fontFamily: 'monospace' }}
-                  >
-                    {telegramCode.code}
-                  </Text>
+              </div>
+
+              {telegramCode ? (
+                <div className={s.telegramCodeWrap}>
+                  <span className={s.telegramCodeLabel}>Tu codigo (expira en 10 minutos):</span>
+                  <div className={s.telegramCodeRow}>
+                    <span className={s.telegramCode}>{telegramCode.code}</span>
+                    <Button
+                      icon={copied ? <CheckOutlined /> : <CopyOutlined />}
+                      type={copied ? 'default' : 'primary'}
+                      onClick={() => {
+                        navigator.clipboard.writeText(telegramCode.code);
+                        setCopied(true);
+                        message.success('Codigo copiado');
+                      }}
+                    >
+                      {copied ? 'Copiado' : 'Copiar'}
+                    </Button>
+                  </div>
                   <Button
-                    icon={copied ? <CheckOutlined /> : <CopyOutlined />}
-                    type={copied ? 'default' : 'primary'}
-                    onClick={() => {
-                      navigator.clipboard.writeText(telegramCode.code);
-                      setCopied(true);
-                      message.success('Codigo copiado');
-                    }}
+                    type="link"
+                    onClick={() => telegramLinkMutation.mutate()}
+                    loading={telegramLinkMutation.isPending}
                   >
-                    {copied ? 'Copiado' : 'Copiar'}
+                    Generar nuevo codigo
                   </Button>
-                </Space>
+                </div>
+              ) : (
                 <Button
-                  type="link"
+                  type="primary"
+                  icon={<SendOutlined />}
                   onClick={() => telegramLinkMutation.mutate()}
                   loading={telegramLinkMutation.isPending}
                 >
-                  Generar nuevo codigo
+                  Generar codigo de vinculacion
                 </Button>
-              </Space>
-            ) : (
-              <Button
-                type="primary"
-                icon={<SendOutlined />}
-                onClick={() => telegramLinkMutation.mutate()}
-                loading={telegramLinkMutation.isPending}
-                style={{ marginTop: 12 }}
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* ── Password (only for LOCAL auth users) ── */}
+        {!isOAuthUser && (
+          <div className={s.section}>
+            <div className={s.sectionHead}>
+              <span className={s.sectionIcon}><LockOutlined /></span>
+              <h2 className={s.sectionTitle}>Cambiar contrasena</h2>
+            </div>
+
+            <Form form={passwordForm} layout="vertical">
+              <Form.Item
+                name="currentPassword"
+                label="Contrasena actual"
+                rules={[{ required: true, message: 'Ingrese su contrasena actual' }]}
               >
-                Generar codigo de vinculacion
-              </Button>
-            )}
-          </Space>
+                <Input.Password />
+              </Form.Item>
+
+              <Form.Item
+                name="newPassword"
+                label="Nueva contrasena"
+                rules={[
+                  { required: true, message: 'Ingrese la nueva contrasena' },
+                  { min: 8, message: 'Minimo 8 caracteres' },
+                ]}
+              >
+                <Input.Password />
+              </Form.Item>
+
+              <Form.Item
+                name="confirmPassword"
+                label="Confirmar contrasena"
+                dependencies={['newPassword']}
+                rules={[
+                  { required: true, message: 'Confirme la nueva contrasena' },
+                  ({ getFieldValue }) => ({
+                    validator(_, value) {
+                      if (!value || getFieldValue('newPassword') === value) {
+                        return Promise.resolve();
+                      }
+                      return Promise.reject(new Error('Las contrasenas no coinciden'));
+                    },
+                  }),
+                ]}
+              >
+                <Input.Password />
+              </Form.Item>
+
+              <Form.Item style={{ marginBottom: 0 }}>
+                <Button
+                  type="primary"
+                  onClick={handleChangePassword}
+                  loading={passwordMutation.isPending}
+                >
+                  Cambiar contrasena
+                </Button>
+              </Form.Item>
+            </Form>
+          </div>
         )}
-      </Card>
-
-      {/* Password card (only for LOCAL auth users) */}
-      {!isOAuthUser && (
-        <Card
-          title={
-            <Space>
-              <LockOutlined />
-              Cambiar contrasena
-            </Space>
-          }
-          style={{ maxWidth: 560, marginBottom: 24 }}
-        >
-          <Form form={passwordForm} layout="vertical">
-            <Form.Item
-              name="currentPassword"
-              label="Contrasena actual"
-              rules={[{ required: true, message: 'Ingrese su contrasena actual' }]}
-            >
-              <Input.Password />
-            </Form.Item>
-
-            <Form.Item
-              name="newPassword"
-              label="Nueva contrasena"
-              rules={[
-                { required: true, message: 'Ingrese la nueva contrasena' },
-                { min: 8, message: 'Minimo 8 caracteres' },
-              ]}
-            >
-              <Input.Password />
-            </Form.Item>
-
-            <Form.Item
-              name="confirmPassword"
-              label="Confirmar contrasena"
-              dependencies={['newPassword']}
-              rules={[
-                { required: true, message: 'Confirme la nueva contrasena' },
-                ({ getFieldValue }) => ({
-                  validator(_, value) {
-                    if (!value || getFieldValue('newPassword') === value) {
-                      return Promise.resolve();
-                    }
-                    return Promise.reject(new Error('Las contrasenas no coinciden'));
-                  },
-                }),
-              ]}
-            >
-              <Input.Password />
-            </Form.Item>
-
-            <Form.Item>
-              <Button
-                type="primary"
-                onClick={handleChangePassword}
-                loading={passwordMutation.isPending}
-              >
-                Cambiar contrasena
-              </Button>
-            </Form.Item>
-          </Form>
-        </Card>
-      )}
+      </div>
     </div>
   );
 }

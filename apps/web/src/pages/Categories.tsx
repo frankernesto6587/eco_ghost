@@ -1,23 +1,20 @@
 import { useState, useCallback } from 'react';
 import {
-  Typography,
   Button,
-  Card,
-  Space,
   Modal,
   Form,
   Input,
   Select,
   ColorPicker,
   Popconfirm,
-  Spin,
-  Empty,
-  List,
+  Space,
 } from 'antd';
 import {
   PlusOutlined,
   EditOutlined,
   DeleteOutlined,
+  RightOutlined,
+  AppstoreOutlined,
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -26,49 +23,31 @@ import { categoriesService } from '@/services/categories.service';
 import type { Category, CreateCategoryDto } from '@/services/categories.service';
 import { usePermissions } from '@/hooks/usePermissions';
 import CategoryIcon, { ICON_MAP } from '@/components/common/CategoryIcon';
-
-const { Title, Text } = Typography;
+import css from './Categories.module.css';
 
 const iconKeys = Object.keys(ICON_MAP);
 
 function IconPicker({ value, onChange }: { value?: string; onChange?: (val: string | undefined) => void }) {
   return (
-    <div
-      style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fill, 40px)',
-        gap: 6,
-        maxHeight: 200,
-        overflowY: 'auto',
-        padding: 4,
-        border: '1px solid #d9d9d9',
-        borderRadius: 8,
-      }}
-    >
+    <div className={css.iconPicker}>
       {iconKeys.map((key) => (
         <div
           key={key}
           onClick={() => onChange?.(value === key ? undefined : key)}
           title={key}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: 40,
-            height: 40,
-            fontSize: 20,
-            borderRadius: 8,
-            cursor: 'pointer',
-            border: value === key ? '2px solid #1677ff' : '2px solid transparent',
-            backgroundColor: value === key ? '#e6f4ff' : undefined,
-            transition: 'all 0.15s',
-          }}
+          className={value === key ? css.iconPickerItemSelected : css.iconPickerItem}
         >
           {ICON_MAP[key]}
         </div>
       ))}
     </div>
   );
+}
+
+/** Lighten a hex color to create a soft background */
+function colorToBg(hex: string | null | undefined): string {
+  if (!hex) return 'var(--eco-accent-weak)';
+  return `color-mix(in oklab, ${hex} 18%, var(--eco-surface))`;
 }
 
 export default function CategoriesPage() {
@@ -79,6 +58,7 @@ export default function CategoriesPage() {
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [form] = Form.useForm<CreateCategoryDto & { color: string }>();
 
   // ---------- Queries ----------
@@ -88,8 +68,9 @@ export default function CategoriesPage() {
     queryFn: categoriesService.getAll,
   });
 
-  // Flat list of root categories for the parent select
   const rootCategories = categories.filter((c) => !c.parentId);
+
+  const totalCount = categories.length;
 
   // ---------- Mutations ----------
 
@@ -143,7 +124,7 @@ export default function CategoriesPage() {
       form.setFieldsValue({
         name: category.name,
         icon: category.icon ?? '',
-        color: category.color ?? '#1677ff',
+        color: category.color ?? '#d07a1c',
         parentId: category.parentId ?? undefined,
       });
       setModalOpen(true);
@@ -161,13 +142,12 @@ export default function CategoriesPage() {
     try {
       const values = await form.validateFields();
 
-      // Resolve color value -- ColorPicker can return an object or a string
       const color =
         typeof values.color === 'string'
           ? values.color
           : typeof values.color === 'object' && values.color !== null
-            ? (values.color as { toHexString?: () => string }).toHexString?.() ?? '#1677ff'
-            : '#1677ff';
+            ? (values.color as { toHexString?: () => string }).toHexString?.() ?? '#d07a1c'
+            : '#d07a1c';
 
       const payload: CreateCategoryDto = {
         name: values.name,
@@ -193,155 +173,193 @@ export default function CategoriesPage() {
     [deleteMutation],
   );
 
-  // ---------- Render helpers ----------
-
-  const renderCategoryItem = (category: Category) => (
-    <List.Item
-      key={category.id}
-      actions={
-        canWrite
-          ? [
-              <Button
-                key="edit"
-                type="text"
-                size="small"
-                icon={<EditOutlined />}
-                onClick={() => openEditModal(category)}
-              />,
-              <Popconfirm
-                key="delete"
-                title={t('common.confirm')}
-                description={
-                  category.children?.length > 0
-                    ? t('categories.deleteConfirmWithChildren')
-                    : t('categories.deleteConfirm')
-                }
-                onConfirm={() => handleDelete(category.id)}
-                okText={t('common.confirm')}
-                cancelText={t('common.cancel')}
-              >
-                <Button
-                  type="text"
-                  size="small"
-                  danger
-                  icon={<DeleteOutlined />}
-                />
-              </Popconfirm>,
-            ]
-          : undefined
-      }
-    >
-      <Space>
-        <span
-          style={{
-            display: 'inline-block',
-            width: 12,
-            height: 12,
-            borderRadius: '50%',
-            backgroundColor: category.color ?? '#d9d9d9',
-          }}
-        />
-        {category.icon && (
-          <CategoryIcon name={category.icon} style={{ color: category.color ?? '#8c8c8c' }} />
-        )}
-        <Text>{category.name}</Text>
-      </Space>
-    </List.Item>
-  );
+  const toggleGroup = useCallback((id: string) => {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
 
   // ---------- Main render ----------
 
   if (isLoading) {
     return (
-      <div style={{ textAlign: 'center', padding: 64 }}>
-        <Spin size="large" />
+      <div className={css.page}>
+        <div className={css.loading}>
+          <span className={css.loadingText}>cargando categorías...</span>
+        </div>
       </div>
     );
   }
 
   return (
-    <div>
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: 24,
-        }}
-      >
-        <Title level={2} style={{ margin: 0 }}>
-          {t('categories.title')}
-        </Title>
-        {canWrite && (
-          <Button type="primary" icon={<PlusOutlined />} onClick={openCreateModal}>
-            {t('categories.newCategory')}
-          </Button>
-        )}
-      </div>
+    <div className={css.page}>
+      {/* Page header */}
+      <header className={css.pageHead}>
+        <div>
+          <h1 className={css.pageTitle}>Categorías</h1>
+          <div className={css.pageSub}>
+            {totalCount} categoría{totalCount !== 1 ? 's' : ''}
+          </div>
+        </div>
+        <div className={css.pageActions}>
+          {canWrite && (
+            <Button type="primary" icon={<PlusOutlined />} onClick={openCreateModal}>
+              Nueva categoría
+            </Button>
+          )}
+        </div>
+      </header>
 
       {rootCategories.length === 0 ? (
-        <Empty description={t('categories.noCategories')} />
+        <div className={css.emptyState}>
+          <div className={css.emptyIcon}><AppstoreOutlined /></div>
+          <div className={css.emptyText}>{t('categories.noCategories')}</div>
+          <div className={css.emptySub}>Crea tu primera categoría para organizar tus movimientos</div>
+        </div>
       ) : (
-        <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-          {rootCategories.map((parent) => (
-            <Card
-              key={parent.id}
-              title={
-                <Space>
-                  <span
+        <div className={css.catList}>
+          {rootCategories.map((parent) => {
+            const isExpanded = expandedGroups.has(parent.id);
+            const childCount = parent.children?.length ?? 0;
+
+            return (
+              <div key={parent.id} className={css.catGroup}>
+                {/* Parent row */}
+                <div
+                  className={css.catGroupHead}
+                  onClick={() => toggleGroup(parent.id)}
+                >
+                  <div
+                    className={css.catIcon}
                     style={{
-                      display: 'inline-block',
-                      width: 14,
-                      height: 14,
-                      borderRadius: '50%',
-                      backgroundColor: parent.color ?? '#d9d9d9',
-                    }}
-                  />
-                  {parent.icon && (
-                    <CategoryIcon name={parent.icon} style={{ fontSize: 16, color: parent.color ?? '#8c8c8c' }} />
+                      '--cat-color': colorToBg(parent.color),
+                      '--cat-fg': parent.color ?? undefined,
+                    } as React.CSSProperties}
+                  >
+                    {parent.icon ? (
+                      <CategoryIcon name={parent.icon} />
+                    ) : (
+                      <span
+                        className={css.catDot}
+                        style={{ backgroundColor: parent.color ?? 'var(--eco-fg4)' }}
+                      />
+                    )}
+                  </div>
+
+                  <div className={css.catMeta}>
+                    <div className={css.catName}>
+                      {parent.name}
+                      {childCount > 0 && (
+                        <span className={css.catChildCount}>{childCount}</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {canWrite && (
+                    <div className={css.catActions} onClick={(e) => e.stopPropagation()}>
+                      <button
+                        className={css.catActionBtn}
+                        onClick={() => openEditModal(parent)}
+                        title="Editar"
+                      >
+                        <EditOutlined />
+                      </button>
+                      <Popconfirm
+                        title={t('common.confirm')}
+                        description={
+                          childCount > 0
+                            ? t('categories.deleteConfirmWithChildren')
+                            : t('categories.deleteConfirm')
+                        }
+                        onConfirm={() => handleDelete(parent.id)}
+                        okText={t('common.confirm')}
+                        cancelText={t('common.cancel')}
+                      >
+                        <button
+                          className={`${css.catActionBtn} ${css.catActionBtnDanger}`}
+                          title="Eliminar"
+                        >
+                          <DeleteOutlined />
+                        </button>
+                      </Popconfirm>
+                    </div>
                   )}
-                  <span>{parent.name}</span>
-                </Space>
-              }
-              extra={
-                canWrite ? (
-                  <Space>
-                    <Button
-                      type="text"
-                      size="small"
-                      icon={<EditOutlined />}
-                      onClick={() => openEditModal(parent)}
-                    />
-                    <Popconfirm
-                      title={t('common.confirm')}
-                      description={
-                        parent.children?.length > 0
-                          ? t('categories.deleteConfirmWithChildren')
-                          : t('categories.deleteConfirm')
-                      }
-                      onConfirm={() => handleDelete(parent.id)}
-                      okText={t('common.confirm')}
-                      cancelText={t('common.cancel')}
-                    >
-                      <Button type="text" size="small" danger icon={<DeleteOutlined />} />
-                    </Popconfirm>
-                  </Space>
-                ) : undefined
-              }
-              size="small"
-            >
-              {parent.children?.length > 0 ? (
-                <List
-                  size="small"
-                  dataSource={parent.children}
-                  renderItem={renderCategoryItem}
-                />
-              ) : (
-                <Text type="secondary">{t('categories.noCategories')}</Text>
-              )}
-            </Card>
-          ))}
-        </Space>
+
+                  {childCount > 0 && (
+                    <span className={isExpanded ? css.catExpandOpen : css.catExpand}>
+                      <RightOutlined />
+                    </span>
+                  )}
+                </div>
+
+                {/* Children */}
+                {isExpanded && (
+                  <div className={css.catChildren}>
+                    {childCount > 0 ? (
+                      parent.children!.map((child) => (
+                        <div key={child.id} className={css.catChild}>
+                          <div
+                            className={css.catChildIcon}
+                            style={{
+                              '--cat-color': colorToBg(child.color),
+                              '--cat-fg': child.color ?? undefined,
+                            } as React.CSSProperties}
+                          >
+                            {child.icon ? (
+                              <CategoryIcon name={child.icon} />
+                            ) : (
+                              <span
+                                className={css.catChildDot}
+                                style={{ backgroundColor: child.color ?? 'var(--eco-fg4)' }}
+                              />
+                            )}
+                          </div>
+
+                          <div className={css.catChildName}>
+                            {child.name}
+                          </div>
+
+                          {canWrite && (
+                            <div className={css.catActions} onClick={(e) => e.stopPropagation()}>
+                              <button
+                                className={css.catActionBtn}
+                                onClick={() => openEditModal(child)}
+                                title="Editar"
+                              >
+                                <EditOutlined />
+                              </button>
+                              <Popconfirm
+                                title={t('common.confirm')}
+                                description={t('categories.deleteConfirm')}
+                                onConfirm={() => handleDelete(child.id)}
+                                okText={t('common.confirm')}
+                                cancelText={t('common.cancel')}
+                              >
+                                <button
+                                  className={`${css.catActionBtn} ${css.catActionBtnDanger}`}
+                                  title="Eliminar"
+                                >
+                                  <DeleteOutlined />
+                                </button>
+                              </Popconfirm>
+                            </div>
+                          )}
+                        </div>
+                      ))
+                    ) : (
+                      <div className={css.catEmptyChildren}>
+                        {t('categories.noCategories')}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
       )}
 
       {/* Create / Edit Modal */}
@@ -372,7 +390,7 @@ export default function CategoriesPage() {
                 .map((c) => ({
                   label: (
                     <Space>
-                      <CategoryIcon name={c.icon} style={{ color: c.color ?? '#8c8c8c' }} />
+                      <CategoryIcon name={c.icon} style={{ color: c.color ?? 'var(--eco-fg3)' }} />
                       <span>{c.name}</span>
                     </Space>
                   ),
@@ -381,7 +399,7 @@ export default function CategoriesPage() {
             />
           </Form.Item>
 
-          <Form.Item name="color" label={t('categories.color')} initialValue="#1677ff">
+          <Form.Item name="color" label={t('categories.color')} initialValue="#d07a1c">
             <ColorPicker format="hex" />
           </Form.Item>
 

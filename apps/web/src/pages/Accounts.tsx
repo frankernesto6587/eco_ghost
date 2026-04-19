@@ -1,38 +1,12 @@
-import { useState } from 'react';
-import {
-  Typography,
-  Button,
-  Row,
-  Col,
-  Card,
-  Tag,
-  Space,
-  Modal,
-  Form,
-  Input,
-  Select,
-  Popconfirm,
-  Spin,
-  Empty,
-  App,
-} from 'antd';
-import {
-  PlusOutlined,
-  EditOutlined,
-  DeleteOutlined,
-  BankOutlined,
-  WalletOutlined,
-  MobileOutlined,
-  AppstoreOutlined,
-} from '@ant-design/icons';
+import { useState, useMemo } from 'react';
+import { Modal, Form, Input, Select, App, Dropdown } from 'antd';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { accountsService, type CreateAccountDto, type Account } from '@/services/accounts.service';
 import { usePermissions } from '@/hooks/usePermissions';
 import { formatCurrency } from '@/lib/formatters';
 import { CURRENCIES, AccountType } from '@ecoghost/shared';
 import { useAuthStore } from '@/store/auth.store';
-
-const { Title, Text } = Typography;
+import css from './Accounts.module.css';
 
 const ACCOUNT_TYPE_LABELS: Record<string, string> = {
   [AccountType.CASH]: 'Efectivo',
@@ -41,29 +15,36 @@ const ACCOUNT_TYPE_LABELS: Record<string, string> = {
   [AccountType.OTHER]: 'Otro',
 };
 
-const ACCOUNT_TYPE_COLORS: Record<string, string> = {
-  [AccountType.CASH]: 'green',
-  [AccountType.BANK]: 'blue',
-  [AccountType.DIGITAL]: 'purple',
-  [AccountType.OTHER]: 'default',
+const TYPE_COLORS: Record<string, string> = {
+  [AccountType.CASH]: '#8a7e72',
+  [AccountType.BANK]: 'oklch(0.6 0.1 220)',
+  [AccountType.DIGITAL]: 'oklch(0.58 0.2 300)',
+  [AccountType.OTHER]: '#d4700a',
 };
 
-function getAccountIcon(type: string) {
-  switch (type) {
-    case AccountType.CASH:
-      return <WalletOutlined />;
-    case AccountType.BANK:
-      return <BankOutlined />;
-    case AccountType.DIGITAL:
-      return <MobileOutlined />;
-    default:
-      return <AppstoreOutlined />;
-  }
+function getInitials(name: string): string {
+  return name
+    .split(/[\s·\-]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() ?? '')
+    .join('');
+}
+
+function splitAmount(cents: number): { sign: string; integer: string; decimal: string } {
+  const abs = Math.abs(cents / 100);
+  const parts = abs.toFixed(2).split('.');
+  const integer = new Intl.NumberFormat('en-US').format(Number(parts[0]));
+  return {
+    sign: cents < 0 ? '−' : '',
+    integer,
+    decimal: `.${parts[1]}`,
+  };
 }
 
 export default function AccountsPage() {
   const { message } = App.useApp();
-  const { canManageMembers } = usePermissions(); // Accounts require OWNER or ADMIN
+  const { canManageMembers } = usePermissions();
   const queryClient = useQueryClient();
 
   const [modalOpen, setModalOpen] = useState(false);
@@ -71,14 +52,24 @@ export default function AccountsPage() {
   const [form] = Form.useForm();
 
   // --- Queries ---
-
   const { data: accounts = [], isLoading } = useQuery<Account[]>({
     queryKey: ['accounts'],
     queryFn: () => accountsService.getAll(),
   });
 
-  // --- Mutations ---
+  // --- Group by currency ---
+  const grouped = useMemo(() => {
+    const map = new Map<string, { accounts: Account[]; total: number }>();
+    for (const acc of accounts) {
+      const group = map.get(acc.currency) ?? { accounts: [], total: 0 };
+      group.accounts.push(acc);
+      group.total += acc.balance;
+      map.set(acc.currency, group);
+    }
+    return Array.from(map.entries());
+  }, [accounts]);
 
+  // --- Mutations ---
   const createMutation = useMutation({
     mutationFn: (payload: CreateAccountDto) => accountsService.create(payload),
     onSuccess: () => {
@@ -86,9 +77,7 @@ export default function AccountsPage() {
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
       closeModal();
     },
-    onError: () => {
-      message.error('Error al crear la cuenta');
-    },
+    onError: () => message.error('Error al crear la cuenta'),
   });
 
   const updateMutation = useMutation({
@@ -99,9 +88,7 @@ export default function AccountsPage() {
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
       closeModal();
     },
-    onError: () => {
-      message.error('Error al actualizar la cuenta');
-    },
+    onError: () => message.error('Error al actualizar la cuenta'),
   });
 
   const deleteMutation = useMutation({
@@ -110,13 +97,10 @@ export default function AccountsPage() {
       message.success('Cuenta eliminada correctamente');
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
     },
-    onError: () => {
-      message.error('Error al eliminar la cuenta');
-    },
+    onError: () => message.error('Error al eliminar la cuenta'),
   });
 
   // --- Handlers ---
-
   function openCreateModal() {
     setEditingAccount(null);
     form.resetFields();
@@ -164,97 +148,219 @@ export default function AccountsPage() {
   }
 
   // --- Render ---
-
   const isSaving = createMutation.isPending || updateMutation.isPending;
+  const totalAccounts = accounts.length;
+
+  if (isLoading) {
+    return (
+      <div className={css.page}>
+        <div className={css.loading}>
+          <div style={{ color: 'var(--db-fg3)', fontFamily: "'Geist Mono', monospace", fontSize: 13 }}>
+            cargando cuentas...
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 8 }}>
-        <Title level={2} style={{ margin: 0 }}>
-          Cuentas
-        </Title>
-        {canManageMembers && (
-          <Button type="primary" icon={<PlusOutlined />} onClick={openCreateModal}>
-            Nueva Cuenta
-          </Button>
-        )}
-      </div>
-
-      {isLoading ? (
-        <div style={{ textAlign: 'center', padding: 64 }}>
-          <Spin size="large" />
+    <div className={css.page}>
+      {/* Page header */}
+      <header className={css.pageHead}>
+        <div>
+          <h1 className={css.pageTitle}>Cuentas</h1>
+          <div className={css.pageSub}>
+            {totalAccounts} cuenta{totalAccounts !== 1 ? 's' : ''} activa{totalAccounts !== 1 ? 's' : ''}
+          </div>
         </div>
-      ) : accounts.length === 0 ? (
-        <Empty
-          image={Empty.PRESENTED_IMAGE_SIMPLE}
-          description="No hay cuentas registradas"
-        >
+        <div className={css.pageActions}>
           {canManageMembers && (
-            <Button type="primary" icon={<PlusOutlined />} onClick={openCreateModal}>
-              Crear primera cuenta
-            </Button>
+            <button
+              className="btn primary"
+              onClick={openCreateModal}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '8px 14px',
+                borderRadius: 8,
+                border: 'none',
+                background: 'var(--db-accent)',
+                color: '#1a1715',
+                fontSize: 13,
+                fontWeight: 500,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+              }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+              Nueva cuenta
+            </button>
           )}
-        </Empty>
+        </div>
+      </header>
+
+      {accounts.length === 0 ? (
+        <div className={css.emptyState}>
+          <div style={{ marginBottom: 16 }}>No hay cuentas registradas</div>
+          {canManageMembers && (
+            <button
+              onClick={openCreateModal}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '8px 14px',
+                borderRadius: 8,
+                border: 'none',
+                background: 'var(--db-accent)',
+                color: '#1a1715',
+                fontSize: 13,
+                fontWeight: 500,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+              }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+              Crear primera cuenta
+            </button>
+          )}
+        </div>
       ) : (
-        <Row gutter={[16, 16]}>
-          {accounts.map((account) => (
-            <Col key={account.id} xs={24} sm={12} lg={8}>
-              <Card
-                hoverable
-                actions={
-                  canManageMembers
-                    ? [
-                        <EditOutlined key="edit" onClick={() => openEditModal(account)} />,
-                        <Popconfirm
-                          key="delete"
-                          title="Eliminar cuenta"
-                          description="Esta accion no se puede deshacer. Se eliminara la cuenta y sus datos asociados."
-                          onConfirm={() => handleDelete(account.id)}
-                          okText="Eliminar"
-                          cancelText="Cancelar"
-                          okButtonProps={{ danger: true }}
-                        >
-                          <DeleteOutlined />
-                        </Popconfirm>,
-                      ]
-                    : undefined
-                }
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
-                  <span style={{ fontSize: 24 }}>
-                    {account.icon ? (
-                      <span>{account.icon}</span>
-                    ) : (
-                      getAccountIcon(account.type)
-                    )}
-                  </span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <Text strong style={{ fontSize: 16, display: 'block' }} ellipsis>
-                      {account.name}
-                    </Text>
-                    <Space size={4}>
-                      <Tag color={ACCOUNT_TYPE_COLORS[account.type] ?? 'default'}>
-                        {ACCOUNT_TYPE_LABELS[account.type] ?? account.type}
-                      </Tag>
-                      <Tag>{account.currency}</Tag>
-                    </Space>
-                  </div>
-                </div>
-                <div style={{ textAlign: 'right' }}>
-                  <Text
-                    strong
-                    style={{
-                      fontSize: 20,
-                      color: account.balance >= 0 ? '#52c41a' : '#ff4d4f',
-                    }}
+        grouped.map(([currency, group]) => (
+          <div key={currency}>
+            {/* Currency group header */}
+            <div className={css.groupHd}>
+              <h3 className={css.groupTitle}>{currency}</h3>
+              <span className={css.groupLine} />
+              <span className={css.groupTotal}>
+                <span className={css.groupTotalLabel}>total: </span>
+                {formatCurrency(group.total, currency)}
+              </span>
+            </div>
+
+            {/* Account cards grid */}
+            <div className={css.accountsGrid}>
+              {group.accounts.map((account) => {
+                const color = TYPE_COLORS[account.type] ?? '#d4700a';
+                const amt = splitAmount(account.balance);
+                const initials = account.icon || getInitials(account.name);
+                const typeLabel = ACCOUNT_TYPE_LABELS[account.type] ?? account.type;
+
+                const menuItems = canManageMembers
+                  ? [
+                      {
+                        key: 'edit',
+                        label: 'Editar',
+                        onClick: () => openEditModal(account),
+                      },
+                      {
+                        key: 'delete',
+                        label: 'Eliminar',
+                        danger: true,
+                        onClick: () => {
+                          Modal.confirm({
+                            title: 'Eliminar cuenta',
+                            content: 'Esta accion no se puede deshacer. Se eliminara la cuenta y sus datos asociados.',
+                            okText: 'Eliminar',
+                            cancelText: 'Cancelar',
+                            okButtonProps: { danger: true },
+                            onOk: () => handleDelete(account.id),
+                          });
+                        },
+                      },
+                    ]
+                  : [];
+
+                return (
+                  <article
+                    key={account.id}
+                    className={css.accCard}
+                    style={{ '--card-color': color } as React.CSSProperties}
+                    onClick={() => canManageMembers && openEditModal(account)}
                   >
-                    {formatCurrency(account.balance, account.currency)}
-                  </Text>
-                </div>
-              </Card>
-            </Col>
-          ))}
-        </Row>
+                    <div className={css.accHead}>
+                      <div className={css.accIcon}>{initials}</div>
+                      <div className={css.accMeta}>
+                        <div className={css.accName}>{account.name}</div>
+                        <div className={css.accSub}>
+                          {typeLabel.toLowerCase()}
+                          <span className={css.accSubDot} />
+                          {account.currency}
+                        </div>
+                      </div>
+                      {canManageMembers && (
+                        <Dropdown
+                          menu={{ items: menuItems }}
+                          trigger={['click']}
+                          placement="bottomRight"
+                        >
+                          <button
+                            className={css.accMore}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <circle cx="12" cy="12" r="1.5" />
+                              <circle cx="5" cy="12" r="1.5" />
+                              <circle cx="19" cy="12" r="1.5" />
+                            </svg>
+                          </button>
+                        </Dropdown>
+                      )}
+                    </div>
+
+                    <div className={`${css.accBalance} ${account.balance < 0 ? css.accBalNeg : ''}`}>
+                      {amt.sign}
+                      <span className={css.accBalCur}>$</span>
+                      {amt.integer}
+                      <span className={css.accBalDec}>{amt.decimal}</span>
+                    </div>
+
+                    <div className={css.accEquiv}>
+                      {account.currency.toLowerCase()} · {typeLabel.toLowerCase()}
+                    </div>
+
+                    {/* Mini chart placeholder */}
+                    <div className={css.miniChart}>
+                      <svg viewBox="0 0 200 40" preserveAspectRatio="none">
+                        <path
+                          d={generateMiniChartPath(account.id)}
+                          fill="none"
+                          stroke={color}
+                          strokeWidth="1.5"
+                        />
+                      </svg>
+                    </div>
+
+                    <div className={css.accFoot}>
+                      <span>ult. 30d</span>
+                      <span className={account.balance >= 0 ? css.accDeltaPos : css.accDeltaNeg}>
+                        {account.balance >= 0 ? '↑' : '↓'} activa
+                      </span>
+                    </div>
+                  </article>
+                );
+              })}
+
+              {/* Add new account card (only in last currency group) */}
+              {canManageMembers && currency === grouped[grouped.length - 1][0] && (
+                <article className={css.addCard} onClick={openCreateModal}>
+                  <div className={css.addCardPlus}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M12 5v14M5 12h14" />
+                    </svg>
+                  </div>
+                  <div className={css.addCardLabel}>agregar cuenta</div>
+                  <div className={css.addCardSub}>bancaria · digital · efectivo</div>
+                </article>
+              )}
+            </div>
+          </div>
+        ))
       )}
 
       {/* Create / Edit Modal */}
@@ -269,7 +375,10 @@ export default function AccountsPage() {
           form={form}
           layout="vertical"
           onFinish={handleSubmit}
-          initialValues={{ type: AccountType.CASH, currency: useAuthStore.getState().currentOrg?.baseCurrency ?? 'USD' }}
+          initialValues={{
+            type: AccountType.CASH,
+            currency: useAuthStore.getState().currentOrg?.baseCurrency ?? 'USD',
+          }}
         >
           <Form.Item
             name="name"
@@ -285,18 +394,10 @@ export default function AccountsPage() {
             rules={[{ required: true, message: 'Seleccione un tipo' }]}
           >
             <Select>
-              <Select.Option value={AccountType.CASH}>
-                <WalletOutlined /> Efectivo
-              </Select.Option>
-              <Select.Option value={AccountType.BANK}>
-                <BankOutlined /> Banco
-              </Select.Option>
-              <Select.Option value={AccountType.DIGITAL}>
-                <MobileOutlined /> Digital
-              </Select.Option>
-              <Select.Option value={AccountType.OTHER}>
-                <AppstoreOutlined /> Otro
-              </Select.Option>
+              <Select.Option value={AccountType.CASH}>Efectivo</Select.Option>
+              <Select.Option value={AccountType.BANK}>Banco</Select.Option>
+              <Select.Option value={AccountType.DIGITAL}>Digital</Select.Option>
+              <Select.Option value={AccountType.OTHER}>Otro</Select.Option>
             </Select>
           </Form.Item>
 
@@ -319,15 +420,61 @@ export default function AccountsPage() {
           </Form.Item>
 
           <Form.Item style={{ marginBottom: 0, textAlign: 'right' }}>
-            <Space>
-              <Button onClick={closeModal}>Cancelar</Button>
-              <Button type="primary" htmlType="submit" loading={isSaving}>
-                {editingAccount ? 'Guardar cambios' : 'Crear cuenta'}
-              </Button>
-            </Space>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                onClick={closeModal}
+                style={{
+                  padding: '7px 14px',
+                  borderRadius: 8,
+                  border: '1px solid var(--db-line)',
+                  background: 'var(--db-surface2)',
+                  color: 'var(--db-fg2)',
+                  fontSize: 13,
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={isSaving}
+                style={{
+                  padding: '7px 14px',
+                  borderRadius: 8,
+                  border: 'none',
+                  background: 'var(--db-accent)',
+                  color: '#1a1715',
+                  fontSize: 13,
+                  fontWeight: 500,
+                  cursor: isSaving ? 'wait' : 'pointer',
+                  opacity: isSaving ? 0.7 : 1,
+                  fontFamily: 'inherit',
+                }}
+              >
+                {isSaving ? 'Guardando...' : editingAccount ? 'Guardar cambios' : 'Crear cuenta'}
+              </button>
+            </div>
           </Form.Item>
         </Form>
       </Modal>
     </div>
   );
+}
+
+/** Generate a deterministic-looking mini chart path from account id */
+function generateMiniChartPath(seed: string): string {
+  let hash = 0;
+  for (let i = 0; i < seed.length; i++) {
+    hash = ((hash << 5) - hash + seed.charCodeAt(i)) | 0;
+  }
+  const points: number[] = [];
+  for (let i = 0; i < 11; i++) {
+    hash = ((hash * 16807) + 1) | 0;
+    points.push(5 + (Math.abs(hash) % 30));
+  }
+  return points
+    .map((y, i) => `${i === 0 ? 'M' : 'L'}${i * 20},${y}`)
+    .join(' ');
 }

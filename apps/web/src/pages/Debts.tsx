@@ -1,46 +1,15 @@
 import { useState, useMemo } from 'react';
-import {
-  Typography,
-  Button,
-  Card,
-  Table,
-  Tag,
-  Space,
-  Modal,
-  Drawer,
-  Form,
-  Input,
-  InputNumber,
-  Select,
-  DatePicker,
-  Popconfirm,
-  Spin,
-  Empty,
-  App,
-  Segmented,
-  Descriptions,
-  List,
-  Divider,
-} from 'antd';
-import type { ColumnsType } from 'antd/es/table';
-import {
-  PlusOutlined,
-  EditOutlined,
-  DeleteOutlined,
-  EyeOutlined,
-  DollarOutlined,
-} from '@ant-design/icons';
+import { Modal, Form, Input, InputNumber, Select, DatePicker, App } from 'antd';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import dayjs from 'dayjs';
 import { debtsService, type CreateDebtDto, type AddPaymentDto } from '@/services/debts.service';
 import { accountsService } from '@/services/accounts.service';
 import type { Account } from '@/services/accounts.service';
 import { usePermissions } from '@/hooks/usePermissions';
-import { useIsMobile } from '@/hooks/useIsMobile';
-import { formatCurrency, formatDate } from '@/lib/formatters';
+import { formatCurrency, formatDate, formatRelativeDate } from '@/lib/formatters';
 import { DebtType, DebtStatus } from '@ecoghost/shared';
+import css from './Debts.module.css';
 
-const { Title, Text } = Typography;
 const { TextArea } = Input;
 
 interface Debt {
@@ -78,121 +47,60 @@ interface DebtTransaction {
 
 type FilterTab = 'ALL' | DebtType.RECEIVABLE | DebtType.PAYABLE;
 
-const STATUS_CONFIG: Record<string, { color: string; label: string }> = {
-  [DebtStatus.PENDING]: { color: 'orange', label: 'Pendiente' },
-  [DebtStatus.PARTIAL]: { color: 'blue', label: 'Parcial' },
-  [DebtStatus.PAID]: { color: 'green', label: 'Pagada' },
-};
+const PERSON_COLORS = [
+  'oklch(0.72 0.16 60)',
+  'oklch(0.68 0.18 350)',
+  'oklch(0.7 0.14 180)',
+  'oklch(0.58 0.2 300)',
+  'oklch(0.7 0.12 30)',
+  'oklch(0.65 0.15 110)',
+  'oklch(0.6 0.1 220)',
+];
 
-const TYPE_CONFIG: Record<string, { color: string; label: string }> = {
-  [DebtType.RECEIVABLE]: { color: 'green', label: 'Me deben' },
-  [DebtType.PAYABLE]: { color: 'red', label: 'Debo' },
-};
+function getPersonColor(name: string): string {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = ((hash << 5) - hash + name.charCodeAt(i)) | 0;
+  }
+  return PERSON_COLORS[Math.abs(hash) % PERSON_COLORS.length];
+}
 
-function DebtCard({
-  debt,
-  canWrite,
-  onView,
-  onEdit,
-  onDelete,
-}: {
-  debt: Debt;
-  canWrite: boolean;
-  onView: (id: string) => void;
-  onEdit: (debt: Debt) => void;
-  onDelete: (id: string) => void;
-}) {
-  const remaining = debt.totalAmount - debt.paidAmount;
-  const statusCfg = STATUS_CONFIG[debt.status];
-  const typeCfg = TYPE_CONFIG[debt.type];
+function getInitials(name: string): string {
+  return name
+    .split(/[\s·\-]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() ?? '')
+    .join('');
+}
 
-  return (
-    <Card
-      size="small"
-      style={{ marginBottom: 8 }}
-      onClick={() => onView(debt.id)}
-      hoverable
-    >
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <Text strong ellipsis style={{ display: 'block', marginBottom: 4 }}>
-            {debt.personName}
-          </Text>
-          <Space size={4} wrap>
-            <Tag color={typeCfg?.color}>{typeCfg?.label ?? debt.type}</Tag>
-            <Tag color={statusCfg?.color}>{statusCfg?.label ?? debt.status}</Tag>
-          </Space>
-          {debt.dueDate && (
-            <div style={{ marginTop: 4 }}>
-              <Text
-                type={dayjs(debt.dueDate).isBefore(dayjs(), 'day') ? 'danger' : 'secondary'}
-                style={{ fontSize: 12 }}
-              >
-                Vence: {formatDate(debt.dueDate)}
-              </Text>
-            </div>
-          )}
-        </div>
-        <div style={{ textAlign: 'right', marginLeft: 8, flexShrink: 0 }}>
-          <Text strong style={{ fontSize: 14 }}>
-            {formatCurrency(debt.totalAmount, debt.currency)}
-          </Text>
-          {remaining > 0 && (
-            <div>
-              <Text type="warning" style={{ fontSize: 12 }}>
-                Resta: {formatCurrency(remaining, debt.currency)}
-              </Text>
-            </div>
-          )}
-          {canWrite && (
-            <Space size={4} style={{ marginTop: 4 }}>
-              <Button
-                type="text"
-                size="small"
-                icon={<EditOutlined />}
-                onClick={(e) => { e.stopPropagation(); onEdit(debt); }}
-              />
-              <Popconfirm
-                title="Eliminar deuda"
-                description="Esta accion no se puede deshacer."
-                onConfirm={() => onDelete(debt.id)}
-                okText="Eliminar"
-                cancelText="Cancelar"
-                okButtonProps={{ danger: true }}
-              >
-                <Button
-                  type="text"
-                  size="small"
-                  danger
-                  icon={<DeleteOutlined />}
-                  onClick={(e) => e.stopPropagation()}
-                />
-              </Popconfirm>
-            </Space>
-          )}
-        </div>
-      </div>
-    </Card>
-  );
+function splitAmount(cents: number): { sign: string; integer: string; decimal: string } {
+  const abs = Math.abs(cents / 100);
+  const parts = abs.toFixed(2).split('.');
+  const integer = new Intl.NumberFormat('en-US').format(Number(parts[0]));
+  return {
+    sign: cents < 0 ? '−' : '',
+    integer,
+    decimal: `.${parts[1]}`,
+  };
 }
 
 export default function DebtsPage() {
   const { message } = App.useApp();
   const { canWrite } = usePermissions();
-  const isMobile = useIsMobile();
   const queryClient = useQueryClient();
 
   const [activeFilter, setActiveFilter] = useState<FilterTab>('ALL');
   const [modalOpen, setModalOpen] = useState(false);
   const [editingDebt, setEditingDebt] = useState<Debt | null>(null);
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const [selectedDebtId, setSelectedDebtId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+  const [paymentDebtId, setPaymentDebtId] = useState<string | null>(null);
 
   const [debtForm] = Form.useForm();
   const [paymentForm] = Form.useForm();
 
   // --- Queries ---
-
   const { data: debts = [], isLoading } = useQuery<Debt[]>({
     queryKey: ['debts'],
     queryFn: () => debtsService.getAll(),
@@ -203,21 +111,47 @@ export default function DebtsPage() {
     queryFn: () => accountsService.getAll(),
   });
 
-  const { data: debtDetail, isLoading: isLoadingDetail } = useQuery<DebtDetail>({
-    queryKey: ['debts', selectedDebtId],
-    queryFn: () => debtsService.getOne(selectedDebtId!),
-    enabled: !!selectedDebtId,
+  const { data: debtDetail } = useQuery<DebtDetail>({
+    queryKey: ['debts', expandedId],
+    queryFn: () => debtsService.getOne(expandedId!),
+    enabled: !!expandedId,
   });
 
   // --- Filtered data ---
-
   const filteredDebts = useMemo(() => {
     if (activeFilter === 'ALL') return debts;
     return debts.filter((d) => d.type === activeFilter);
   }, [debts, activeFilter]);
 
-  // --- Mutations ---
+  // --- Summary stats ---
+  const stats = useMemo(() => {
+    let receivable = 0;
+    let payable = 0;
+    let receivableCount = 0;
+    let payableCount = 0;
 
+    for (const d of debts) {
+      const remaining = d.totalAmount - d.paidAmount;
+      if (d.type === DebtType.RECEIVABLE) {
+        receivable += remaining;
+        if (d.status !== DebtStatus.PAID) receivableCount++;
+      } else {
+        payable += remaining;
+        if (d.status !== DebtStatus.PAID) payableCount++;
+      }
+    }
+
+    return {
+      net: receivable - payable,
+      receivable,
+      payable,
+      receivableCount,
+      payableCount,
+      total: debts.filter((d) => d.status !== DebtStatus.PAID).length,
+    };
+  }, [debts]);
+
+  // --- Mutations ---
   const createMutation = useMutation({
     mutationFn: (payload: CreateDebtDto) => debtsService.create(payload),
     onSuccess: () => {
@@ -225,9 +159,7 @@ export default function DebtsPage() {
       queryClient.invalidateQueries({ queryKey: ['debts'] });
       closeDebtModal();
     },
-    onError: () => {
-      message.error('Error al crear la deuda');
-    },
+    onError: () => message.error('Error al crear la deuda'),
   });
 
   const updateMutation = useMutation({
@@ -238,20 +170,17 @@ export default function DebtsPage() {
       queryClient.invalidateQueries({ queryKey: ['debts'] });
       closeDebtModal();
     },
-    onError: () => {
-      message.error('Error al actualizar la deuda');
-    },
+    onError: () => message.error('Error al actualizar la deuda'),
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => debtsService.remove(id),
-    onSuccess: () => {
+    onSuccess: (_data, deletedId) => {
       message.success('Deuda eliminada correctamente');
       queryClient.invalidateQueries({ queryKey: ['debts'] });
+      if (expandedId === deletedId) setExpandedId(null);
     },
-    onError: () => {
-      message.error('Error al eliminar la deuda');
-    },
+    onError: () => message.error('Error al eliminar la deuda'),
   });
 
   const addPaymentMutation = useMutation({
@@ -261,14 +190,13 @@ export default function DebtsPage() {
       message.success('Pago registrado correctamente');
       queryClient.invalidateQueries({ queryKey: ['debts'] });
       paymentForm.resetFields();
+      setPaymentModalOpen(false);
+      setPaymentDebtId(null);
     },
-    onError: () => {
-      message.error('Error al registrar el pago');
-    },
+    onError: () => message.error('Error al registrar el pago'),
   });
 
   // --- Handlers ---
-
   function openCreateModal() {
     setEditingDebt(null);
     debtForm.resetFields();
@@ -294,17 +222,11 @@ export default function DebtsPage() {
     debtForm.resetFields();
   }
 
-  function openDrawer(debtId: string) {
-    setSelectedDebtId(debtId);
+  function openPaymentModal(debtId: string) {
+    setPaymentDebtId(debtId);
     paymentForm.resetFields();
     paymentForm.setFieldsValue({ date: dayjs() });
-    setDrawerOpen(true);
-  }
-
-  function closeDrawer() {
-    setDrawerOpen(false);
-    setSelectedDebtId(null);
-    paymentForm.resetFields();
+    setPaymentModalOpen(true);
   }
 
   function handleDebtSubmit(values: {
@@ -337,235 +259,360 @@ export default function DebtsPage() {
     accountId: string;
     description?: string;
   }) {
-    if (!selectedDebtId) return;
-
+    if (!paymentDebtId) return;
     const payload: AddPaymentDto = {
       amount: Math.round(values.amount * 100),
       date: values.date.toISOString(),
       accountId: values.accountId,
       description: values.description?.trim(),
     };
-
-    addPaymentMutation.mutate({ id: selectedDebtId, payload });
+    addPaymentMutation.mutate({ id: paymentDebtId, payload });
   }
 
   function handleDelete(id: string) {
-    deleteMutation.mutate(id);
+    Modal.confirm({
+      title: 'Eliminar deuda',
+      content: 'Esta accion no se puede deshacer.',
+      okText: 'Eliminar',
+      cancelText: 'Cancelar',
+      okButtonProps: { danger: true },
+      onOk: () => deleteMutation.mutate(id),
+    });
   }
 
-  // --- Table columns ---
+  function toggleExpand(debtId: string) {
+    setExpandedId((prev) => (prev === debtId ? null : debtId));
+  }
 
-  const columns: ColumnsType<Debt> = [
-    {
-      title: 'Persona',
-      dataIndex: 'personName',
-      key: 'personName',
-      ellipsis: true,
-    },
-    {
-      title: 'Descripcion',
-      dataIndex: 'description',
-      key: 'description',
-      ellipsis: true,
-      responsive: ['md'],
-      render: (text: string) => text || '-',
-    },
-    {
-      title: 'Monto total',
-      dataIndex: 'totalAmount',
-      key: 'totalAmount',
-      align: 'right',
-      render: (amount: number, record: Debt) => formatCurrency(amount, record.currency),
-      sorter: (a, b) => a.totalAmount - b.totalAmount,
-    },
-    {
-      title: 'Pagado',
-      dataIndex: 'paidAmount',
-      key: 'paidAmount',
-      align: 'right',
-      render: (amount: number, record: Debt) => formatCurrency(amount, record.currency),
-    },
-    {
-      title: 'Restante',
-      key: 'remaining',
-      align: 'right',
-      render: (_: unknown, record: Debt) =>
-        formatCurrency(record.totalAmount - record.paidAmount, record.currency),
-    },
-    {
-      title: 'Estado',
-      dataIndex: 'status',
-      key: 'status',
-      render: (status: DebtStatus) => {
-        const config = STATUS_CONFIG[status];
-        return <Tag color={config?.color}>{config?.label ?? status}</Tag>;
-      },
-      filters: [
-        { text: 'Pendiente', value: DebtStatus.PENDING },
-        { text: 'Parcial', value: DebtStatus.PARTIAL },
-        { text: 'Pagada', value: DebtStatus.PAID },
-      ],
-      onFilter: (value, record) => record.status === value,
-    },
-    {
-      title: 'Tipo',
-      dataIndex: 'type',
-      key: 'type',
-      render: (type: DebtType) => {
-        const config = TYPE_CONFIG[type];
-        return <Tag color={config?.color}>{config?.label ?? type}</Tag>;
-      },
-    },
-    {
-      title: 'Vencimiento',
-      dataIndex: 'dueDate',
-      key: 'dueDate',
-      responsive: ['lg'],
-      render: (date: string | undefined) => {
-        if (!date) return '-';
-        const isOverdue = dayjs(date).isBefore(dayjs(), 'day');
-        return (
-          <Text type={isOverdue ? 'danger' : undefined}>
-            {formatDate(date)}
-          </Text>
-        );
-      },
-      sorter: (a, b) => {
-        if (!a.dueDate && !b.dueDate) return 0;
-        if (!a.dueDate) return 1;
-        if (!b.dueDate) return -1;
-        return dayjs(a.dueDate).unix() - dayjs(b.dueDate).unix();
-      },
-    },
-    {
-      title: 'Acciones',
-      key: 'actions',
-      width: 180,
-      render: (_: unknown, record: Debt) => (
-        <Space size="small">
-          <Button
-            type="text"
-            size="small"
-            icon={<EyeOutlined />}
-            onClick={() => openDrawer(record.id)}
-            title="Ver detalles"
-          />
-          {canWrite && record.status !== DebtStatus.PAID && (
-            <Button
-              type="text"
-              size="small"
-              icon={<DollarOutlined />}
-              onClick={() => openDrawer(record.id)}
-              title="Agregar pago"
-            />
-          )}
-          {canWrite && (
-            <Button
-              type="text"
-              size="small"
-              icon={<EditOutlined />}
-              onClick={() => openEditModal(record)}
-              title="Editar"
-            />
-          )}
-          {canWrite && (
-            <Popconfirm
-              title="Eliminar deuda"
-              description="Esta accion no se puede deshacer."
-              onConfirm={() => handleDelete(record.id)}
-              okText="Eliminar"
-              cancelText="Cancelar"
-              okButtonProps={{ danger: true }}
-            >
-              <Button
-                type="text"
-                size="small"
-                danger
-                icon={<DeleteOutlined />}
-                title="Eliminar"
-              />
-            </Popconfirm>
-          )}
-        </Space>
-      ),
-    },
-  ];
-
-  // --- Render ---
-
+  // --- Render helpers ---
   const isSaving = createMutation.isPending || updateMutation.isPending;
-  const remainingOnSelected = debtDetail
-    ? debtDetail.totalAmount - debtDetail.paidAmount
-    : 0;
-  const detailCurrency = debtDetail?.currency ?? 'USD';
+  const activeDebts = debts.filter((d) => d.status !== DebtStatus.PAID);
+  const paymentDebt = debts.find((d) => d.id === paymentDebtId);
+  const paymentRemaining = paymentDebt ? paymentDebt.totalAmount - paymentDebt.paidAmount : 0;
+  const paymentCurrency = paymentDebt?.currency ?? 'USD';
+
+  // Net amount display
+  const netAmt = splitAmount(stats.net);
+  const recAmt = splitAmount(stats.receivable);
+  const payAmt = splitAmount(stats.payable);
+
+  if (isLoading) {
+    return (
+      <div className={css.page}>
+        <div className={css.loading}>
+          <div style={{ color: 'var(--db-fg3)', fontFamily: "'Geist Mono', monospace", fontSize: 13 }}>
+            cargando deudas...
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div>
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 8 }}>
-        <Title level={isMobile ? 3 : 2} style={{ margin: 0 }}>
-          Deudas
-        </Title>
-        {canWrite && (
-          <Button type="primary" icon={<PlusOutlined />} onClick={openCreateModal}>
-            {isMobile ? 'Nueva' : 'Nueva Deuda'}
-          </Button>
+    <div className={css.page}>
+      {/* Page header */}
+      <header className={css.pageHead}>
+        <div>
+          <h1 className={css.pageTitle}>Deudas</h1>
+          <div className={css.pageSub}>
+            {activeDebts.length} deuda{activeDebts.length !== 1 ? 's' : ''} activa{activeDebts.length !== 1 ? 's' : ''}
+          </div>
+        </div>
+        <div className={css.pageActions}>
+          {canWrite && (
+            <button
+              onClick={openCreateModal}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '8px 14px',
+                borderRadius: 8,
+                border: 'none',
+                background: 'var(--db-accent)',
+                color: '#1a1715',
+                fontSize: 13,
+                fontWeight: 500,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+              }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+              Nueva deuda
+            </button>
+          )}
+        </div>
+      </header>
+
+      {/* Hero stats */}
+      {debts.length > 0 && (
+        <section className={css.heroGrid}>
+          {/* Net balance */}
+          <article className={css.card}>
+            <div className={css.cardLabel}>
+              <span className={css.cardDot} />
+              balance neto · deudas
+            </div>
+            <div className={`${css.bigNum} ${stats.net > 0 ? css.bigNumPos : ''}`}>
+              {stats.net > 0 ? '+' : stats.net < 0 ? '−' : ''}
+              <span className={css.bigNumCur}>$</span>
+              {netAmt.integer}
+              <span className={css.bigNumDec}>{netAmt.decimal}</span>
+            </div>
+            <div className={css.flowRow}>
+              <div className={css.flowItem}>
+                <span className={css.flowLabel}>te deben</span>
+                <span className={`${css.flowVal} ${css.flowValPos}`}>
+                  +{formatCurrency(stats.receivable, 'USD').replace('$', '$')}
+                </span>
+              </div>
+              <div className={css.flowItem}>
+                <span className={css.flowLabel}>debes</span>
+                <span className={`${css.flowVal} ${css.flowValNeg}`}>
+                  −{formatCurrency(stats.payable, 'USD').replace('$', '$').replace('-', '')}
+                </span>
+              </div>
+            </div>
+          </article>
+
+          {/* Receivable */}
+          <article className={css.card}>
+            <div className={css.cardLabel}>
+              <span className={css.cardDotPos} />
+              por cobrar
+            </div>
+            <div className={css.bigNum}>
+              <span className={css.bigNumCur}>$</span>
+              {recAmt.integer}
+              <span className={css.bigNumDec}>{recAmt.decimal}</span>
+            </div>
+            <div className={css.flowRow}>
+              <div className={css.flowItem}>
+                <span className={css.flowLabel}>personas</span>
+                <span className={css.flowVal} style={{ fontSize: 13 }}>{stats.receivableCount}</span>
+              </div>
+            </div>
+          </article>
+
+          {/* Payable */}
+          <article className={css.card}>
+            <div className={css.cardLabel}>
+              <span className={css.cardDotNeg} />
+              por pagar
+            </div>
+            <div className={css.bigNum}>
+              <span className={css.bigNumCur}>$</span>
+              {payAmt.integer}
+              <span className={css.bigNumDec}>{payAmt.decimal}</span>
+            </div>
+            <div className={css.flowRow}>
+              <div className={css.flowItem}>
+                <span className={css.flowLabel}>personas</span>
+                <span className={css.flowVal} style={{ fontSize: 13 }}>{stats.payableCount}</span>
+              </div>
+            </div>
+          </article>
+        </section>
+      )}
+
+      {/* People list */}
+      <div className={css.peopleList}>
+        <header className={css.plHead}>
+          <h3 className={css.plTitle}>Deudas</h3>
+          <span className={css.plCount}>{filteredDebts.length} total</span>
+
+          <div className={css.seg}>
+            {([
+              { label: 'Todas', value: 'ALL' as FilterTab },
+              { label: 'Te deben', value: DebtType.RECEIVABLE as FilterTab },
+              { label: 'Debes', value: DebtType.PAYABLE as FilterTab },
+            ]).map((opt) => (
+              <button
+                key={opt.value}
+                className={activeFilter === opt.value ? css.segBtnOn : css.segBtn}
+                onClick={() => setActiveFilter(opt.value)}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </header>
+
+        {filteredDebts.length === 0 ? (
+          <div className={css.emptyState}>
+            No hay deudas registradas
+          </div>
+        ) : (
+          filteredDebts.map((debt) => {
+            const remaining = debt.totalAmount - debt.paidAmount;
+            const isReceivable = debt.type === DebtType.RECEIVABLE;
+            const isExpanded = expandedId === debt.id;
+            const color = getPersonColor(debt.personName);
+            const initials = getInitials(debt.personName);
+            const isOverdue = debt.dueDate && dayjs(debt.dueDate).isBefore(dayjs(), 'day');
+            const isDueSoon = debt.dueDate && !isOverdue && dayjs(debt.dueDate).diff(dayjs(), 'day') <= 7;
+            const daysLabel = debt.dueDate
+              ? isOverdue
+                ? `vencida ${dayjs().diff(dayjs(debt.dueDate), 'day')}d`
+                : isDueSoon
+                  ? `vence en ${dayjs(debt.dueDate).diff(dayjs(), 'day')}d`
+                  : null
+              : null;
+
+            return (
+              <div key={debt.id}>
+                <div
+                  className={isExpanded ? css.personOpen : css.person}
+                  style={{ '--person-color': color } as React.CSSProperties}
+                  onClick={() => toggleExpand(debt.id)}
+                >
+                  <div className={css.avatar}>{initials}</div>
+                  <div>
+                    <div className={css.personName}>
+                      {debt.personName}
+                      {debt.status === DebtStatus.PARTIAL && (
+                        <span className={css.statusPartial}>parcial</span>
+                      )}
+                      {isOverdue && debt.status !== DebtStatus.PAID && (
+                        <span className={css.statusOverdue}>{daysLabel}</span>
+                      )}
+                      {isDueSoon && debt.status !== DebtStatus.PAID && (
+                        <span className={css.statusDue}>{daysLabel}</span>
+                      )}
+                    </div>
+                    <div className={css.personSub}>
+                      <span>{formatRelativeDate(debt.updatedAt)}</span>
+                      <span className={css.personSubDot} />
+                      <span>{debt.description || (isReceivable ? 'te debe' : 'le debes')}</span>
+                    </div>
+                  </div>
+                  <div className={css.personAmt}>
+                    <span className={`${css.personAmtNum} ${isReceivable ? css.personAmtPos : css.personAmtNeg}`}>
+                      {isReceivable ? '+' : '−'}{formatCurrency(remaining, debt.currency)}
+                    </span>
+                    <span className={css.personAmtSub}>
+                      {isReceivable ? 'te debe' : 'le debes'} · {debt.currency.toLowerCase()}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Expanded detail */}
+                {isExpanded && (
+                  <div className={css.personDetail}>
+                    <div className={css.timeline}>
+                      {/* Original debt */}
+                      <div className={`${css.tlEntry} ${debt.status === DebtStatus.PAID ? css.tlEntryPaid : css.tlEntryPending}`}>
+                        <div className={css.tlRow}>
+                          <div>
+                            <div className={css.tlTitle}>
+                              {debt.description || 'Deuda original'} · {debt.status === DebtStatus.PAID ? 'pagada' : 'pendiente'}
+                            </div>
+                            <div className={css.tlSub}>
+                              creada {formatDate(debt.createdAt)}
+                              {debt.dueDate && ` · vence ${formatDate(debt.dueDate)}`}
+                            </div>
+                          </div>
+                          <div className={css.tlAmt}>
+                            {formatCurrency(debt.totalAmount, debt.currency)} {debt.currency.toLowerCase()}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Payment history */}
+                      {debtDetail?.transactions?.map((tx) => (
+                        <div key={tx.id} className={`${css.tlEntry} ${css.tlEntryPaid}`}>
+                          <div className={css.tlRow}>
+                            <div>
+                              <div className={css.tlTitle}>
+                                Pago {tx.description ? `— ${tx.description}` : ''}
+                              </div>
+                              <div className={css.tlSub}>
+                                {formatDate(tx.date)}
+                                {tx.account && ` · via ${tx.account.name}`}
+                              </div>
+                            </div>
+                            <div className={`${css.tlAmt} ${css.tlAmtPos}`}>
+                              +{formatCurrency(tx.amount, tx.account?.currency ?? debt.currency)}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Actions */}
+                    <div className={css.pdActions}>
+                      {canWrite && debt.status !== DebtStatus.PAID && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); openPaymentModal(debt.id); }}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            padding: '7px 12px',
+                            borderRadius: 8,
+                            border: 'none',
+                            background: 'var(--db-accent)',
+                            color: '#1a1715',
+                            fontSize: 12,
+                            fontWeight: 500,
+                            cursor: 'pointer',
+                            fontFamily: 'inherit',
+                          }}
+                        >
+                          Registrar pago
+                        </button>
+                      )}
+                      {canWrite && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); openEditModal(debt); }}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            padding: '7px 12px',
+                            borderRadius: 8,
+                            border: '1px solid var(--db-line)',
+                            background: 'var(--db-surface)',
+                            color: 'var(--db-fg2)',
+                            fontSize: 12,
+                            cursor: 'pointer',
+                            fontFamily: 'inherit',
+                          }}
+                        >
+                          Editar
+                        </button>
+                      )}
+                      {canWrite && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleDelete(debt.id); }}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            padding: '7px 12px',
+                            borderRadius: 8,
+                            border: '1px solid var(--db-neg-soft)',
+                            background: 'transparent',
+                            color: 'var(--db-neg)',
+                            fontSize: 12,
+                            cursor: 'pointer',
+                            fontFamily: 'inherit',
+                            marginLeft: 'auto',
+                          }}
+                        >
+                          Eliminar
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })
         )}
       </div>
-
-      {/* Filter tabs */}
-      <div style={{ marginBottom: 16 }}>
-        <Segmented
-          value={activeFilter}
-          onChange={(val) => setActiveFilter(val as FilterTab)}
-          options={[
-            { label: 'Todas', value: 'ALL' },
-            { label: 'Me deben', value: DebtType.RECEIVABLE },
-            { label: 'Debo', value: DebtType.PAYABLE },
-          ]}
-        />
-      </div>
-
-      {/* Debts table / cards */}
-      {isMobile ? (
-        isLoading ? (
-          <div style={{ textAlign: 'center', padding: 24 }}><Spin /></div>
-        ) : filteredDebts.length === 0 ? (
-          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No hay deudas registradas" />
-        ) : (
-          filteredDebts.map((debt) => (
-            <DebtCard
-              key={debt.id}
-              debt={debt}
-              canWrite={canWrite}
-              onView={openDrawer}
-              onEdit={openEditModal}
-              onDelete={handleDelete}
-            />
-          ))
-        )
-      ) : (
-        <Table<Debt>
-          columns={columns}
-          dataSource={filteredDebts}
-          rowKey="id"
-          loading={isLoading}
-          pagination={{
-            pageSize: 20,
-            showSizeChanger: true,
-            showTotal: (total) => `${total} deudas`,
-          }}
-          locale={{
-            emptyText: (
-              <Empty
-                image={Empty.PRESENTED_IMAGE_SIMPLE}
-                description="No hay deudas registradas"
-              />
-            ),
-          }}
-          scroll={{ x: 800 }}
-        />
-      )}
 
       {/* Create / Edit Debt Modal */}
       <Modal
@@ -590,11 +637,7 @@ export default function DebtsPage() {
           </Form.Item>
 
           <Form.Item name="description" label="Descripcion">
-            <TextArea
-              placeholder="Descripcion o motivo de la deuda"
-              rows={3}
-              maxLength={500}
-            />
+            <TextArea placeholder="Descripcion o motivo de la deuda" rows={3} maxLength={500} />
           </Form.Item>
 
           <Form.Item
@@ -641,198 +684,150 @@ export default function DebtsPage() {
           </Form.Item>
 
           <Form.Item name="dueDate" label="Fecha de vencimiento (opcional)">
-            <DatePicker
-              style={{ width: '100%' }}
-              format="DD/MM/YYYY"
-              placeholder="Seleccione una fecha"
-            />
+            <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" placeholder="Seleccione una fecha" />
           </Form.Item>
 
           <Form.Item style={{ marginBottom: 0, textAlign: 'right' }}>
-            <Space>
-              <Button onClick={closeDebtModal}>Cancelar</Button>
-              <Button type="primary" htmlType="submit" loading={isSaving}>
-                {editingDebt ? 'Guardar cambios' : 'Crear deuda'}
-              </Button>
-            </Space>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                onClick={closeDebtModal}
+                style={{
+                  padding: '7px 14px',
+                  borderRadius: 8,
+                  border: '1px solid var(--db-line)',
+                  background: 'var(--db-surface2)',
+                  color: 'var(--db-fg2)',
+                  fontSize: 13,
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={isSaving}
+                style={{
+                  padding: '7px 14px',
+                  borderRadius: 8,
+                  border: 'none',
+                  background: 'var(--db-accent)',
+                  color: '#1a1715',
+                  fontSize: 13,
+                  fontWeight: 500,
+                  cursor: isSaving ? 'wait' : 'pointer',
+                  opacity: isSaving ? 0.7 : 1,
+                  fontFamily: 'inherit',
+                }}
+              >
+                {isSaving ? 'Guardando...' : editingDebt ? 'Guardar cambios' : 'Crear deuda'}
+              </button>
+            </div>
           </Form.Item>
         </Form>
       </Modal>
 
-      {/* Debt Detail + Payment Drawer */}
-      <Drawer
-        title="Detalle de deuda"
-        open={drawerOpen}
-        onClose={closeDrawer}
-        width={isMobile ? '100%' : 520}
+      {/* Payment Modal */}
+      <Modal
+        title="Registrar pago"
+        open={paymentModalOpen}
+        onCancel={() => { setPaymentModalOpen(false); setPaymentDebtId(null); }}
+        footer={null}
         destroyOnClose
       >
-        {isLoadingDetail ? (
-          <div style={{ textAlign: 'center', padding: 48 }}>
-            <Spin size="large" />
+        {paymentDebt && (
+          <div style={{
+            marginBottom: 16,
+            padding: '10px 14px',
+            background: 'var(--db-surface2)',
+            borderRadius: 8,
+            fontFamily: "'Geist Mono', monospace",
+            fontSize: 12,
+            color: 'var(--db-fg3)',
+          }}>
+            {paymentDebt.personName} · Restante: {formatCurrency(paymentRemaining, paymentCurrency)}
           </div>
-        ) : debtDetail ? (
-          <>
-            {/* Debt summary */}
-            <Descriptions column={1} size="small" bordered>
-              <Descriptions.Item label="Persona">
-                {debtDetail.personName}
-              </Descriptions.Item>
-              {debtDetail.description && (
-                <Descriptions.Item label="Descripcion">
-                  {debtDetail.description}
-                </Descriptions.Item>
-              )}
-              <Descriptions.Item label="Tipo">
-                <Tag color={TYPE_CONFIG[debtDetail.type]?.color}>
-                  {TYPE_CONFIG[debtDetail.type]?.label ?? debtDetail.type}
-                </Tag>
-              </Descriptions.Item>
-              <Descriptions.Item label="Monto total">
-                {formatCurrency(debtDetail.totalAmount, detailCurrency)}
-              </Descriptions.Item>
-              <Descriptions.Item label="Pagado">
-                {formatCurrency(debtDetail.paidAmount, detailCurrency)}
-              </Descriptions.Item>
-              <Descriptions.Item label="Restante">
-                <Text strong type={remainingOnSelected > 0 ? 'warning' : 'success'}>
-                  {formatCurrency(remainingOnSelected, detailCurrency)}
-                </Text>
-              </Descriptions.Item>
-              <Descriptions.Item label="Estado">
-                <Tag color={STATUS_CONFIG[debtDetail.status]?.color}>
-                  {STATUS_CONFIG[debtDetail.status]?.label ?? debtDetail.status}
-                </Tag>
-              </Descriptions.Item>
-              {debtDetail.dueDate && (
-                <Descriptions.Item label="Vencimiento">
-                  {formatDate(debtDetail.dueDate)}
-                </Descriptions.Item>
-              )}
-              <Descriptions.Item label="Creada">
-                {formatDate(debtDetail.createdAt)}
-              </Descriptions.Item>
-            </Descriptions>
-
-            {/* Payment history */}
-            <Divider orientation="left">Historial de pagos</Divider>
-
-            {debtDetail.transactions && debtDetail.transactions.length > 0 ? (
-              <List
-                size="small"
-                dataSource={debtDetail.transactions}
-                renderItem={(tx) => (
-                  <List.Item>
-                    <List.Item.Meta
-                      title={
-                        <Space>
-                          <Text>{formatDate(tx.date)}</Text>
-                          {tx.account && (
-                            <Tag>{tx.account.name}</Tag>
-                          )}
-                        </Space>
-                      }
-                      description={tx.description || undefined}
-                    />
-                    <Text strong style={{ color: '#52c41a' }}>
-                      {formatCurrency(tx.amount, tx.account?.currency ?? 'USD')}
-                    </Text>
-                  </List.Item>
-                )}
-              />
-            ) : (
-              <Empty
-                image={Empty.PRESENTED_IMAGE_SIMPLE}
-                description="No hay pagos registrados"
-              />
-            )}
-
-            {/* Add payment form */}
-            {canWrite && debtDetail.status !== DebtStatus.PAID && (
-              <>
-                <Divider orientation="left">Registrar pago</Divider>
-                <Form
-                  form={paymentForm}
-                  layout="vertical"
-                  onFinish={handlePaymentSubmit}
-                  initialValues={{ date: dayjs() }}
-                >
-                  <Form.Item
-                    name="amount"
-                    label="Monto"
-                    rules={[
-                      { required: true, message: 'El monto es obligatorio' },
-                      {
-                        type: 'number',
-                        min: 0.01,
-                        message: 'El monto debe ser mayor a 0',
-                      },
-                      {
-                        type: 'number',
-                        max: remainingOnSelected / 100,
-                        message: `El monto no puede superar ${formatCurrency(remainingOnSelected, detailCurrency)}`,
-                      },
-                    ]}
-                  >
-                    <InputNumber
-                      style={{ width: '100%' }}
-                      placeholder="0.00"
-                      min={0.01}
-                      max={remainingOnSelected / 100}
-                      step={0.01}
-                      precision={2}
-                      prefix="$"
-                    />
-                  </Form.Item>
-
-                  <Form.Item
-                    name="date"
-                    label="Fecha"
-                    rules={[{ required: true, message: 'La fecha es obligatoria' }]}
-                  >
-                    <DatePicker
-                      style={{ width: '100%' }}
-                      format="DD/MM/YYYY"
-                    />
-                  </Form.Item>
-
-                  <Form.Item
-                    name="accountId"
-                    label="Cuenta"
-                    rules={[{ required: true, message: 'Seleccione una cuenta' }]}
-                  >
-                    <Select placeholder="Seleccione la cuenta">
-                      {accounts.map((acc) => (
-                        <Select.Option key={acc.id} value={acc.id}>
-                          {acc.name} ({acc.currency})
-                        </Select.Option>
-                      ))}
-                    </Select>
-                  </Form.Item>
-
-                  <Form.Item name="description" label="Notas (opcional)">
-                    <TextArea rows={2} placeholder="Notas adicionales" maxLength={250} />
-                  </Form.Item>
-
-                  <Form.Item style={{ marginBottom: 0 }}>
-                    <Button
-                      type="primary"
-                      htmlType="submit"
-                      loading={addPaymentMutation.isPending}
-                      block
-                      icon={<DollarOutlined />}
-                    >
-                      Registrar pago
-                    </Button>
-                  </Form.Item>
-                </Form>
-              </>
-            )}
-          </>
-        ) : (
-          <Empty description="No se encontro la deuda" />
         )}
-      </Drawer>
+        <Form
+          form={paymentForm}
+          layout="vertical"
+          onFinish={handlePaymentSubmit}
+          initialValues={{ date: dayjs() }}
+        >
+          <Form.Item
+            name="amount"
+            label="Monto"
+            rules={[
+              { required: true, message: 'El monto es obligatorio' },
+              { type: 'number', min: 0.01, message: 'El monto debe ser mayor a 0' },
+              { type: 'number', max: paymentRemaining / 100, message: `Maximo: ${formatCurrency(paymentRemaining, paymentCurrency)}` },
+            ]}
+          >
+            <InputNumber
+              style={{ width: '100%' }}
+              placeholder="0.00"
+              min={0.01}
+              max={paymentRemaining / 100}
+              step={0.01}
+              precision={2}
+              prefix="$"
+            />
+          </Form.Item>
+
+          <Form.Item
+            name="date"
+            label="Fecha"
+            rules={[{ required: true, message: 'La fecha es obligatoria' }]}
+          >
+            <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" />
+          </Form.Item>
+
+          <Form.Item
+            name="accountId"
+            label="Cuenta"
+            rules={[{ required: true, message: 'Seleccione una cuenta' }]}
+          >
+            <Select placeholder="Seleccione la cuenta">
+              {accounts.map((acc) => (
+                <Select.Option key={acc.id} value={acc.id}>
+                  {acc.name} ({acc.currency})
+                </Select.Option>
+              ))}
+            </Select>
+          </Form.Item>
+
+          <Form.Item name="description" label="Notas (opcional)">
+            <TextArea rows={2} placeholder="Notas adicionales" maxLength={250} />
+          </Form.Item>
+
+          <Form.Item style={{ marginBottom: 0 }}>
+            <button
+              type="submit"
+              disabled={addPaymentMutation.isPending}
+              style={{
+                width: '100%',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6,
+                padding: '9px 14px',
+                borderRadius: 8,
+                border: 'none',
+                background: 'var(--db-accent)',
+                color: '#1a1715',
+                fontSize: 13,
+                fontWeight: 500,
+                cursor: addPaymentMutation.isPending ? 'wait' : 'pointer',
+                opacity: addPaymentMutation.isPending ? 0.7 : 1,
+                fontFamily: 'inherit',
+              }}
+            >
+              {addPaymentMutation.isPending ? 'Registrando...' : 'Registrar pago'}
+            </button>
+          </Form.Item>
+        </Form>
+      </Modal>
     </div>
   );
 }

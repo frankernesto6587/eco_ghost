@@ -1,0 +1,349 @@
+/* ═══════ Ember Palette (CSS vars for accounts) ═══════ */
+:root {
+  --db-accent: #d4700a;
+  --db-accent-soft: rgba(212, 112, 10, 0.16);
+  --db-accent-weak: rgba(212, 112, 10, 0.08);
+  --db-bg: #1a1715;
+  --db-surface: #282420;
+  --db-surface2: #302b27;
+  --db-surface3: #3d3730;
+  --db-line: #3d3730;
+  --db-line-soft: #332e28;
+  --db-fg: #f5f0eb;
+  --db-fg2: #bfb5a8;
+  --db-fg3: #8a7e72;
+  --db-fg4: #6b6058;
+  --db-pos: #4da666;
+  --db-pos-soft: rgba(77, 166, 102, 0.14);
+  --db-neg: #c9503c;
+  --db-neg-soft: rgba(201, 80, 60, 0.14);
+}
+
+/* ═══════ PAGE ═══════ */
+.page {
+  max-width: 1360px;
+  font-family: 'Geist', 'Inter', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ═══════ PAGE HEADER ═══════ */
+.pageHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 28px;
+}
+
+.pageTitle {
+  font-size: 28px;
+  font-weight: 500;
+  letter-spacing: -0.022em;
+  line-height: 1.1;
+  color: var(--db-fg);
+  margin: 0;
+}
+
+.pageSub {
+  color: var(--db-fg3);
+  font-size: 13px;
+  margin-top: 4px;
+  font-family: 'Geist Mono', monospace;
+  letter-spacing: 0.02em;
+}
+
+.pageActions {
+  display: flex;
+  gap: 8px;
+}
+
+/* ═══════ GROUP HEADER ═══════ */
+.groupHd {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 0 12px;
+}
+
+.groupTitle {
+  font-size: 12px;
+  font-family: 'Geist Mono', monospace;
+  letter-spacing: 0.14em;
+  color: var(--db-fg3);
+  text-transform: uppercase;
+  margin: 0;
+  white-space: nowrap;
+}
+
+.groupLine {
+  flex: 1;
+  height: 1px;
+  background: var(--db-line-soft);
+}
+
+.groupTotal {
+  font-family: 'Geist Mono', monospace;
+  font-size: 12px;
+  color: var(--db-fg);
+  font-feature-settings: 'tnum';
+  white-space: nowrap;
+}
+
+.groupTotalLabel {
+  color: var(--db-fg3);
+}
+
+/* ═══════ ACCOUNTS GRID ═══════ */
+.accountsGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 14px;
+  margin-bottom: 28px;
+}
+
+/* ═══════ ACCOUNT CARD ═══════ */
+.accCard {
+  background: var(--db-surface);
+  border: 1px solid var(--db-line);
+  border-radius: 14px;
+  padding: 18px 20px;
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color 0.12s, transform 0.12s;
+}
+
+.accCard:hover {
+  border-color: var(--db-fg4);
+}
+
+.accCard::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--card-color, var(--db-accent));
+}
+
+/* Header row */
+.accHead {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.accIcon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--card-color, var(--db-accent));
+  color: #1a1715;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Geist Mono', monospace;
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
+}
+
+.accMeta {
+  flex: 1;
+  min-width: 0;
+}
+
+.accName {
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  margin-bottom: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--db-fg);
+}
+
+.accSub {
+  font-family: 'Geist Mono', monospace;
+  font-size: 11px;
+  color: var(--db-fg3);
+  letter-spacing: 0.02em;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.accSubDot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--db-fg4);
+}
+
+.accMore {
+  color: var(--db-fg4);
+  padding: 4px;
+  border-radius: 6px;
+  line-height: 1;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.accMore:hover {
+  color: var(--db-fg);
+  background: var(--db-surface2);
+}
+
+/* Balance */
+.accBalance {
+  font-family: 'Geist Mono', monospace;
+  font-size: 26px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  font-feature-settings: 'tnum';
+  display: flex;
+  align-items: baseline;
+  gap: 3px;
+  line-height: 1;
+  margin-bottom: 6px;
+  color: var(--db-fg);
+}
+
+.accBalNeg {
+  color: var(--db-neg);
+}
+
+.accBalCur {
+  font-size: 13px;
+  color: var(--db-fg3);
+}
+
+.accBalDec {
+  color: var(--db-fg3);
+  font-size: 18px;
+}
+
+.accEquiv {
+  font-family: 'Geist Mono', monospace;
+  font-size: 11px;
+  color: var(--db-fg3);
+  letter-spacing: 0.02em;
+  margin-bottom: 14px;
+}
+
+/* Mini chart */
+.miniChart {
+  height: 40px;
+  margin: 0 -4px;
+}
+
+.miniChart svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* Footer */
+.accFoot {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--db-line-soft);
+  font-family: 'Geist Mono', monospace;
+  font-size: 11px;
+  color: var(--db-fg3);
+  letter-spacing: 0.02em;
+}
+
+.accDeltaPos {
+  color: var(--db-pos);
+}
+
+.accDeltaNeg {
+  color: var(--db-neg);
+}
+
+/* ═══════ ADD NEW CARD ═══════ */
+.addCard {
+  background: var(--db-surface);
+  border: 1px dashed var(--db-line);
+  border-radius: 14px;
+  color: var(--db-fg3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 220px;
+  cursor: pointer;
+  transition: border-color 0.12s, color 0.12s, background 0.12s;
+}
+
+.addCard:hover {
+  border-color: var(--db-accent);
+  color: var(--db-accent);
+  background: var(--db-accent-weak);
+}
+
+.addCardPlus {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1.5px dashed currentColor;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.addCardLabel {
+  font-family: 'Geist Mono', monospace;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+}
+
+.addCardSub {
+  font-size: 11px;
+  color: var(--db-fg4);
+  font-family: 'Geist Mono', monospace;
+}
+
+/* ═══════ LOADING / EMPTY ═══════ */
+.loading {
+  display: flex;
+  justify-content: center;
+  padding-top: 120px;
+}
+
+.emptyState {
+  text-align: center;
+  padding: 40px;
+  color: var(--db-fg3);
+  font-size: 14px;
+}
+
+/* ═══════ RESPONSIVE ═══════ */
+@media (max-width: 1000px) {
+  .accountsGrid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 900px) {
+  .pageHead {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .accountsGrid {
+    grid-template-columns: 1fr;
+  }
+}

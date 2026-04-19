@@ -1,0 +1,491 @@
+/* ═══════ Ember Palette (CSS vars for debts) ═══════ */
+:root {
+  --db-accent: #d4700a;
+  --db-accent-soft: rgba(212, 112, 10, 0.16);
+  --db-accent-weak: rgba(212, 112, 10, 0.08);
+  --db-bg: #1a1715;
+  --db-surface: #282420;
+  --db-surface2: #302b27;
+  --db-surface3: #3d3730;
+  --db-line: #3d3730;
+  --db-line-soft: #332e28;
+  --db-fg: #f5f0eb;
+  --db-fg2: #bfb5a8;
+  --db-fg3: #8a7e72;
+  --db-fg4: #6b6058;
+  --db-pos: #4da666;
+  --db-pos-soft: rgba(77, 166, 102, 0.14);
+  --db-neg: #c9503c;
+  --db-neg-soft: rgba(201, 80, 60, 0.14);
+  --db-shadow1: 0 1px 0 rgba(51, 46, 40, 0.6), 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+/* ═══════ PAGE ═══════ */
+.page {
+  max-width: 1360px;
+  font-family: 'Geist', 'Inter', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ═══════ PAGE HEADER ═══════ */
+.pageHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 28px;
+}
+
+.pageTitle {
+  font-size: 28px;
+  font-weight: 500;
+  letter-spacing: -0.022em;
+  line-height: 1.1;
+  color: var(--db-fg);
+  margin: 0;
+}
+
+.pageSub {
+  color: var(--db-fg3);
+  font-size: 13px;
+  margin-top: 4px;
+  font-family: 'Geist Mono', monospace;
+  letter-spacing: 0.02em;
+}
+
+.pageActions {
+  display: flex;
+  gap: 8px;
+}
+
+/* ═══════ HERO GRID ═══════ */
+.heroGrid {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+/* ═══════ CARD BASE ═══════ */
+.card {
+  background: var(--db-surface);
+  border: 1px solid var(--db-line);
+  border-radius: 14px;
+  padding: 18px 20px;
+  position: relative;
+  overflow: hidden;
+}
+
+.card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg,
+    transparent,
+    rgba(212, 112, 10, 0.55) 40%,
+    rgba(212, 112, 10, 0.55) 60%,
+    transparent);
+}
+
+.cardLabel {
+  font-family: 'Geist Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  color: var(--db-fg3);
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.cardDot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--db-accent);
+  box-shadow: 0 0 0 3px var(--db-accent-weak);
+}
+
+.cardDotPos {
+  composes: cardDot;
+  background: var(--db-pos);
+  box-shadow: 0 0 0 3px var(--db-pos-soft);
+}
+
+.cardDotNeg {
+  composes: cardDot;
+  background: var(--db-neg);
+  box-shadow: 0 0 0 3px var(--db-neg-soft);
+}
+
+/* Big number */
+.bigNum {
+  font-family: 'Geist Mono', monospace;
+  font-size: 36px;
+  font-weight: 500;
+  letter-spacing: -0.025em;
+  font-feature-settings: 'tnum';
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  line-height: 1;
+  color: var(--db-fg);
+}
+
+.bigNumPos { color: var(--db-pos); }
+
+.bigNumCur { font-size: 15px; color: var(--db-fg3); }
+.bigNumDec { color: var(--db-fg3); font-size: 22px; }
+
+/* Flow row */
+.flowRow {
+  display: flex;
+  gap: 14px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--db-line-soft);
+  font-size: 12px;
+  font-family: 'Geist Mono', monospace;
+}
+
+.flowItem { flex: 1; }
+
+.flowLabel {
+  color: var(--db-fg3);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.flowVal {
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.flowValPos { color: var(--db-pos); }
+.flowValNeg { color: var(--db-neg); }
+
+/* ═══════ PEOPLE LIST ═══════ */
+.peopleList {
+  background: var(--db-surface);
+  border: 1px solid var(--db-line);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.plHead {
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--db-line-soft);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.plTitle {
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+
+.plCount {
+  font-family: 'Geist Mono', monospace;
+  font-size: 11px;
+  color: var(--db-fg3);
+  padding: 2px 8px;
+  background: var(--db-surface2);
+  border-radius: 6px;
+}
+
+/* Segmented filter */
+.seg {
+  display: inline-flex;
+  background: var(--db-surface2);
+  border: 1px solid var(--db-line);
+  border-radius: 8px;
+  padding: 2px;
+  margin-left: auto;
+}
+
+.segBtn {
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--db-fg3);
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.12s;
+}
+
+.segBtnOn {
+  composes: segBtn;
+  background: var(--db-surface);
+  color: var(--db-fg);
+  box-shadow: var(--db-shadow1);
+}
+
+/* ═══════ PERSON ROW ═══════ */
+.person {
+  display: grid;
+  grid-template-columns: 44px 1fr auto;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--db-line-soft);
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.person:hover { background: var(--db-surface2); }
+.person:last-child { border-bottom: 0; }
+
+.personOpen {
+  composes: person;
+  border-bottom: 0;
+  background: var(--db-surface2);
+}
+
+.avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 500;
+  background: linear-gradient(135deg, var(--person-color, var(--db-accent)), color-mix(in oklab, var(--person-color, var(--db-accent)) 60%, #3d3730));
+  color: #1a1715;
+  letter-spacing: -0.01em;
+  flex-shrink: 0;
+}
+
+.personName {
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--db-fg);
+}
+
+.statusBadge {
+  font-family: 'Geist Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+.statusOverdue {
+  composes: statusBadge;
+  background: var(--db-neg-soft);
+  color: var(--db-neg);
+}
+
+.statusDue {
+  composes: statusBadge;
+  background: var(--db-accent-weak);
+  color: var(--db-accent);
+}
+
+.statusPartial {
+  composes: statusBadge;
+  background: rgba(91, 155, 213, 0.14);
+  color: #5b9bd5;
+}
+
+.personSub {
+  font-family: 'Geist Mono', monospace;
+  font-size: 11px;
+  color: var(--db-fg3);
+  letter-spacing: 0.02em;
+  margin-top: 2px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.personSubDot {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--db-fg4);
+}
+
+.personAmt {
+  text-align: right;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.personAmtNum {
+  font-family: 'Geist Mono', monospace;
+  font-size: 17px;
+  font-weight: 500;
+  font-feature-settings: 'tnum';
+  letter-spacing: -0.005em;
+}
+
+.personAmtPos { color: var(--db-pos); }
+.personAmtNeg { color: var(--db-neg); }
+
+.personAmtSub {
+  font-family: 'Geist Mono', monospace;
+  font-size: 10px;
+  color: var(--db-fg3);
+  letter-spacing: 0.02em;
+}
+
+/* ═══════ PERSON DETAIL (expanded) ═══════ */
+.personDetail {
+  padding: 0 20px 18px 78px;
+  border-bottom: 1px solid var(--db-line-soft);
+  background: var(--db-surface2);
+}
+
+.timeline {
+  position: relative;
+  padding-left: 20px;
+  margin-top: 4px;
+}
+
+.timeline::before {
+  content: '';
+  position: absolute;
+  top: 12px;
+  bottom: 12px;
+  left: 5px;
+  width: 1px;
+  background: var(--db-line);
+}
+
+.tlEntry {
+  position: relative;
+  padding: 10px 0;
+  font-size: 13px;
+}
+
+.tlEntry::before {
+  content: '';
+  position: absolute;
+  left: -20px;
+  top: 16px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--db-accent);
+  border: 2px solid var(--db-surface2);
+}
+
+.tlEntryPaid::before { background: var(--db-pos); }
+.tlEntryPending::before { background: var(--db-fg4); }
+
+.tlRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.tlTitle {
+  font-weight: 450;
+  color: var(--db-fg);
+}
+
+.tlSub {
+  font-family: 'Geist Mono', monospace;
+  font-size: 11px;
+  color: var(--db-fg3);
+  margin-top: 2px;
+  letter-spacing: 0.02em;
+}
+
+.tlAmt {
+  font-family: 'Geist Mono', monospace;
+  font-weight: 500;
+  font-feature-settings: 'tnum';
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.tlAmtPos { color: var(--db-pos); }
+.tlAmtNeg { color: var(--db-fg); }
+
+/* Actions */
+.pdActions {
+  display: flex;
+  gap: 8px;
+  padding-top: 14px;
+  margin-top: 4px;
+  border-top: 1px dashed var(--db-line);
+}
+
+/* ═══════ LOADING / EMPTY ═══════ */
+.loading {
+  display: flex;
+  justify-content: center;
+  padding-top: 120px;
+}
+
+.emptyState {
+  text-align: center;
+  padding: 40px;
+  color: var(--db-fg3);
+  font-size: 14px;
+}
+
+/* ═══════ RESPONSIVE ═══════ */
+@media (max-width: 1000px) {
+  .heroGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 900px) {
+  .pageHead {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .person, .personOpen {
+    grid-template-columns: 36px 1fr auto;
+    gap: 10px;
+    padding: 14px 16px;
+  }
+
+  .avatar {
+    width: 36px;
+    height: 36px;
+    font-size: 12px;
+  }
+
+  .personDetail {
+    padding-left: 62px;
+  }
+
+  .plHead {
+    padding: 12px 16px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .seg {
+    margin-left: 0;
+  }
+}

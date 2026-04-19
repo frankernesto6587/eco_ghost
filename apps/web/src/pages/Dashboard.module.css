@@ -289,72 +289,117 @@
   border-radius: 1.5px;
 }
 
-/* ═══════ FLOW CARD (income + expense) ═══════ */
+/* ═══════ FLOW CARD (income + expense per currency) ═══════ */
 .flowCard {
   composes: card;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-}
-
-.flowSection {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.flowLabel {
-  font-family: 'Geist Mono', monospace;
-  font-size: 10px;
-  letter-spacing: 0.12em;
-  color: var(--eco-fg3);
-  text-transform: uppercase;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.flowAmounts {
-  font-family: 'Geist Mono', monospace;
-  font-size: 20px;
-  font-weight: 500;
-  font-feature-settings: 'tnum';
-  letter-spacing: -0.02em;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-
-.flowCur {
-  font-size: 11px;
-  color: var(--eco-fg3);
-  margin-right: 2px;
-}
-
-.flowBar {
-  height: 4px;
-  border-radius: 2px;
-  overflow: hidden;
-  margin-top: 2px;
-}
-
-.flowBarInner {
-  height: 100%;
-  border-radius: 2px;
-  transition: width 0.6s ease;
+  gap: 10px;
 }
 
 .flowDivider {
   height: 1px;
   background: var(--eco-line-soft);
+  margin: 4px 0;
 }
 
-.flowCount {
+.flowCurRow {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+/* Donut */
+.flowDonut {
+  width: 72px;
+  height: 72px;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.flowDonut svg {
+  width: 100%;
+  height: 100%;
+}
+
+.flowDonutCenter {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.flowDonutIcon {
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  object-fit: cover;
+}
+
+.flowDonutCode {
   font-family: 'Geist Mono', monospace;
   font-size: 10px;
-  color: var(--eco-fg4);
-  letter-spacing: 0.02em;
+  font-weight: 600;
+  color: var(--eco-fg3);
 }
+
+/* Values */
+.flowCurData {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.flowCurTitle {
+  font-family: 'Geist Mono', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--eco-fg2);
+  text-transform: uppercase;
+  margin-bottom: 2px;
+}
+
+.flowCurLine {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: 'Geist Mono', monospace;
+  font-feature-settings: 'tnum';
+}
+
+.flowCurDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.flowCurLabel {
+  font-size: 11px;
+  color: var(--eco-fg3);
+  min-width: 52px;
+}
+
+.flowCurVal {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--eco-fg);
+  margin-left: auto;
+}
+
+.flowCurPct {
+  font-size: 10px;
+  color: var(--eco-fg4);
+  min-width: 28px;
+  text-align: right;
+}
+
+.flowNetPos { color: var(--eco-pos); }
+.flowNetNeg { color: var(--eco-neg); }
 
 /* ═══════ STAT CARD ═══════ */
 .statCard {
@@ -896,6 +941,7 @@
   }
 
   .heroCard { grid-column: span 2; }
+  .flowCard { grid-column: span 2; }
 
   .heroNum { font-size: 32px; }
 

@@ -107,6 +107,20 @@ function getCurrencyIcon(currency: string): string | null {
   return CURRENCY_ICONS[currency] ?? null;
 }
 
+/** SVG donut arc path */
+function describeArc(cx: number, cy: number, r: number, startAngle: number, endAngle: number): string {
+  const start = {
+    x: cx + r * Math.cos((startAngle - 90) * Math.PI / 180),
+    y: cy + r * Math.sin((startAngle - 90) * Math.PI / 180),
+  };
+  const end = {
+    x: cx + r * Math.cos((endAngle - 90) * Math.PI / 180),
+    y: cy + r * Math.sin((endAngle - 90) * Math.PI / 180),
+  };
+  const largeArc = endAngle - startAngle > 180 ? 1 : 0;
+  return `M ${start.x} ${start.y} A ${r} ${r} 0 ${largeArc} 1 ${end.x} ${end.y}`;
+}
+
 function getGreeting(): string {
   const h = new Date().getHours();
   if (h < 12) return 'Buenos dias';
@@ -321,10 +335,15 @@ export default function DashboardPage() {
   const pendingDebtsReceivable = overview?.pendingDebtsReceivable ?? {};
   const pendingDebtsPayable = overview?.pendingDebtsPayable ?? {};
 
-  // Calculate total for bar width %
-  const totalInc = Object.values(monthIncome).reduce((a, b) => a + b, 0);
-  const totalExp = Object.values(monthExpense).reduce((a, b) => a + b, 0);
-  const maxStat = Math.max(totalInc, totalExp) || 1;
+  // Per-currency flow data for donut charts
+  const flowByCurrency = useMemo(() => {
+    const allCurs = new Set([...Object.keys(monthIncome), ...Object.keys(monthExpense)]);
+    return [...allCurs].sort().map((cur) => {
+      const inc = monthIncome[cur] ?? 0;
+      const exp = monthExpense[cur] ?? 0;
+      return { currency: cur, income: inc, expense: exp, total: inc + exp };
+    });
+  }, [monthIncome, monthExpense]);
 
   if (isLoading) {
     return <div className={s.loading}><Spin size="large" /></div>;
@@ -498,54 +517,68 @@ export default function DashboardPage() {
           )}
         </article>
 
-        {/* Stat: Income + Expenses */}
+        {/* Stat: Flow per currency */}
         <article className={s.flowCard}>
           <div className={s.cardLabel}>
             <span className={s.cardDot} />
             flujo{dateRange ? '' : ' · 30d'}
           </div>
 
-          {/* Income */}
-          <div className={s.flowSection}>
-            <div className={s.flowLabel}>
-              <span className={s.cardDotPos} />
-              ingresos
-              <span className={s.flowCount}>{typeCounts.INCOME} tx</span>
-            </div>
-            <div className={s.flowAmounts}>
-              {Object.keys(monthIncome).length > 0
-                ? Object.entries(monthIncome).map(([cur, amt]) => (
-                    <div key={cur}><span className={s.flowCur}>{cur}</span> {formatCurrency(amt, cur)}</div>
-                  ))
-                : <span style={{ color: 'var(--eco-fg3)' }}>—</span>
-              }
-            </div>
-            <div className={s.flowBar}>
-              <div className={s.flowBarInner} style={{ width: `${Math.round((totalInc / maxStat) * 100)}%`, background: 'var(--eco-pos)' }} />
-            </div>
-          </div>
+          {flowByCurrency.length > 0 ? flowByCurrency.map((flow, idx) => {
+            const incPct = flow.total > 0 ? (flow.income / flow.total) * 100 : 50;
+            const expPct = 100 - incPct;
+            const incAngle = flow.total > 0 ? (flow.income / flow.total) * 359.99 : 180;
+            const icon = getCurrencyIcon(flow.currency);
 
-          <div className={s.flowDivider} />
+            return (
+              <div key={flow.currency}>
+                {idx > 0 && <div className={s.flowDivider} />}
+                <div className={s.flowCurRow}>
+                  {/* Donut */}
+                  <div className={s.flowDonut}>
+                    <svg viewBox="0 0 64 64">
+                      {/* Background ring */}
+                      <circle cx="32" cy="32" r="24" fill="none" stroke="var(--eco-surface3)" strokeWidth="7" />
+                      {/* Income arc */}
+                      <path d={describeArc(32, 32, 24, 0, incAngle)} fill="none" stroke="var(--eco-pos)" strokeWidth="7" strokeLinecap="round" />
+                      {/* Expense arc */}
+                      <path d={describeArc(32, 32, 24, incAngle, 359.99)} fill="none" stroke="var(--eco-neg)" strokeWidth="7" strokeLinecap="round" />
+                    </svg>
+                    <div className={s.flowDonutCenter}>
+                      {icon
+                        ? <img src={icon} alt={flow.currency} className={s.flowDonutIcon} />
+                        : <span className={s.flowDonutCode}>{flow.currency}</span>
+                      }
+                    </div>
+                  </div>
 
-          {/* Expense */}
-          <div className={s.flowSection}>
-            <div className={s.flowLabel}>
-              <span className={s.cardDotNeg} />
-              gastos
-              <span className={s.flowCount}>{typeCounts.EXPENSE} tx</span>
-            </div>
-            <div className={s.flowAmounts}>
-              {Object.keys(monthExpense).length > 0
-                ? Object.entries(monthExpense).map(([cur, amt]) => (
-                    <div key={cur}><span className={s.flowCur}>{cur}</span> {formatCurrency(amt, cur)}</div>
-                  ))
-                : <span style={{ color: 'var(--eco-fg3)' }}>—</span>
-              }
-            </div>
-            <div className={s.flowBar}>
-              <div className={s.flowBarInner} style={{ width: `${Math.round((totalExp / maxStat) * 100)}%`, background: 'var(--eco-neg)' }} />
-            </div>
-          </div>
+                  {/* Values */}
+                  <div className={s.flowCurData}>
+                    <div className={s.flowCurTitle}>{flow.currency}</div>
+                    <div className={s.flowCurLine}>
+                      <span className={s.flowCurDot} style={{ background: 'var(--eco-pos)' }} />
+                      <span className={s.flowCurLabel}>Ingresos</span>
+                      <span className={s.flowCurVal}>{formatCurrency(flow.income, flow.currency)}</span>
+                      <span className={s.flowCurPct}>{incPct.toFixed(0)}%</span>
+                    </div>
+                    <div className={s.flowCurLine}>
+                      <span className={s.flowCurDot} style={{ background: 'var(--eco-neg)' }} />
+                      <span className={s.flowCurLabel}>Gastos</span>
+                      <span className={s.flowCurVal}>{formatCurrency(flow.expense, flow.currency)}</span>
+                      <span className={s.flowCurPct}>{expPct.toFixed(0)}%</span>
+                    </div>
+                    <div className={s.flowCurLine}>
+                      <span className={s.flowCurDot} style={{ background: 'var(--eco-accent)' }} />
+                      <span className={s.flowCurLabel}>Neto</span>
+                      <span className={`${s.flowCurVal} ${flow.income - flow.expense >= 0 ? s.flowNetPos : s.flowNetNeg}`}>
+                        {flow.income - flow.expense >= 0 ? '+' : ''}{formatCurrency(flow.income - flow.expense, flow.currency)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          }) : <span style={{ color: 'var(--eco-fg3)', fontSize: 13 }}>Sin movimientos</span>}
         </article>
 
         {/* Stat: Debts */}

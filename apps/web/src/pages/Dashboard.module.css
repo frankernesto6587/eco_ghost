@@ -246,9 +246,8 @@
 }
 
 .accountsList {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .accountItem {
@@ -281,7 +280,6 @@
 }
 
 .accountCurDivider {
-  grid-column: 1 / -1;
   padding: 6px 10px 3px;
   font-family: 'Geist Mono', monospace;
   font-size: 10px;

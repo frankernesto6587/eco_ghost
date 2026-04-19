@@ -53,9 +53,9 @@ const PAGE_SIZE = 20;
 
 interface Filters {
   dateRange: [Dayjs, Dayjs] | null;
-  type: string | undefined;
-  accountId: string | undefined;
-  categoryId: string | undefined;
+  types: string[];
+  accountIds: string[];
+  categoryIds: string[];
   currency: string | undefined;
 }
 
@@ -77,9 +77,10 @@ interface TransactionFormValues {
 
 function buildParams(filters: Filters, cursor?: string, deleted?: boolean): TransactionFilters {
   const params: TransactionFilters = { limit: PAGE_SIZE };
-  if (filters.type) params.type = filters.type;
-  if (filters.accountId) params.accountId = filters.accountId;
-  if (filters.categoryId) params.categoryId = filters.categoryId;
+  // Single-value filters go to API; multi-value filtered client-side
+  if (filters.types.length === 1) params.type = filters.types[0];
+  if (filters.accountIds.length === 1) params.accountId = filters.accountIds[0];
+  if (filters.categoryIds.length === 1) params.categoryId = filters.categoryIds[0];
   if (filters.currency) params.currency = filters.currency;
   if (filters.dateRange) {
     params.from = filters.dateRange[0].startOf('day').toISOString();
@@ -166,9 +167,9 @@ export default function TransactionsPage() {
   // ---- State ----
   const [filters, setFilters] = useState<Filters>(() => ({
     dateRange: null,
-    type: undefined,
-    accountId: undefined,
-    categoryId: undefined,
+    types: [],
+    accountIds: [],
+    categoryIds: [],
     currency: localStorage.getItem('txFilterCurrency') || undefined,
   }));
   const [viewDeleted, setViewDeleted] = useState(false);
@@ -535,12 +536,12 @@ export default function TransactionsPage() {
     [],
   );
 
-  const handleTypeChange = useCallback((value: string | undefined) => {
-    setFilters((prev) => ({ ...prev, type: value }));
+  const handleTypesChange = useCallback((values: string[]) => {
+    setFilters((prev) => ({ ...prev, types: values }));
   }, []);
 
-  const handleAccountChange = useCallback((value: string | undefined) => {
-    setFilters((prev) => ({ ...prev, accountId: value }));
+  const handleAccountsChange = useCallback((values: string[]) => {
+    setFilters((prev) => ({ ...prev, accountIds: values }));
   }, []);
 
   const handleCurrencyChange = useCallback((value: string | undefined) => {
@@ -552,13 +553,13 @@ export default function TransactionsPage() {
     setFilters((prev) => ({ ...prev, currency: value }));
   }, []);
 
-  const handleCategoryChange = useCallback((value: string | undefined) => {
-    setFilters((prev) => ({ ...prev, categoryId: value }));
+  const handleCategoriesChange = useCallback((values: string[]) => {
+    setFilters((prev) => ({ ...prev, categoryIds: values }));
   }, []);
 
   const clearAllFilters = useCallback(() => {
     localStorage.removeItem('txFilterCurrency');
-    setFilters({ dateRange: null, type: undefined, accountId: undefined, categoryId: undefined, currency: undefined });
+    setFilters({ dateRange: null, types: [], accountIds: [], categoryIds: [], currency: undefined });
   }, []);
 
   // ---- Derived ----
@@ -569,11 +570,21 @@ export default function TransactionsPage() {
   const currencies = useMemo(() => [...new Set(accounts.map((a) => a.currency))].sort(), [accounts]);
   const isSaving = createMutation.isPending || updateMutation.isPending;
 
-  const activeFilterCount = [filters.dateRange, filters.type, filters.accountId, filters.categoryId, filters.currency].filter(Boolean).length;
+  const activeFilterCount = [filters.dateRange, filters.types.length > 0, filters.accountIds.length > 0, filters.categoryIds.length > 0, filters.currency].filter(Boolean).length;
 
-  // Local search filtering + sorting
+  // Local search filtering + multi-value filters + sorting
   const displayedTransactions = useMemo(() => {
     let result = allTransactions;
+    // Multi-value filters (when >1 selected, API only handles single)
+    if (filters.types.length > 1) {
+      result = result.filter((tx) => filters.types.includes(tx.type));
+    }
+    if (filters.accountIds.length > 1) {
+      result = result.filter((tx) => filters.accountIds.includes(tx.accountId));
+    }
+    if (filters.categoryIds.length > 1) {
+      result = result.filter((tx) => tx.categoryId && filters.categoryIds.includes(tx.categoryId));
+    }
     if (searchText.trim()) {
       const q = searchText.toLowerCase();
       result = result.filter((tx) =>
@@ -595,7 +606,7 @@ export default function TransactionsPage() {
       return sortOrder === 'asc' ? cmp : -cmp;
     });
     return sorted;
-  }, [allTransactions, searchText, sortBy, sortOrder]);
+  }, [allTransactions, searchText, sortBy, sortOrder, filters.types, filters.accountIds, filters.categoryIds]);
 
   const toggleSelectAll = useCallback(() => {
     setSelectedIds((prev) => {
@@ -603,6 +614,31 @@ export default function TransactionsPage() {
       return new Set(displayedTransactions.map((tx) => tx.id));
     });
   }, [displayedTransactions]);
+
+  // Selection balance — income/expense/net grouped by currency
+  const selectionBalance = useMemo(() => {
+    if (selectedIds.size === 0) return null;
+    const income: Record<string, number> = {};
+    const expense: Record<string, number> = {};
+    for (const tx of displayedTransactions) {
+      if (!selectedIds.has(tx.id)) continue;
+      const cur = tx.account?.currency ?? 'USD';
+      const amt = Math.abs(tx.amount);
+      const isOutgoing = ['TRANSFER', 'EXCHANGE'].includes(tx.type) && !!tx.linkedTransactionId;
+      if (tx.type === 'INCOME' || ((['TRANSFER', 'EXCHANGE'].includes(tx.type)) && !isOutgoing)) {
+        income[cur] = (income[cur] ?? 0) + amt;
+      } else {
+        expense[cur] = (expense[cur] ?? 0) + amt;
+      }
+    }
+    const allCurrencies = [...new Set([...Object.keys(income), ...Object.keys(expense)])].sort();
+    return allCurrencies.map((cur) => ({
+      currency: cur,
+      income: income[cur] ?? 0,
+      expense: expense[cur] ?? 0,
+      net: (income[cur] ?? 0) - (expense[cur] ?? 0),
+    }));
+  }, [selectedIds, displayedTransactions]);
 
   const exportCsv = useCallback(() => {
     if (displayedTransactions.length === 0) return;
@@ -639,24 +675,34 @@ export default function TransactionsPage() {
     }
   };
 
-  // ---- Filter chip dropdown items ----
-  const typeFilterItems = [
-    { key: '', label: 'Todos' },
-    { key: 'INCOME', label: 'Ingreso' },
-    { key: 'EXPENSE', label: 'Gasto' },
-    { key: 'TRANSFER', label: 'Transferencia' },
-    { key: 'EXCHANGE', label: 'Cambio' },
+  // ---- Filter options ----
+  const typeOptions = [
+    { label: 'Ingreso', value: 'INCOME' },
+    { label: 'Gasto', value: 'EXPENSE' },
+    { label: 'Transferencia', value: 'TRANSFER' },
+    { label: 'Cambio', value: 'EXCHANGE' },
   ];
 
-  const accountFilterItems = [
-    { key: '', label: 'Todas' },
-    ...accounts.map((a) => ({ key: a.id, label: `${a.name} (${a.currency})` })),
-  ];
+  const accountOptions = accounts.map((a) => ({ label: `${a.name} (${a.currency})`, value: a.id }));
 
   const currencyFilterItems = [
     { key: '', label: 'Todas' },
     ...currencies.map((c) => ({ key: c, label: c })),
   ];
+
+  const categoryOptions = useMemo(() => {
+    function flatten(cats: Category[], prefix = ''): { label: string; value: string }[] {
+      const result: { label: string; value: string }[] = [];
+      for (const cat of cats) {
+        result.push({ label: prefix + cat.name, value: cat.id });
+        if (cat.children?.length) {
+          result.push(...flatten(cat.children, prefix + '  '));
+        }
+      }
+      return result;
+    }
+    return categoriesQuery.data ? flatten(categoriesQuery.data) : [];
+  }, [categoriesQuery.data]);
 
   // ---- Render ----
   return (
@@ -797,18 +843,58 @@ export default function TransactionsPage() {
             </span>
           </Dropdown>
 
-          {/* Account */}
+          {/* Type (multi) */}
           <Dropdown
-            menu={{
-              items: accountFilterItems,
-              onClick: ({ key }) => handleAccountChange(key || undefined),
-              selectedKeys: filters.accountId ? [filters.accountId] : [],
-            }}
             trigger={['click']}
+            dropdownRender={() => (
+              <div style={{ padding: 12, background: 'var(--eco-surface)', border: '1px solid var(--eco-line)', borderRadius: 10, width: 220 }}>
+                <Select
+                  mode="multiple"
+                  style={{ width: '100%' }}
+                  placeholder="Todos"
+                  value={filters.types}
+                  onChange={handleTypesChange}
+                  options={typeOptions}
+                  allowClear
+                  maxTagCount={0}
+                  maxTagPlaceholder={(omitted) => `${omitted.length} seleccionados`}
+                />
+              </div>
+            )}
           >
-            <span className={filters.accountId ? s.filterChipActive : s.filterChip}>
+            <span className={filters.types.length > 0 ? s.filterChipActive : s.filterChip}>
+              <span className={s.filterKey}>tipo:</span>
+              <span className={s.filterVal}>
+                {filters.types.length === 0 ? 'todos' : filters.types.length === 1 ? getTypeLabel(filters.types[0]).toLowerCase() : `${filters.types.length} seleccionados`}
+              </span>
+              <span className={s.filterCaret}>▾</span>
+            </span>
+          </Dropdown>
+
+          {/* Account (multi) */}
+          <Dropdown
+            trigger={['click']}
+            dropdownRender={() => (
+              <div style={{ padding: 12, background: 'var(--eco-surface)', border: '1px solid var(--eco-line)', borderRadius: 10, width: 260 }}>
+                <Select
+                  mode="multiple"
+                  style={{ width: '100%' }}
+                  placeholder="Todas"
+                  value={filters.accountIds}
+                  onChange={handleAccountsChange}
+                  options={accountOptions}
+                  allowClear
+                  maxTagCount={0}
+                  maxTagPlaceholder={(omitted) => `${omitted.length} seleccionadas`}
+                />
+              </div>
+            )}
+          >
+            <span className={filters.accountIds.length > 0 ? s.filterChipActive : s.filterChip}>
               <span className={s.filterKey}>cuenta:</span>
-              <span className={s.filterVal}>{filters.accountId ? accounts.find((a) => a.id === filters.accountId)?.name ?? '...' : 'todas'}</span>
+              <span className={s.filterVal}>
+                {filters.accountIds.length === 0 ? 'todas' : filters.accountIds.length === 1 ? (accounts.find((a) => a.id === filters.accountIds[0])?.name ?? '...') : `${filters.accountIds.length} seleccionadas`}
+              </span>
               <span className={s.filterCaret}>▾</span>
             </span>
           </Dropdown>
@@ -829,43 +915,30 @@ export default function TransactionsPage() {
             </span>
           </Dropdown>
 
-          {/* Type */}
-          <Dropdown
-            menu={{
-              items: typeFilterItems,
-              onClick: ({ key }) => handleTypeChange(key || undefined),
-              selectedKeys: filters.type ? [filters.type] : [],
-            }}
-            trigger={['click']}
-          >
-            <span className={filters.type ? s.filterChipActive : s.filterChip}>
-              <span className={s.filterKey}>tipo:</span>
-              <span className={s.filterVal}>{filters.type ? getTypeLabel(filters.type).toLowerCase() : 'todos'}</span>
-              <span className={s.filterCaret}>▾</span>
-            </span>
-          </Dropdown>
-
-          {/* Category */}
+          {/* Category (multi) */}
           <Dropdown
             trigger={['click']}
             dropdownRender={() => (
-              <div style={{ padding: 12, background: 'var(--eco-surface)', border: '1px solid var(--eco-line)', borderRadius: 10, width: 240 }}>
-                <TreeSelect
+              <div style={{ padding: 12, background: 'var(--eco-surface)', border: '1px solid var(--eco-line)', borderRadius: 10, width: 260 }}>
+                <Select
+                  mode="multiple"
                   style={{ width: '100%' }}
-                  placeholder="Categoria"
-                  value={filters.categoryId}
-                  onChange={handleCategoryChange}
+                  placeholder="Cualquiera"
+                  value={filters.categoryIds}
+                  onChange={handleCategoriesChange}
+                  options={categoryOptions}
                   allowClear
-                  treeData={categoryTree}
-                  loading={categoriesQuery.isLoading}
-                  treeDefaultExpandAll
+                  maxTagCount={0}
+                  maxTagPlaceholder={(omitted) => `${omitted.length} seleccionadas`}
                 />
               </div>
             )}
           >
-            <span className={filters.categoryId ? s.filterChipActive : s.filterChip}>
+            <span className={filters.categoryIds.length > 0 ? s.filterChipActive : s.filterChip}>
               <span className={s.filterKey}>categoria:</span>
-              <span className={s.filterVal}>{filters.categoryId ? '...' : 'cualquiera'}</span>
+              <span className={s.filterVal}>
+                {filters.categoryIds.length === 0 ? 'cualquiera' : filters.categoryIds.length === 1 ? (categoryOptions.find((c) => c.value === filters.categoryIds[0])?.label ?? '...') : `${filters.categoryIds.length} seleccionadas`}
+              </span>
               <span className={s.filterCaret}>▾</span>
             </span>
           </Dropdown>
@@ -917,26 +990,25 @@ export default function TransactionsPage() {
                 />
               </div>
               <Select
+                mode="multiple"
                 style={{ width: '100%' }}
                 placeholder="Tipo"
-                value={filters.type}
-                onChange={handleTypeChange}
+                value={filters.types}
+                onChange={handleTypesChange}
                 allowClear
-                options={[
-                  { label: 'Ingreso', value: 'INCOME' },
-                  { label: 'Gasto', value: 'EXPENSE' },
-                  { label: 'Transferencia', value: 'TRANSFER' },
-                  { label: 'Cambio', value: 'EXCHANGE' },
-                ]}
+                options={typeOptions}
+                maxTagCount="responsive"
               />
               <Select
+                mode="multiple"
                 style={{ width: '100%' }}
                 placeholder="Cuenta"
-                value={filters.accountId}
-                onChange={handleAccountChange}
+                value={filters.accountIds}
+                onChange={handleAccountsChange}
                 allowClear
                 loading={accountsQuery.isLoading}
-                options={accounts.map((acc) => ({ label: acc.name, value: acc.id }))}
+                options={accountOptions}
+                maxTagCount="responsive"
               />
               <Select
                 style={{ width: '100%' }}
@@ -946,15 +1018,15 @@ export default function TransactionsPage() {
                 allowClear
                 options={currencies.map((c) => ({ label: c, value: c }))}
               />
-              <TreeSelect
+              <Select
+                mode="multiple"
                 style={{ width: '100%' }}
                 placeholder="Categoria"
-                value={filters.categoryId}
-                onChange={handleCategoryChange}
+                value={filters.categoryIds}
+                onChange={handleCategoriesChange}
                 allowClear
-                treeData={categoryTree}
-                loading={categoriesQuery.isLoading}
-                treeDefaultExpandAll
+                options={categoryOptions}
+                maxTagCount="responsive"
               />
               <Button block onClick={clearAllFilters}>Limpiar</Button>
             </div>
@@ -963,11 +1035,23 @@ export default function TransactionsPage() {
       )}
 
       {/* ═══════ BULK SELECTION BAR ═══════ */}
-      {selectedIds.size > 0 && (
+      {selectedIds.size > 0 && selectionBalance && (
         <div className={s.bulkBar}>
           <span className={s.bulkCount}>
             {selectedIds.size} seleccionada{selectedIds.size > 1 ? 's' : ''}
           </span>
+          <div className={s.bulkBalance}>
+            {selectionBalance.map((b) => (
+              <div key={b.currency} className={s.bulkBalCur}>
+                <span className={s.bulkBalLabel}>{b.currency}</span>
+                <span className={s.bulkBalIncome}>+{formatCurrency(b.income, b.currency)}</span>
+                <span className={s.bulkBalExpense}>−{formatCurrency(b.expense, b.currency)}</span>
+                <span className={b.net >= 0 ? s.bulkBalNetPos : s.bulkBalNetNeg}>
+                  = {b.net >= 0 ? '+' : '−'}{formatCurrency(Math.abs(b.net), b.currency)}
+                </span>
+              </div>
+            ))}
+          </div>
           <div className={s.bulkActions}>
             <button className={s.bulkBtn} onClick={() => setSelectedIds(new Set())}>
               Deseleccionar

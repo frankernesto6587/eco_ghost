@@ -670,10 +670,52 @@
   font-weight: 500;
 }
 
+.bulkBalance {
+  display: flex;
+  gap: 12px;
+  flex: 1;
+  flex-wrap: wrap;
+}
+
+.bulkBalCur {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: 'Geist Mono', monospace;
+  font-size: 12px;
+  font-feature-settings: 'tnum';
+}
+
+.bulkBalLabel {
+  color: var(--eco-fg3);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 500;
+}
+
+.bulkBalIncome {
+  color: var(--eco-pos);
+}
+
+.bulkBalExpense {
+  color: var(--eco-neg);
+}
+
+.bulkBalNetPos {
+  color: var(--eco-pos);
+  font-weight: 600;
+}
+
+.bulkBalNetNeg {
+  color: var(--eco-neg);
+  font-weight: 600;
+}
+
 .bulkActions {
   display: flex;
   gap: 6px;
-  margin-left: auto;
+  flex-shrink: 0;
 }
 
 .bulkBtn {

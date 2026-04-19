@@ -888,13 +888,34 @@ export default function TransactionsPage() {
           </button>
           {mobileFiltersOpen && (
             <div className={s.mobileFiltersBody}>
-              <RangePicker
-                style={{ width: '100%' }}
-                placeholder={['Fecha inicio', 'Fecha fin']}
-                value={filters.dateRange}
-                onChange={handleDateRangeChange}
-                allowClear
-              />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                <DatePicker
+                  style={{ width: '100%' }}
+                  placeholder="Desde"
+                  value={filters.dateRange?.[0] ?? null}
+                  onChange={(date) => {
+                    if (date) {
+                      handleDateRangeChange([date, filters.dateRange?.[1] ?? date]);
+                    } else {
+                      handleDateRangeChange(null);
+                    }
+                  }}
+                  format="DD/MM/YY"
+                />
+                <DatePicker
+                  style={{ width: '100%' }}
+                  placeholder="Hasta"
+                  value={filters.dateRange?.[1] ?? null}
+                  onChange={(date) => {
+                    if (date) {
+                      handleDateRangeChange([filters.dateRange?.[0] ?? date, date]);
+                    } else {
+                      handleDateRangeChange(null);
+                    }
+                  }}
+                  format="DD/MM/YY"
+                />
+              </div>
               <Select
                 style={{ width: '100%' }}
                 placeholder="Tipo"
@@ -1182,10 +1203,16 @@ export default function TransactionsPage() {
       <Drawer
         open={modalOpen}
         onClose={closeFormModal}
+        placement={isMobile ? 'bottom' : 'right'}
         width={isMobile ? '100%' : 480}
+        height={isMobile ? '95vh' : undefined}
         closable={false}
         destroyOnClose
-        styles={{ body: { padding: 0, background: 'var(--eco-surface)', color: 'var(--eco-fg)' }, header: { display: 'none' } }}
+        styles={{
+          body: { padding: 0, background: 'var(--eco-surface)', color: 'var(--eco-fg)', overflowY: 'auto' },
+          header: { display: 'none' },
+          wrapper: isMobile ? { borderRadius: '14px 14px 0 0', overflow: 'hidden' } : undefined,
+        }}
       >
         {/* Drawer header */}
         <div className={s.formDrawerHead}>
@@ -1388,6 +1415,7 @@ export default function TransactionsPage() {
         transaction={drawerTx as DrawerTransaction | null}
         open={drawerOpen}
         onClose={closeDrawer}
+        isMobile={isMobile}
         onEdit={(tx) => {
           closeDrawer();
           openEditModal(tx as unknown as Transaction);

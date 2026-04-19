@@ -29,6 +29,7 @@ interface TransactionDrawerProps {
   onEdit?: (tx: DrawerTransaction) => void;
   onDelete?: (tx: DrawerTransaction) => void;
   canWrite: boolean;
+  isMobile?: boolean;
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -38,7 +39,7 @@ const TYPE_LABELS: Record<string, string> = {
   EXCHANGE: 'Cambio',
 };
 
-export default function TransactionDrawer({ transaction: tx, open, onClose, onEdit, onDelete, canWrite }: TransactionDrawerProps) {
+export default function TransactionDrawer({ transaction: tx, open, onClose, onEdit, onDelete, canWrite, isMobile }: TransactionDrawerProps) {
   if (!tx) return null;
 
   const currency = tx.account?.currency ?? 'USD';
@@ -57,9 +58,15 @@ export default function TransactionDrawer({ transaction: tx, open, onClose, onEd
     <Drawer
       open={open}
       onClose={onClose}
-      width={420}
+      placement={isMobile ? 'bottom' : 'right'}
+      width={isMobile ? '100%' : 420}
+      height={isMobile ? '85vh' : undefined}
       closable={false}
-      styles={{ body: { padding: 0, background: 'var(--eco-surface)', color: 'var(--eco-fg)' }, header: { display: 'none' } }}
+      styles={{
+        body: { padding: 0, background: 'var(--eco-surface)', color: 'var(--eco-fg)', overflowY: 'auto' },
+        header: { display: 'none' },
+        wrapper: isMobile ? { borderRadius: '14px 14px 0 0', overflow: 'hidden' } : undefined,
+      }}
     >
       {/* Header */}
       <div className={css.header}>

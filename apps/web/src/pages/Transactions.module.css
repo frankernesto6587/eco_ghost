@@ -870,4 +870,12 @@
 
   .pageHead { margin-bottom: 12px; }
   .pageActions { width: 100%; }
+
+  .formDrawerHead {
+    padding: 14px 16px;
+  }
+
+  .formDrawerFoot {
+    padding: 14px 16px;
+  }
 }

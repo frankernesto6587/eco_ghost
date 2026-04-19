@@ -21,14 +21,27 @@ function resolveIsDark(mode: ThemeMode): boolean {
   return mode === 'dark';
 }
 
+function loadPageSize(): number {
+  try {
+    const stored = localStorage.getItem('ecoghost_page_size');
+    if (stored) {
+      const n = parseInt(stored, 10);
+      if ([15, 20, 25].includes(n)) return n;
+    }
+  } catch {}
+  return 15;
+}
+
 interface UIState {
   sidebarCollapsed: boolean;
   themeMode: ThemeMode;
   isDark: boolean;
   isMobile: boolean;
+  pageSize: number;
   toggleSidebar: () => void;
   setThemeMode: (mode: ThemeMode) => void;
   setIsMobile: (value: boolean) => void;
+  setPageSize: (size: number) => void;
 }
 
 const initialMode = loadThemeMode();
@@ -38,6 +51,7 @@ export const useUIStore = create<UIState>((set) => ({
   themeMode: initialMode,
   isDark: resolveIsDark(initialMode),
   isMobile: false,
+  pageSize: loadPageSize(),
 
   toggleSidebar: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
 
@@ -47,6 +61,11 @@ export const useUIStore = create<UIState>((set) => ({
   },
 
   setIsMobile: (value) => set({ isMobile: value }),
+
+  setPageSize: (size) => {
+    localStorage.setItem('ecoghost_page_size', String(size));
+    set({ pageSize: size });
+  },
 }));
 
 // Listen for system theme changes when mode is 'system'

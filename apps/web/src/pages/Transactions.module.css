@@ -469,15 +469,82 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 20px;
+  padding: 12px 16px;
   border-top: 1px solid var(--eco-line-soft);
   background: var(--eco-surface);
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .paginationInfo {
   color: var(--eco-fg3);
   font-size: 12px;
   font-family: 'Geist Mono', monospace;
+}
+
+.paginationControls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pageBtn {
+  min-width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  border: 1px solid var(--eco-line);
+  background: var(--eco-surface);
+  color: var(--eco-fg2);
+  font-family: 'Geist Mono', monospace;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.12s;
+  padding: 0 6px;
+}
+
+.pageBtn:hover:not(:disabled) {
+  background: var(--eco-surface2);
+  border-color: var(--eco-fg4);
+  color: var(--eco-fg);
+}
+
+.pageBtn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.pageBtnActive {
+  background: var(--eco-accent) !important;
+  border-color: var(--eco-accent) !important;
+  color: oklch(0.15 0.01 80) !important;
+  font-weight: 600;
+}
+
+.pageSizeSelect {
+  margin-right: 8px;
+}
+
+.pageSizeSelect select {
+  background: var(--eco-surface2);
+  border: 1px solid var(--eco-line);
+  border-radius: 6px;
+  color: var(--eco-fg2);
+  font-family: 'Geist Mono', monospace;
+  font-size: 11px;
+  padding: 5px 8px;
+  cursor: pointer;
+  outline: none;
+}
+
+.pageSizeSelect select:hover {
+  border-color: var(--eco-fg4);
+}
+
+.pageSizeSelect select:focus {
+  border-color: var(--eco-accent);
 }
 
 /* ═══════ EMPTY / ERROR ═══════ */

@@ -2,15 +2,14 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsBoolean,
   IsDateString,
-  IsEnum,
   IsInt,
   IsOptional,
   IsString,
   Max,
   Min,
+  IsArray,
 } from 'class-validator';
 import { Type, Transform } from 'class-transformer';
-import { TransactionType } from '@prisma/client';
 
 export class TransactionQueryDto {
   @ApiPropertyOptional({ example: '2026-01-01' })
@@ -23,20 +22,26 @@ export class TransactionQueryDto {
   @IsDateString()
   to?: string;
 
-  @ApiPropertyOptional({ enum: TransactionType })
+  @ApiPropertyOptional({ description: 'Comma-separated types: INCOME,EXPENSE,TRANSFER,EXCHANGE' })
   @IsOptional()
-  @IsEnum(TransactionType)
-  type?: TransactionType;
+  @Transform(({ value }) => typeof value === 'string' ? value.split(',').filter(Boolean) : value)
+  @IsArray()
+  @IsString({ each: true })
+  type?: string[];
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ description: 'Comma-separated category IDs' })
   @IsOptional()
-  @IsString()
-  categoryId?: string;
+  @Transform(({ value }) => typeof value === 'string' ? value.split(',').filter(Boolean) : value)
+  @IsArray()
+  @IsString({ each: true })
+  categoryId?: string[];
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ description: 'Comma-separated account IDs' })
   @IsOptional()
-  @IsString()
-  accountId?: string;
+  @Transform(({ value }) => typeof value === 'string' ? value.split(',').filter(Boolean) : value)
+  @IsArray()
+  @IsString({ each: true })
+  accountId?: string[];
 
   @ApiPropertyOptional({ example: 'USD', description: 'Filter by account currency' })
   @IsOptional()
@@ -48,18 +53,20 @@ export class TransactionQueryDto {
   @IsString()
   projectId?: string;
 
-  @ApiPropertyOptional({ description: 'Cursor for pagination (last item id)' })
+  @ApiPropertyOptional({ default: 1, minimum: 1 })
   @IsOptional()
-  @IsString()
-  cursor?: string;
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page?: number = 1;
 
-  @ApiPropertyOptional({ default: 20, minimum: 1, maximum: 100 })
+  @ApiPropertyOptional({ default: 15, minimum: 1, maximum: 100 })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
   @Max(100)
-  limit?: number = 20;
+  limit?: number = 15;
 
   @ApiPropertyOptional()
   @IsOptional()

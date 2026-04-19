@@ -1,13 +1,13 @@
 import { api } from './api';
 
 export interface TransactionFilters {
-  type?: string;
-  accountId?: string;
-  categoryId?: string;
+  type?: string;         // comma-separated for multi
+  accountId?: string;    // comma-separated for multi
+  categoryId?: string;   // comma-separated for multi
   currency?: string;
   from?: string;
   to?: string;
-  cursor?: string;
+  page?: number;
   limit?: number;
   deleted?: boolean;
   sortBy?: string;
@@ -53,8 +53,10 @@ export interface Transaction {
 export interface TransactionListResponse {
   data: Transaction[];
   meta: {
-    cursor: string | null;
-    hasMore: boolean;
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
   };
 }
 
@@ -73,7 +75,7 @@ export interface TransactionSummaryParams {
 export const transactionsService = {
   async getAll(params?: TransactionFilters): Promise<TransactionListResponse> {
     const { data } = await api.get('/transactions', { params });
-    return data; // returns { data: [...], meta: { cursor, hasMore } }
+    return data; // returns { data: [...], meta: { page, limit, total, totalPages } }
   },
 
   async getOne(id: string): Promise<Transaction> {

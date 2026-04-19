@@ -251,7 +251,7 @@ export class TransactionsService {
   }
 
   async findAll(orgId: string, query: TransactionQueryDto) {
-    const { from, to, type, categoryId, accountId, projectId, currency, cursor, limit = 20, deleted, sortBy, sortOrder } = query;
+    const { from, to, type, categoryId, accountId, projectId, currency, page = 1, limit = 15, deleted, sortBy, sortOrder } = query;
 
     const where: Prisma.TransactionWhereInput = {
       orgId,
@@ -264,9 +264,15 @@ export class TransactionsService {
       if (to) where.date.lte = new Date(to);
     }
 
-    if (type) where.type = type;
-    if (categoryId) where.categoryId = categoryId;
-    if (accountId) where.accountId = accountId;
+    if (type?.length) {
+      where.type = type.length === 1 ? (type[0] as any) : { in: type as any };
+    }
+    if (categoryId?.length) {
+      where.categoryId = categoryId.length === 1 ? categoryId[0] : { in: categoryId };
+    }
+    if (accountId?.length) {
+      where.accountId = accountId.length === 1 ? accountId[0] : { in: accountId };
+    }
     if (projectId) where.projectId = projectId;
     if (currency) where.account = { currency };
 
@@ -276,23 +282,24 @@ export class TransactionsService {
       orderBy = { [sortBy]: sortOrder ?? 'desc' };
     }
 
-    const transactions = await this.prisma.transaction.findMany({
-      where,
-      orderBy,
-      take: limit,
-      ...(cursor
-        ? { cursor: { id: cursor }, skip: 1 }
-        : {}),
-      include: TRANSACTION_INCLUDE,
-    });
-
-    const lastItem = transactions[transactions.length - 1];
+    const [transactions, total] = await Promise.all([
+      this.prisma.transaction.findMany({
+        where,
+        orderBy,
+        skip: (page - 1) * limit,
+        take: limit,
+        include: TRANSACTION_INCLUDE,
+      }),
+      this.prisma.transaction.count({ where }),
+    ]);
 
     return {
       data: transactions,
       meta: {
-        cursor: lastItem?.id ?? null,
-        hasMore: transactions.length === limit,
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
       },
     };
   }

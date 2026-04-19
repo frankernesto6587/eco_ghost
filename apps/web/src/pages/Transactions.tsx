@@ -15,7 +15,6 @@ import {
 import {
   PlusOutlined,
   DeleteOutlined,
-  LoadingOutlined,
   UndoOutlined,
   SearchOutlined,
   DownloadOutlined,
@@ -37,6 +36,7 @@ import { accountsService, type Account } from '@/services/accounts.service';
 import { categoriesService, type Category } from '@/services/categories.service';
 import { formatCurrency, formatDate } from '@/lib/formatters';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useUIStore } from '@/store';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import CategoryIcon from '@/components/common/CategoryIcon';
 import TransactionDrawer, { type DrawerTransaction } from '@/components/transactions/TransactionDrawer';
@@ -45,7 +45,7 @@ import s from './Transactions.module.css';
 const { RangePicker } = DatePicker;
 const { TextArea } = Input;
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE_OPTIONS = [15, 20, 25];
 
 // ---------------------------------------------------------------------------
 // Types
@@ -75,18 +75,16 @@ interface TransactionFormValues {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function buildParams(filters: Filters, cursor?: string, deleted?: boolean): TransactionFilters {
-  const params: TransactionFilters = { limit: PAGE_SIZE };
-  // Single-value filters go to API; multi-value filtered client-side
-  if (filters.types.length === 1) params.type = filters.types[0];
-  if (filters.accountIds.length === 1) params.accountId = filters.accountIds[0];
-  if (filters.categoryIds.length === 1) params.categoryId = filters.categoryIds[0];
+function buildParams(filters: Filters, page: number, pageSize: number, deleted?: boolean): TransactionFilters {
+  const params: TransactionFilters = { page, limit: pageSize };
+  if (filters.types.length > 0) params.type = filters.types.join(',');
+  if (filters.accountIds.length > 0) params.accountId = filters.accountIds.join(',');
+  if (filters.categoryIds.length > 0) params.categoryId = filters.categoryIds.join(',');
   if (filters.currency) params.currency = filters.currency;
   if (filters.dateRange) {
     params.from = filters.dateRange[0].startOf('day').toISOString();
     params.to = filters.dateRange[1].endOf('day').toISOString();
   }
-  if (cursor) params.cursor = cursor;
   if (deleted) params.deleted = true;
   return params;
 }
@@ -172,12 +170,11 @@ export default function TransactionsPage() {
     categoryIds: [],
     currency: localStorage.getItem('txFilterCurrency') || undefined,
   }));
+  const { pageSize, setPageSize } = useUIStore();
   const [viewDeleted, setViewDeleted] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
-  const [allTransactions, setAllTransactions] = useState<Transaction[]>([]);
-  const [cursor, setCursor] = useState<string | null>(null);
-  const [hasMore, setHasMore] = useState(false);
+  const [page, setPage] = useState(1);
   const [searchText, setSearchText] = useState('');
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -222,38 +219,16 @@ export default function TransactionsPage() {
 
   // ---- Data fetching ----
   const transactionsQuery = useQuery<TransactionListResponse>({
-    queryKey: ['transactions', filters, viewDeleted],
+    queryKey: ['transactions', filters, viewDeleted, page, pageSize],
     queryFn: async () => {
-      const params = buildParams(filters, undefined, viewDeleted);
+      const params = buildParams(filters, page, pageSize, viewDeleted);
       return transactionsService.getAll(params);
     },
   });
 
-  useEffect(() => {
-    if (transactionsQuery.data) {
-      setAllTransactions(transactionsQuery.data.data);
-      setCursor(transactionsQuery.data.meta.cursor);
-      setHasMore(transactionsQuery.data.meta.hasMore);
-    }
-  }, [transactionsQuery.data]);
-
-  const loadMoreMutation = useMutation({
-    mutationFn: async () => {
-      if (!cursor) return null;
-      const params = buildParams(filters, cursor, viewDeleted);
-      return transactionsService.getAll(params);
-    },
-    onSuccess: (result) => {
-      if (result) {
-        setAllTransactions((prev) => [...prev, ...result.data]);
-        setCursor(result.meta.cursor);
-        setHasMore(result.meta.hasMore);
-      }
-    },
-    onError: () => {
-      message.error('Error al cargar mas transacciones');
-    },
-  });
+  const allTransactions = transactionsQuery.data?.data ?? [];
+  const totalItems = transactionsQuery.data?.meta.total ?? 0;
+  const totalPages = transactionsQuery.data?.meta.totalPages ?? 1;
 
   const summaryParams = useMemo(() => {
     if (!filters.dateRange) return undefined;
@@ -528,6 +503,7 @@ export default function TransactionsPage() {
   // ---- Filter handlers ----
   const handleDateRangeChange = useCallback(
     (dates: [Dayjs | null, Dayjs | null] | null) => {
+      setPage(1);
       setFilters((prev) => ({
         ...prev,
         dateRange: dates && dates[0] && dates[1] ? [dates[0], dates[1]] : null,
@@ -537,14 +513,17 @@ export default function TransactionsPage() {
   );
 
   const handleTypesChange = useCallback((values: string[]) => {
+    setPage(1);
     setFilters((prev) => ({ ...prev, types: values }));
   }, []);
 
   const handleAccountsChange = useCallback((values: string[]) => {
+    setPage(1);
     setFilters((prev) => ({ ...prev, accountIds: values }));
   }, []);
 
   const handleCurrencyChange = useCallback((value: string | undefined) => {
+    setPage(1);
     if (value) {
       localStorage.setItem('txFilterCurrency', value);
     } else {
@@ -553,12 +532,10 @@ export default function TransactionsPage() {
     setFilters((prev) => ({ ...prev, currency: value }));
   }, []);
 
-  const handleCategoriesChange = useCallback((values: string[]) => {
-    setFilters((prev) => ({ ...prev, categoryIds: values }));
-  }, []);
 
   const clearAllFilters = useCallback(() => {
     localStorage.removeItem('txFilterCurrency');
+    setPage(1);
     setFilters({ dateRange: null, types: [], accountIds: [], categoryIds: [], currency: undefined });
   }, []);
 
@@ -572,19 +549,9 @@ export default function TransactionsPage() {
 
   const activeFilterCount = [filters.dateRange, filters.types.length > 0, filters.accountIds.length > 0, filters.categoryIds.length > 0, filters.currency].filter(Boolean).length;
 
-  // Local search filtering + multi-value filters + sorting
+  // Local search filtering + sorting
   const displayedTransactions = useMemo(() => {
     let result = allTransactions;
-    // Multi-value filters (when >1 selected, API only handles single)
-    if (filters.types.length > 1) {
-      result = result.filter((tx) => filters.types.includes(tx.type));
-    }
-    if (filters.accountIds.length > 1) {
-      result = result.filter((tx) => filters.accountIds.includes(tx.accountId));
-    }
-    if (filters.categoryIds.length > 1) {
-      result = result.filter((tx) => tx.categoryId && filters.categoryIds.includes(tx.categoryId));
-    }
     if (searchText.trim()) {
       const q = searchText.toLowerCase();
       result = result.filter((tx) =>
@@ -606,7 +573,7 @@ export default function TransactionsPage() {
       return sortOrder === 'asc' ? cmp : -cmp;
     });
     return sorted;
-  }, [allTransactions, searchText, sortBy, sortOrder, filters.types, filters.accountIds, filters.categoryIds]);
+  }, [allTransactions, searchText, sortBy, sortOrder]);
 
   const toggleSelectAll = useCallback(() => {
     setSelectedIds((prev) => {
@@ -690,18 +657,24 @@ export default function TransactionsPage() {
     ...currencies.map((c) => ({ key: c, label: c })),
   ];
 
-  const categoryOptions = useMemo(() => {
-    function flatten(cats: Category[], prefix = ''): { label: string; value: string }[] {
-      const result: { label: string; value: string }[] = [];
+  const handleCategoryTreeChange = useCallback((selectedIds: string[]) => {
+    setPage(1);
+    setFilters((prev) => ({ ...prev, categoryIds: selectedIds }));
+  }, []);
+
+  // Find category name by id
+  const getCategoryName = useCallback((catId: string): string => {
+    function find(cats: Category[]): string | null {
       for (const cat of cats) {
-        result.push({ label: prefix + cat.name, value: cat.id });
+        if (cat.id === catId) return cat.name;
         if (cat.children?.length) {
-          result.push(...flatten(cat.children, prefix + '  '));
+          const found = find(cat.children);
+          if (found) return found;
         }
       }
-      return result;
+      return null;
     }
-    return categoriesQuery.data ? flatten(categoriesQuery.data) : [];
+    return find(categoriesQuery.data ?? []) ?? '...';
   }, [categoriesQuery.data]);
 
   // ---- Render ----
@@ -712,7 +685,7 @@ export default function TransactionsPage() {
         <div>
           <h1 className={s.pageTitle}>Transacciones</h1>
           <div className={s.pageSub}>
-            {allTransactions.length} transacciones{summaryParams ? ' en rango' : ''}
+            {totalItems} transacciones{summaryParams ? ' en rango' : ''}
           </div>
         </div>
         <div className={s.pageActions}>
@@ -777,7 +750,7 @@ export default function TransactionsPage() {
           </div>
           <div className={s.qStat}>
             <div className={s.qStatLabel}><span className={s.qStatDot} style={{ background: 'var(--eco-accent)' }} />transacciones</div>
-            <div className={s.qStatNum}>{allTransactions.length}</div>
+            <div className={s.qStatNum}>{totalItems}</div>
             <div className={s.qStatSub}>este periodo</div>
           </div>
         </section>
@@ -805,7 +778,7 @@ export default function TransactionsPage() {
             >
               Activas
               <span className={s.stateCount} style={!viewDeleted ? { background: 'var(--eco-accent-weak)', color: 'var(--eco-accent)' } : undefined}>
-                {allTransactions.length}
+                {totalItems}
               </span>
             </button>
             <button
@@ -915,21 +888,24 @@ export default function TransactionsPage() {
             </span>
           </Dropdown>
 
-          {/* Category (multi) */}
+          {/* Category (multi - tree with checkboxes) */}
           <Dropdown
             trigger={['click']}
             dropdownRender={() => (
-              <div style={{ padding: 12, background: 'var(--eco-surface)', border: '1px solid var(--eco-line)', borderRadius: 10, width: 260 }}>
-                <Select
-                  mode="multiple"
+              <div style={{ padding: 12, background: 'var(--eco-surface)', border: '1px solid var(--eco-line)', borderRadius: 10, width: 280, maxHeight: 320, overflow: 'auto' }}>
+                <TreeSelect
                   style={{ width: '100%' }}
                   placeholder="Cualquiera"
                   value={filters.categoryIds}
-                  onChange={handleCategoriesChange}
-                  options={categoryOptions}
+                  onChange={handleCategoryTreeChange}
+                  treeData={categoryTree}
+                  treeCheckable
+                  treeDefaultExpandAll
                   allowClear
+                  showCheckedStrategy={TreeSelect.SHOW_CHILD}
                   maxTagCount={0}
                   maxTagPlaceholder={(omitted) => `${omitted.length} seleccionadas`}
+                  loading={categoriesQuery.isLoading}
                 />
               </div>
             )}
@@ -937,7 +913,7 @@ export default function TransactionsPage() {
             <span className={filters.categoryIds.length > 0 ? s.filterChipActive : s.filterChip}>
               <span className={s.filterKey}>categoria:</span>
               <span className={s.filterVal}>
-                {filters.categoryIds.length === 0 ? 'cualquiera' : filters.categoryIds.length === 1 ? (categoryOptions.find((c) => c.value === filters.categoryIds[0])?.label ?? '...') : `${filters.categoryIds.length} seleccionadas`}
+                {filters.categoryIds.length === 0 ? 'cualquiera' : filters.categoryIds.length === 1 ? getCategoryName(filters.categoryIds[0]) : `${filters.categoryIds.length} seleccionadas`}
               </span>
               <span className={s.filterCaret}>▾</span>
             </span>
@@ -1018,15 +994,18 @@ export default function TransactionsPage() {
                 allowClear
                 options={currencies.map((c) => ({ label: c, value: c }))}
               />
-              <Select
-                mode="multiple"
+              <TreeSelect
                 style={{ width: '100%' }}
                 placeholder="Categoria"
                 value={filters.categoryIds}
-                onChange={handleCategoriesChange}
+                onChange={handleCategoryTreeChange}
+                treeData={categoryTree}
+                treeCheckable
+                treeDefaultExpandAll
                 allowClear
-                options={categoryOptions}
+                showCheckedStrategy={TreeSelect.SHOW_CHILD}
                 maxTagCount="responsive"
+                loading={categoriesQuery.isLoading}
               />
               <Button block onClick={clearAllFilters}>Limpiar</Button>
             </div>
@@ -1267,18 +1246,70 @@ export default function TransactionsPage() {
         )}
 
         {/* Pagination */}
-        {hasMore && (
+        {totalPages > 0 && (
           <div className={s.pagination}>
             <span className={s.paginationInfo}>
-              mostrando {displayedTransactions.length} transacciones
+              {totalItems} transacciones · pagina {page} de {totalPages}
             </span>
-            <Button
-              onClick={() => loadMoreMutation.mutate()}
-              loading={loadMoreMutation.isPending}
-              icon={loadMoreMutation.isPending ? <LoadingOutlined /> : undefined}
-            >
-              Cargar mas
-            </Button>
+            <div className={s.paginationControls}>
+              <div className={s.pageSizeSelect}>
+                <select
+                  value={pageSize}
+                  onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}
+                >
+                  {PAGE_SIZE_OPTIONS.map((n) => (
+                    <option key={n} value={n}>{n} / pag</option>
+                  ))}
+                </select>
+              </div>
+              <button
+                className={s.pageBtn}
+                disabled={page <= 1}
+                onClick={() => setPage(1)}
+                title="Primera"
+              >
+                «
+              </button>
+              <button
+                className={s.pageBtn}
+                disabled={page <= 1}
+                onClick={() => setPage((p) => p - 1)}
+                title="Anterior"
+              >
+                ‹
+              </button>
+              {(() => {
+                const pages: number[] = [];
+                const start = Math.max(1, page - 2);
+                const end = Math.min(totalPages, page + 2);
+                for (let i = start; i <= end; i++) pages.push(i);
+                return pages.map((p) => (
+                  <button
+                    key={p}
+                    className={`${s.pageBtn} ${p === page ? s.pageBtnActive : ''}`}
+                    onClick={() => setPage(p)}
+                  >
+                    {p}
+                  </button>
+                ));
+              })()}
+              <button
+                className={s.pageBtn}
+                disabled={page >= totalPages}
+                onClick={() => setPage((p) => p + 1)}
+                title="Siguiente"
+              >
+                ›
+              </button>
+              <button
+                className={s.pageBtn}
+                disabled={page >= totalPages}
+                onClick={() => setPage(totalPages)}
+                title="Ultima"
+              >
+                »
+              </button>
+            </div>
           </div>
         )}
       </div>

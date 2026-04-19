@@ -84,7 +84,7 @@
 /* ═══════ HERO GRID ═══════ */
 .heroGrid {
   display: grid;
-  grid-template-columns: 1.6fr 1fr 1fr 1fr;
+  grid-template-columns: 1.6fr 1fr 1fr;
   gap: 12px;
   margin-bottom: 12px;
 }
@@ -287,6 +287,73 @@
   width: 10px;
   height: 3px;
   border-radius: 1.5px;
+}
+
+/* ═══════ FLOW CARD (income + expense) ═══════ */
+.flowCard {
+  composes: card;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.flowSection {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.flowLabel {
+  font-family: 'Geist Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  color: var(--eco-fg3);
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.flowAmounts {
+  font-family: 'Geist Mono', monospace;
+  font-size: 20px;
+  font-weight: 500;
+  font-feature-settings: 'tnum';
+  letter-spacing: -0.02em;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.flowCur {
+  font-size: 11px;
+  color: var(--eco-fg3);
+  margin-right: 2px;
+}
+
+.flowBar {
+  height: 4px;
+  border-radius: 2px;
+  overflow: hidden;
+  margin-top: 2px;
+}
+
+.flowBarInner {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.6s ease;
+}
+
+.flowDivider {
+  height: 1px;
+  background: var(--eco-line-soft);
+}
+
+.flowCount {
+  font-family: 'Geist Mono', monospace;
+  font-size: 10px;
+  color: var(--eco-fg4);
+  letter-spacing: 0.02em;
 }
 
 /* ═══════ STAT CARD ═══════ */

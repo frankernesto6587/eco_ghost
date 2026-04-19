@@ -498,59 +498,53 @@ export default function DashboardPage() {
           )}
         </article>
 
-        {/* Stat: Income */}
-        <article className={s.statCard}>
+        {/* Stat: Income + Expenses */}
+        <article className={s.flowCard}>
           <div className={s.cardLabel}>
-            <span className={s.cardDotPos} />
-            ingresos{dateRange ? '' : ' · 30d'}
+            <span className={s.cardDot} />
+            flujo{dateRange ? '' : ' · 30d'}
           </div>
-          <div className={s.statNum}>
-            {Object.keys(monthIncome).length > 0
-              ? Object.entries(monthIncome).map(([cur, amt]) => (
-                  <div key={cur}>
-                    <span className={s.statCur}>{cur}</span>
-                    {' '}{formatCurrency(amt, cur)}
-                  </div>
-                ))
-              : <span style={{ color: 'var(--eco-fg3)' }}>—</span>
-            }
-          </div>
-          <div className={s.statNote}>{typeCounts.INCOME} transacciones</div>
-          <div className={`${s.statBar} ${s.statBarPos}`}>
-            <div className={s.statBarFill} style={{ width: `${Math.round((totalInc / maxStat) * 100)}%` }} />
-          </div>
-          <div className={s.multiCur}>
-            {Object.entries(monthIncome).map(([cur, amt]) => (
-              <span key={cur}>{formatCurrency(amt, cur)} {cur.toLowerCase()}</span>
-            ))}
-          </div>
-        </article>
 
-        {/* Stat: Expenses */}
-        <article className={s.statCard}>
-          <div className={s.cardLabel}>
-            <span className={s.cardDotNeg} />
-            gastos{dateRange ? '' : ' · 30d'}
+          {/* Income */}
+          <div className={s.flowSection}>
+            <div className={s.flowLabel}>
+              <span className={s.cardDotPos} />
+              ingresos
+              <span className={s.flowCount}>{typeCounts.INCOME} tx</span>
+            </div>
+            <div className={s.flowAmounts}>
+              {Object.keys(monthIncome).length > 0
+                ? Object.entries(monthIncome).map(([cur, amt]) => (
+                    <div key={cur}><span className={s.flowCur}>{cur}</span> {formatCurrency(amt, cur)}</div>
+                  ))
+                : <span style={{ color: 'var(--eco-fg3)' }}>—</span>
+              }
+            </div>
+            <div className={s.flowBar}>
+              <div className={s.flowBarInner} style={{ width: `${Math.round((totalInc / maxStat) * 100)}%`, background: 'var(--eco-pos)' }} />
+            </div>
           </div>
-          <div className={s.statNum}>
-            {Object.keys(monthExpense).length > 0
-              ? Object.entries(monthExpense).map(([cur, amt]) => (
-                  <div key={cur}>
-                    <span className={s.statCur}>{cur}</span>
-                    {' '}{formatCurrency(amt, cur)}
-                  </div>
-                ))
-              : <span style={{ color: 'var(--eco-fg3)' }}>—</span>
-            }
-          </div>
-          <div className={s.statNote}>{typeCounts.EXPENSE} transacciones</div>
-          <div className={`${s.statBar} ${s.statBarNeg}`}>
-            <div className={s.statBarFill} style={{ width: `${Math.round((totalExp / maxStat) * 100)}%` }} />
-          </div>
-          <div className={s.multiCur}>
-            {Object.entries(monthExpense).map(([cur, amt]) => (
-              <span key={cur}>{formatCurrency(amt, cur)} {cur.toLowerCase()}</span>
-            ))}
+
+          <div className={s.flowDivider} />
+
+          {/* Expense */}
+          <div className={s.flowSection}>
+            <div className={s.flowLabel}>
+              <span className={s.cardDotNeg} />
+              gastos
+              <span className={s.flowCount}>{typeCounts.EXPENSE} tx</span>
+            </div>
+            <div className={s.flowAmounts}>
+              {Object.keys(monthExpense).length > 0
+                ? Object.entries(monthExpense).map(([cur, amt]) => (
+                    <div key={cur}><span className={s.flowCur}>{cur}</span> {formatCurrency(amt, cur)}</div>
+                  ))
+                : <span style={{ color: 'var(--eco-fg3)' }}>—</span>
+              }
+            </div>
+            <div className={s.flowBar}>
+              <div className={s.flowBarInner} style={{ width: `${Math.round((totalExp / maxStat) * 100)}%`, background: 'var(--eco-neg)' }} />
+            </div>
           </div>
         </article>
 

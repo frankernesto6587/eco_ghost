@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
+  IsArray,
   IsDateString,
   IsEnum,
   IsInt,
@@ -64,4 +65,10 @@ export class CreateTransactionDto {
   @IsInt()
   @Min(1)
   toAmount?: number;
+
+  @ApiPropertyOptional({ example: ['clxyz123'], description: 'Tag IDs to associate' })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  tagIds?: string[];
 }

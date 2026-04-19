@@ -2,17 +2,31 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TelegramService } from '../telegram/telegram.service';
+import { AuditService } from '../audit/audit.service';
 import {
   CreateTransactionDto,
   UpdateTransactionDto,
   TransactionQueryDto,
+  BulkUpdateDto,
+  BulkDeleteDto,
 } from './dto';
+
+const TRANSACTION_INCLUDE = {
+  category: true,
+  account: true,
+  project: true,
+  debt: true,
+  tags: { include: { tag: true } },
+};
+
+const ALLOWED_SORT_FIELDS = ['date', 'amount', 'description', 'createdAt'];
 
 @Injectable()
 export class TransactionsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly telegram: TelegramService,
+    private readonly audit: AuditService,
   ) {}
 
   async create(orgId: string, userId: string, dto: CreateTransactionDto) {
@@ -41,6 +55,11 @@ export class TransactionsService {
             projectId: dto.projectId,
             orgId,
             createdBy: userId,
+            ...(dto.tagIds?.length && {
+              tags: {
+                create: dto.tagIds.map((tagId) => ({ tagId })),
+              },
+            }),
           },
         });
 
@@ -58,6 +77,11 @@ export class TransactionsService {
             linkedTransactionId: inc.id,
             orgId,
             createdBy: userId,
+            ...(dto.tagIds?.length && {
+              tags: {
+                create: dto.tagIds.map((tagId) => ({ tagId })),
+              },
+            }),
           },
         });
 
@@ -68,10 +92,7 @@ export class TransactionsService {
       const result = await this.prisma.transaction.findUniqueOrThrow({
         where: { id: outgoing.id },
         include: {
-          category: true,
-          account: true,
-          project: true,
-          debt: true,
+          ...TRANSACTION_INCLUDE,
           linkedTransaction: { include: { account: true } },
         },
       });
@@ -85,6 +106,15 @@ export class TransactionsService {
       const fmt = (n: number) => (n / 100).toFixed(2);
       const noteLine = dto.notes ? `\n📝 Nota          : ${dto.notes}` : '';
       this.telegram.notify(orgId, `🔄 *Transferencia*\n━━━━━━━━━━━━━━━━━━\n📋 Descripcion : ${dto.description}\n💰 Monto          : ${fmt(dto.amount)} ${result.account.currency}\n🏦 Origen         : ${result.account.name}\n💵 Saldo           : ${fmt(srcBalance)} ${result.account.currency}\n🏦 Destino       : ${dstAccount?.name ?? '?'}\n💵 Saldo           : ${fmt(dstBalance)} ${dstAccount?.currency ?? ''}${noteLine}\n━━━━━━━━━━━━━━━━━━`);
+
+      this.audit.log({
+        action: 'CREATE',
+        entity: 'Transaction',
+        entityId: outgoing.id,
+        metadata: { type: 'TRANSFER' },
+        userId,
+        orgId,
+      });
 
       return result;
     }
@@ -115,6 +145,11 @@ export class TransactionsService {
             projectId: dto.projectId,
             orgId,
             createdBy: userId,
+            ...(dto.tagIds?.length && {
+              tags: {
+                create: dto.tagIds.map((tagId) => ({ tagId })),
+              },
+            }),
           },
         });
 
@@ -132,6 +167,11 @@ export class TransactionsService {
             linkedTransactionId: inc.id,
             orgId,
             createdBy: userId,
+            ...(dto.tagIds?.length && {
+              tags: {
+                create: dto.tagIds.map((tagId) => ({ tagId })),
+              },
+            }),
           },
         });
 
@@ -141,10 +181,7 @@ export class TransactionsService {
       const result = await this.prisma.transaction.findUniqueOrThrow({
         where: { id: outgoing.id },
         include: {
-          category: true,
-          account: true,
-          project: true,
-          debt: true,
+          ...TRANSACTION_INCLUDE,
           linkedTransaction: { include: { account: true } },
         },
       });
@@ -157,6 +194,15 @@ export class TransactionsService {
       const fmt = (n: number) => (n / 100).toFixed(2);
       const noteLine = dto.notes ? `\n📝 Nota          : ${dto.notes}` : '';
       this.telegram.notify(orgId, `💱 *Cambio de divisa*\n━━━━━━━━━━━━━━━━━━\n📋 Descripcion : ${dto.description}\n🏦 Origen         : ${result.account.name}\n💰 Monto          : ${fmt(dto.amount)} ${result.account.currency}\n💵 Saldo           : ${fmt(srcBalance)} ${result.account.currency}\n🏦 Destino       : ${dstAccount?.name ?? '?'}\n💰 Monto          : ${fmt(dto.toAmount)} ${dstAccount?.currency ?? ''}\n💵 Saldo           : ${fmt(dstBalance)} ${dstAccount?.currency ?? ''}${noteLine}\n━━━━━━━━━━━━━━━━━━`);
+
+      this.audit.log({
+        action: 'CREATE',
+        entity: 'Transaction',
+        entityId: outgoing.id,
+        metadata: { type: 'EXCHANGE' },
+        userId,
+        orgId,
+      });
 
       return result;
     }
@@ -175,13 +221,13 @@ export class TransactionsService {
         debtId: dto.debtId,
         orgId,
         createdBy: userId,
+        ...(dto.tagIds?.length && {
+          tags: {
+            create: dto.tagIds.map((tagId) => ({ tagId })),
+          },
+        }),
       },
-      include: {
-        category: true,
-        account: true,
-        project: true,
-        debt: true,
-      },
+      include: TRANSACTION_INCLUDE,
     });
 
     const icon = dto.type === 'INCOME' ? '💵' : '💸';
@@ -192,11 +238,20 @@ export class TransactionsService {
     const noteLine = dto.notes ? `\n📝 Nota          : ${dto.notes}` : '';
     this.telegram.notify(orgId, `${icon} *Nuevo ${label}*\n━━━━━━━━━━━━━━━━━━\n📋 Descripcion : ${dto.description}\n💰 Monto          : ${fmt(dto.amount)} ${tx.account.currency}${catLine}\n🏦 Cuenta        : ${tx.account.name}\n💵 Saldo           : ${fmt(balance)} ${tx.account.currency}${noteLine}\n━━━━━━━━━━━━━━━━━━`);
 
+    this.audit.log({
+      action: 'CREATE',
+      entity: 'Transaction',
+      entityId: tx.id,
+      metadata: { type: dto.type },
+      userId,
+      orgId,
+    });
+
     return tx;
   }
 
   async findAll(orgId: string, query: TransactionQueryDto) {
-    const { from, to, type, categoryId, accountId, projectId, currency, cursor, limit = 20, deleted } = query;
+    const { from, to, type, categoryId, accountId, projectId, currency, cursor, limit = 20, deleted, sortBy, sortOrder } = query;
 
     const where: Prisma.TransactionWhereInput = {
       orgId,
@@ -215,19 +270,20 @@ export class TransactionsService {
     if (projectId) where.projectId = projectId;
     if (currency) where.account = { currency };
 
+    // Build orderBy from sortBy/sortOrder, default to createdAt desc
+    let orderBy: Prisma.TransactionOrderByWithRelationInput = { createdAt: 'desc' };
+    if (sortBy && ALLOWED_SORT_FIELDS.includes(sortBy)) {
+      orderBy = { [sortBy]: sortOrder ?? 'desc' };
+    }
+
     const transactions = await this.prisma.transaction.findMany({
       where,
-      orderBy: { createdAt: 'desc' },
+      orderBy,
       take: limit,
       ...(cursor
         ? { cursor: { id: cursor }, skip: 1 }
         : {}),
-      include: {
-        category: true,
-        account: true,
-        project: true,
-        debt: true,
-      },
+      include: TRANSACTION_INCLUDE,
     });
 
     const lastItem = transactions[transactions.length - 1];
@@ -244,12 +300,7 @@ export class TransactionsService {
   async findOne(orgId: string, id: string) {
     const transaction = await this.prisma.transaction.findFirst({
       where: { id, orgId, deletedAt: null },
-      include: {
-        category: true,
-        account: true,
-        project: true,
-        debt: true,
-      },
+      include: TRANSACTION_INCLUDE,
     });
 
     if (!transaction) {
@@ -259,7 +310,7 @@ export class TransactionsService {
     return transaction;
   }
 
-  async update(orgId: string, id: string, dto: UpdateTransactionDto) {
+  async update(orgId: string, id: string, userId: string, dto: UpdateTransactionDto) {
     const transaction = await this.prisma.transaction.findFirst({
       where: { id, orgId, deletedAt: null },
     });
@@ -268,29 +319,45 @@ export class TransactionsService {
       throw new NotFoundException(`Transaction with id ${id} not found`);
     }
 
-    return this.prisma.transaction.update({
+    const { tagIds, ...data } = dto;
+
+    const result = await this.prisma.transaction.update({
       where: { id },
       data: {
-        ...(dto.date !== undefined && { date: new Date(dto.date) }),
-        ...(dto.description !== undefined && { description: dto.description }),
-        ...(dto.amount !== undefined && { amount: dto.amount }),
-        ...(dto.type !== undefined && { type: dto.type }),
-        ...(dto.notes !== undefined && { notes: dto.notes }),
-        ...(dto.categoryId !== undefined && { categoryId: dto.categoryId }),
-        ...(dto.accountId !== undefined && { accountId: dto.accountId }),
-        ...(dto.projectId !== undefined && { projectId: dto.projectId }),
-        ...(dto.debtId !== undefined && { debtId: dto.debtId }),
+        ...(data.date !== undefined && { date: new Date(data.date) }),
+        ...(data.description !== undefined && { description: data.description }),
+        ...(data.amount !== undefined && { amount: data.amount }),
+        ...(data.type !== undefined && { type: data.type }),
+        ...(data.notes !== undefined && { notes: data.notes }),
+        ...(data.categoryId !== undefined && { categoryId: data.categoryId }),
+        ...(data.accountId !== undefined && { accountId: data.accountId }),
+        ...(data.projectId !== undefined && { projectId: data.projectId }),
+        ...(data.debtId !== undefined && { debtId: data.debtId }),
+        ...(tagIds !== undefined && {
+          tags: {
+            deleteMany: {},
+            ...(tagIds.length && {
+              create: tagIds.map((tagId) => ({ tagId })),
+            }),
+          },
+        }),
       },
-      include: {
-        category: true,
-        account: true,
-        project: true,
-        debt: true,
-      },
+      include: TRANSACTION_INCLUDE,
     });
+
+    this.audit.log({
+      action: 'UPDATE',
+      entity: 'Transaction',
+      entityId: id,
+      changes: data as unknown as Prisma.InputJsonValue,
+      userId,
+      orgId,
+    });
+
+    return result;
   }
 
-  async remove(orgId: string, id: string, reason: string) {
+  async remove(orgId: string, id: string, userId: string, reason: string) {
     const transaction = await this.prisma.transaction.findFirst({
       where: { id, orgId, deletedAt: null },
       include: { category: true, account: true },
@@ -318,6 +385,16 @@ export class TransactionsService {
           where: { id: { in: [id, pairedId] } },
           data: { deletedAt: now, deleteReason: reason },
         });
+
+        this.audit.log({
+          action: 'DELETE',
+          entity: 'Transaction',
+          entityId: id,
+          metadata: { reason, pairedId },
+          userId,
+          orgId,
+        });
+
         return transaction;
       }
     }
@@ -332,10 +409,19 @@ export class TransactionsService {
     const catLine = transaction.category ? `\n📂 Categoria   : ${transaction.category.name}` : '';
     this.telegram.notify(orgId, `🗑 *Transaccion eliminada*\n━━━━━━━━━━━━━━━━━━\n📋 Descripcion : ${transaction.description}\n💰 Monto          : ${fmt(transaction.amount)} ${transaction.account.currency}${catLine}\n🏦 Cuenta        : ${transaction.account.name}\n💵 Saldo           : ${fmt(balance)} ${transaction.account.currency}\n⚠️ Motivo        : ${reason}\n━━━━━━━━━━━━━━━━━━`);
 
+    this.audit.log({
+      action: 'DELETE',
+      entity: 'Transaction',
+      entityId: id,
+      metadata: { reason },
+      userId,
+      orgId,
+    });
+
     return transaction;
   }
 
-  async restore(orgId: string, id: string) {
+  async restore(orgId: string, id: string, userId: string) {
     const transaction = await this.prisma.transaction.findFirst({
       where: { id, orgId, deletedAt: { not: null } },
       include: { account: true },
@@ -361,14 +447,122 @@ export class TransactionsService {
           where: { id: { in: [id, pairedId] } },
           data: { deletedAt: null, deleteReason: null },
         });
+
+        this.audit.log({
+          action: 'RESTORE',
+          entity: 'Transaction',
+          entityId: id,
+          metadata: { pairedId },
+          userId,
+          orgId,
+        });
+
         return transaction;
       }
     }
 
-    return this.prisma.transaction.update({
+    const result = await this.prisma.transaction.update({
       where: { id },
       data: { deletedAt: null, deleteReason: null },
     });
+
+    this.audit.log({
+      action: 'RESTORE',
+      entity: 'Transaction',
+      entityId: id,
+      userId,
+      orgId,
+    });
+
+    return result;
+  }
+
+  async bulkUpdate(orgId: string, userId: string, dto: BulkUpdateDto) {
+    const data: Prisma.TransactionUncheckedUpdateManyInput = {};
+
+    if (dto.categoryId !== undefined) {
+      data.categoryId = dto.categoryId;
+    }
+    if (dto.accountId !== undefined) {
+      data.accountId = dto.accountId;
+    }
+
+    const result = await this.prisma.transaction.updateMany({
+      where: {
+        id: { in: dto.ids },
+        orgId,
+        deletedAt: null,
+      },
+      data,
+    });
+
+    for (const id of dto.ids) {
+      this.audit.log({
+        action: 'BULK_UPDATE',
+        entity: 'Transaction',
+        entityId: id,
+        changes: { categoryId: dto.categoryId, accountId: dto.accountId },
+        userId,
+        orgId,
+      });
+    }
+
+    return { count: result.count };
+  }
+
+  async bulkDelete(orgId: string, userId: string, dto: BulkDeleteDto) {
+    const now = new Date();
+
+    // Find all transactions to check for linked (transfer/exchange) pairs
+    const transactions = await this.prisma.transaction.findMany({
+      where: {
+        id: { in: dto.ids },
+        orgId,
+        deletedAt: null,
+      },
+      select: { id: true, type: true, linkedTransactionId: true },
+    });
+
+    // Collect all IDs including linked pairs
+    const allIds = new Set<string>(dto.ids);
+
+    for (const tx of transactions) {
+      if (['TRANSFER', 'EXCHANGE'].includes(tx.type)) {
+        if (tx.linkedTransactionId) {
+          allIds.add(tx.linkedTransactionId);
+        } else {
+          const linkedBy = await this.prisma.transaction.findFirst({
+            where: { linkedTransactionId: tx.id, deletedAt: null },
+            select: { id: true },
+          });
+          if (linkedBy) {
+            allIds.add(linkedBy.id);
+          }
+        }
+      }
+    }
+
+    const result = await this.prisma.transaction.updateMany({
+      where: {
+        id: { in: Array.from(allIds) },
+        orgId,
+        deletedAt: null,
+      },
+      data: { deletedAt: now, deleteReason: dto.reason },
+    });
+
+    for (const id of allIds) {
+      this.audit.log({
+        action: 'BULK_DELETE',
+        entity: 'Transaction',
+        entityId: id,
+        metadata: { reason: dto.reason },
+        userId,
+        orgId,
+      });
+    }
+
+    return { count: result.count };
   }
 
   async getSummary(orgId: string, query: TransactionQueryDto) {

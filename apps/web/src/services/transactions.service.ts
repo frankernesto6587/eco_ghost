@@ -10,6 +10,8 @@ export interface TransactionFilters {
   cursor?: string;
   limit?: number;
   deleted?: boolean;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
 }
 
 export interface CreateTransactionDto {
@@ -96,6 +98,14 @@ export const transactionsService = {
   async restore(id: string): Promise<Transaction> {
     const { data } = await api.patch(`/transactions/${id}/restore`);
     return data;
+  },
+
+  async bulkUpdate(ids: string[], updates: { categoryId?: string; accountId?: string }): Promise<void> {
+    await api.patch('/transactions/bulk', { ids, ...updates });
+  },
+
+  async bulkDelete(ids: string[], reason: string): Promise<void> {
+    await api.post('/transactions/bulk/delete', { ids, reason });
   },
 
   async getSummary(params?: TransactionSummaryParams): Promise<TransactionSummary> {

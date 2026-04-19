@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   App,
   Button,
@@ -18,6 +18,8 @@ import {
   LoadingOutlined,
   UndoOutlined,
   SearchOutlined,
+  DownloadOutlined,
+  CheckOutlined,
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -37,6 +39,7 @@ import { formatCurrency, formatDate } from '@/lib/formatters';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import CategoryIcon from '@/components/common/CategoryIcon';
+import TransactionDrawer, { type DrawerTransaction } from '@/components/transactions/TransactionDrawer';
 import s from './Transactions.module.css';
 
 const { RangePicker } = DatePicker;
@@ -176,6 +179,45 @@ export default function TransactionsPage() {
   const [hasMore, setHasMore] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [drawerTx, setDrawerTx] = useState<Transaction | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [saveAnother, setSaveAnother] = useState(false);
+  const [sortBy, setSortBy] = useState<string>('createdAt');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  // ---- Keyboard shortcuts ----
+  useEffect(() => {
+    function handleKey(e: KeyboardEvent) {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
+        if (e.key === 'Escape') {
+          (e.target as HTMLElement).blur();
+          e.preventDefault();
+        }
+        return;
+      }
+      if (e.key === 'n' && !e.metaKey && !e.ctrlKey && canWrite && !viewDeleted) {
+        e.preventDefault();
+        openCreateModal();
+      } else if (e.key === '/' && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault();
+        searchRef.current?.focus();
+      } else if (e.key === 'Escape') {
+        if (drawerOpen) {
+          setDrawerOpen(false);
+          setDrawerTx(null);
+        } else if (modalOpen) {
+          closeFormModal();
+        } else if (selectedIds.size > 0) {
+          setSelectedIds(new Set());
+        }
+      }
+    }
+    document.addEventListener('keydown', handleKey);
+    return () => document.removeEventListener('keydown', handleKey);
+  }, [canWrite, viewDeleted, drawerOpen, modalOpen, selectedIds.size]);
 
   // ---- Data fetching ----
   const transactionsQuery = useQuery<TransactionListResponse>({
@@ -246,7 +288,15 @@ export default function TransactionsPage() {
     onSuccess: () => {
       message.success('Transaccion creada exitosamente');
       invalidateAll();
-      closeFormModal();
+      if (saveAnother) {
+        // Keep modal open, reset most fields but keep type and account
+        const keepType = form.getFieldValue('type');
+        const keepAccount = form.getFieldValue('accountId');
+        form.resetFields();
+        form.setFieldsValue({ date: dayjs(), type: keepType, accountId: keepAccount });
+      } else {
+        closeFormModal();
+      }
     },
     onError: () => {
       message.error('Error al crear la transaccion');
@@ -289,6 +339,17 @@ export default function TransactionsPage() {
     },
   });
 
+  const bulkDeleteMutation = useMutation({
+    mutationFn: ({ ids, reason }: { ids: string[]; reason: string }) =>
+      transactionsService.bulkDelete(ids, reason),
+    onSuccess: () => {
+      message.success('Transacciones eliminadas');
+      setSelectedIds(new Set());
+      invalidateAll();
+    },
+    onError: () => message.error('Error al eliminar'),
+  });
+
   // ---- Helpers ----
   const invalidateAll = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ['transactions'] });
@@ -302,6 +363,69 @@ export default function TransactionsPage() {
     setEditingTransaction(null);
     form.resetFields();
   }, [form]);
+
+  const openDrawer = useCallback((tx: Transaction) => {
+    setDrawerTx(tx);
+    setDrawerOpen(true);
+  }, []);
+
+  const closeDrawer = useCallback(() => {
+    setDrawerOpen(false);
+    setDrawerTx(null);
+  }, []);
+
+  const handleSort = useCallback((field: string) => {
+    setSortBy((prev) => {
+      if (prev === field) {
+        setSortOrder((o) => (o === 'desc' ? 'asc' : 'desc'));
+        return prev;
+      }
+      setSortOrder('desc');
+      return field;
+    });
+  }, []);
+
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  // toggleSelectAll is defined after displayedTransactions (see below)
+
+  const handleBulkDelete = useCallback(() => {
+    let deleteReason = '';
+    modal.confirm({
+      title: `Eliminar ${selectedIds.size} transacciones`,
+      content: (
+        <div>
+          <p>{`Estas seguro de que deseas eliminar ${selectedIds.size} transacciones?`}</p>
+          <TextArea
+            placeholder="Motivo de eliminacion (requerido)"
+            rows={3}
+            maxLength={500}
+            showCount
+            onChange={(e) => { deleteReason = e.target.value; }}
+          />
+        </div>
+      ),
+      okText: 'Eliminar',
+      okType: 'danger',
+      cancelText: t('common.cancel'),
+      onOk: () => {
+        if (!deleteReason.trim()) {
+          message.error('El motivo de eliminacion es requerido');
+          return Promise.reject();
+        }
+        return bulkDeleteMutation.mutateAsync({ ids: Array.from(selectedIds), reason: deleteReason.trim() });
+      },
+    });
+  }, [selectedIds, bulkDeleteMutation, modal, message, t]);
+
+  // exportCsv is defined after displayedTransactions (see below)
 
   const openCreateModal = useCallback(() => {
     setEditingTransaction(null);
@@ -447,17 +571,62 @@ export default function TransactionsPage() {
 
   const activeFilterCount = [filters.dateRange, filters.type, filters.accountId, filters.categoryId, filters.currency].filter(Boolean).length;
 
-  // Local search filtering
+  // Local search filtering + sorting
   const displayedTransactions = useMemo(() => {
-    if (!searchText.trim()) return allTransactions;
-    const q = searchText.toLowerCase();
-    return allTransactions.filter((tx) =>
-      tx.description.toLowerCase().includes(q) ||
-      tx.notes?.toLowerCase().includes(q) ||
-      tx.category?.name.toLowerCase().includes(q) ||
-      tx.account?.name.toLowerCase().includes(q)
-    );
-  }, [allTransactions, searchText]);
+    let result = allTransactions;
+    if (searchText.trim()) {
+      const q = searchText.toLowerCase();
+      result = result.filter((tx) =>
+        tx.description.toLowerCase().includes(q) ||
+        tx.notes?.toLowerCase().includes(q) ||
+        tx.category?.name.toLowerCase().includes(q) ||
+        tx.account?.name.toLowerCase().includes(q)
+      );
+    }
+    // Client-side sorting
+    const sorted = [...result].sort((a, b) => {
+      let cmp = 0;
+      switch (sortBy) {
+        case 'date': cmp = new Date(a.date).getTime() - new Date(b.date).getTime(); break;
+        case 'amount': cmp = a.amount - b.amount; break;
+        case 'description': cmp = a.description.localeCompare(b.description); break;
+        default: cmp = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(); break;
+      }
+      return sortOrder === 'asc' ? cmp : -cmp;
+    });
+    return sorted;
+  }, [allTransactions, searchText, sortBy, sortOrder]);
+
+  const toggleSelectAll = useCallback(() => {
+    setSelectedIds((prev) => {
+      if (prev.size === displayedTransactions.length) return new Set();
+      return new Set(displayedTransactions.map((tx) => tx.id));
+    });
+  }, [displayedTransactions]);
+
+  const exportCsv = useCallback(() => {
+    if (displayedTransactions.length === 0) return;
+    const headers = ['Fecha', 'Tipo', 'Descripcion', 'Monto', 'Moneda', 'Cuenta', 'Categoria', 'Notas'];
+    const rows = displayedTransactions.map((tx) => [
+      dayjs(tx.date).format('YYYY-MM-DD HH:mm'),
+      getTypeLabel(tx.type),
+      `"${tx.description.replace(/"/g, '""')}"`,
+      (tx.amount / 100).toFixed(2),
+      tx.account?.currency ?? '',
+      tx.account?.name ?? '',
+      tx.category?.name ?? '',
+      `"${(tx.notes ?? '').replace(/"/g, '""')}"`,
+    ]);
+    const csv = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `transacciones-${dayjs().format('YYYY-MM-DD')}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    message.success('CSV exportado');
+  }, [displayedTransactions, message]);
 
   // ---- Type tab helper for modal ----
   const typeTabDotClass = (type: string): string => {
@@ -501,6 +670,12 @@ export default function TransactionsPage() {
           </div>
         </div>
         <div className={s.pageActions}>
+          {!viewDeleted && displayedTransactions.length > 0 && (
+            <button className={s.exportBtn} onClick={exportCsv} title="Exportar CSV">
+              <DownloadOutlined style={{ fontSize: 13 }} />
+              CSV
+            </button>
+          )}
           {canWrite && !viewDeleted && (
             <Button type="primary" icon={<PlusOutlined />} onClick={openCreateModal}>
               {isMobile ? 'Nueva' : 'Nueva'}
@@ -567,6 +742,7 @@ export default function TransactionsPage() {
         <div className={s.searchInp}>
           <SearchOutlined style={{ fontSize: 14 }} />
           <input
+            ref={searchRef}
             placeholder="Buscar por descripcion, monto, ref..."
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
@@ -765,6 +941,26 @@ export default function TransactionsPage() {
         </>
       )}
 
+      {/* ═══════ BULK SELECTION BAR ═══════ */}
+      {selectedIds.size > 0 && (
+        <div className={s.bulkBar}>
+          <span className={s.bulkCount}>
+            {selectedIds.size} seleccionada{selectedIds.size > 1 ? 's' : ''}
+          </span>
+          <div className={s.bulkActions}>
+            <button className={s.bulkBtn} onClick={() => setSelectedIds(new Set())}>
+              Deseleccionar
+            </button>
+            {canManageOrg && (
+              <button className={s.bulkBtnDanger} onClick={handleBulkDelete}>
+                <DeleteOutlined style={{ fontSize: 12 }} />
+                Eliminar
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* ═══════ TABLE ═══════ */}
       <div className={s.tableWrap}>
         {isError && (
@@ -797,7 +993,7 @@ export default function TransactionsPage() {
                 key={tx.id}
                 className={s.mobileCard}
                 onClick={() => {
-                  if (canManageOrg && !viewDeleted) openEditModal(tx);
+                  if (!viewDeleted) openDrawer(tx);
                 }}
                 style={viewDeleted ? { opacity: 0.6 } : undefined}
               >
@@ -841,13 +1037,31 @@ export default function TransactionsPage() {
           /* ---- DESKTOP GRID ---- */
           <div className={s.txGrid}>
             {/* Headers */}
-            <div className={s.hdrChk} />
-            <div className={s.hdr}>Fecha</div>
+            <div className={s.hdrChk}>
+              {!viewDeleted && canWrite && (
+                <span
+                  className={selectedIds.size === displayedTransactions.length && displayedTransactions.length > 0 ? s.chkOn : selectedIds.size > 0 ? s.chkMixed : s.chk}
+                  onClick={toggleSelectAll}
+                >
+                  {selectedIds.size > 0 && <CheckOutlined style={{ fontSize: 9 }} />}
+                </span>
+              )}
+            </div>
+            <div className={s.hdrSort} onClick={() => handleSort('date')}>
+              Fecha
+              {sortBy === 'date' && <span className={s.sortArrow}>{sortOrder === 'asc' ? '▲' : '▼'}</span>}
+            </div>
             <div className={s.hdrCenter}>T</div>
-            <div className={s.hdr}>Descripcion</div>
+            <div className={s.hdrSort} onClick={() => handleSort('description')}>
+              Descripcion
+              {sortBy === 'description' && <span className={s.sortArrow}>{sortOrder === 'asc' ? '▲' : '▼'}</span>}
+            </div>
             <div className={s.hdr}>Categoria</div>
             <div className={s.hdr}>Cuenta</div>
-            <div className={s.hdrRight}>Monto</div>
+            <div className={s.hdrSortRight} onClick={() => handleSort('amount')}>
+              Monto
+              {sortBy === 'amount' && <span className={s.sortArrow}>{sortOrder === 'asc' ? '▲' : '▼'}</span>}
+            </div>
 
             {/* Rows */}
             {displayedTransactions.map((tx) => {
@@ -860,12 +1074,12 @@ export default function TransactionsPage() {
               return (
                 <div
                   key={tx.id}
-                  className={viewDeleted ? s.txRowDeleted : s.txRow}
+                  className={viewDeleted ? s.txRowDeleted : selectedIds.has(tx.id) ? s.txRowSelected : s.txRow}
                   onClick={() => {
-                    if (canManageOrg && !viewDeleted) openEditModal(tx);
+                    if (!viewDeleted) openDrawer(tx);
                   }}
                 >
-                  {/* Checkbox column — actions */}
+                  {/* Checkbox column */}
                   <div className={s.cChk} onClick={(e) => e.stopPropagation()}>
                     {viewDeleted && canManageOrg ? (
                       <Button
@@ -875,15 +1089,13 @@ export default function TransactionsPage() {
                         onClick={() => handleRestore(tx)}
                         style={{ fontSize: 11 }}
                       />
-                    ) : !viewDeleted && canManageOrg ? (
-                      <Button
-                        type="text"
-                        size="small"
-                        danger
-                        icon={<DeleteOutlined />}
-                        onClick={() => handleDelete(tx)}
-                        style={{ fontSize: 11 }}
-                      />
+                    ) : !viewDeleted && canWrite ? (
+                      <span
+                        className={selectedIds.has(tx.id) ? s.chkOn : s.chk}
+                        onClick={() => toggleSelect(tx.id)}
+                      >
+                        {selectedIds.has(tx.id) && <CheckOutlined style={{ fontSize: 9 }} />}
+                      </span>
                     ) : null}
                   </div>
 
@@ -1142,9 +1354,36 @@ export default function TransactionsPage() {
                 showCount
               />
             </Form.Item>
+
+            {!editingTransaction && (
+              <label className={s.saveAnother}>
+                <input
+                  type="checkbox"
+                  checked={saveAnother}
+                  onChange={(e) => setSaveAnother(e.target.checked)}
+                />
+                Guardar y crear otra
+              </label>
+            )}
           </Form>
         </Spin>
       </Modal>
+
+      {/* ═══════ DETAIL DRAWER ═══════ */}
+      <TransactionDrawer
+        transaction={drawerTx as DrawerTransaction | null}
+        open={drawerOpen}
+        onClose={closeDrawer}
+        onEdit={(tx) => {
+          closeDrawer();
+          openEditModal(tx as unknown as Transaction);
+        }}
+        onDelete={(tx) => {
+          closeDrawer();
+          handleDelete(tx as unknown as Transaction);
+        }}
+        canWrite={canWrite}
+      />
     </div>
   );
 }

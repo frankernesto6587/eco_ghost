@@ -66,4 +66,14 @@ export class TransactionQueryDto {
   @Transform(({ value }) => value === 'true' || value === true)
   @IsBoolean()
   deleted?: boolean;
+
+  @ApiPropertyOptional({ example: 'date', description: 'Sort field: date | amount | description | createdAt' })
+  @IsOptional()
+  @IsString()
+  sortBy?: string;
+
+  @ApiPropertyOptional({ example: 'desc', description: 'Sort direction: asc | desc' })
+  @IsOptional()
+  @IsString()
+  sortOrder?: 'asc' | 'desc';
 }

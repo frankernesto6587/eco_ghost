@@ -133,6 +133,8 @@ model Organization {
   exchangeRates ExchangeRate[]
   integrations  Integration[]
   notifications Notification[]
+  tags          Tag[]
+  auditLogs     AuditLog[]
 
   @@map("organizations")
 }
@@ -202,6 +204,9 @@ model Transaction {
   deletedAt    DateTime?
   deleteReason String?
   source       String?
+
+  tags        TransactionTag[]
+  attachments Attachment[]
 
   @@index([orgId])
   @@index([orgId, date])
@@ -336,4 +341,70 @@ model Notification {
   @@index([orgId, userId])
   @@index([userId, isRead])
   @@map("notifications")
+}
+
+// ─── Tags ───────────────────────────────────────────────────────────
+
+model Tag {
+  id    String  @id @default(cuid())
+  name  String
+  color String?
+
+  orgId        String
+  org          Organization   @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  transactions TransactionTag[]
+
+  createdAt DateTime @default(now())
+
+  @@unique([orgId, name])
+  @@index([orgId])
+  @@map("tags")
+}
+
+model TransactionTag {
+  transactionId String
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  tagId         String
+  tag           Tag @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([transactionId, tagId])
+  @@map("transaction_tags")
+}
+
+// ─── Attachments ────────────────────────────────────────────────────
+
+model Attachment {
+  id        String   @id @default(cuid())
+  filename  String
+  mimeType  String
+  size      Int
+  url       String
+  createdAt DateTime @default(now())
+
+  transactionId String
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+
+  @@index([transactionId])
+  @@map("attachments")
+}
+
+// ─── Audit Logs ─────────────────────────────────────────────────────
+
+model AuditLog {
+  id       String  @id @default(cuid())
+  action   String
+  entity   String
+  entityId String
+  changes  Json?
+  metadata Json?
+
+  userId String
+  orgId  String
+  org    Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([orgId, entityId])
+  @@index([orgId, createdAt])
+  @@map("audit_logs")
 }

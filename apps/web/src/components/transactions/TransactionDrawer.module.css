@@ -1,0 +1,224 @@
+/* ═══════ Transaction Detail Drawer ═══════ */
+
+/* ═══════ HEADER ═══════ */
+.header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--eco-line-soft);
+  background: var(--eco-surface2);
+}
+
+.typeBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-family: 'Geist Mono', monospace;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+.typeDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.typeBadgeInc {
+  background: var(--eco-pos-soft);
+  color: var(--eco-pos);
+}
+.typeBadgeInc .typeDot {
+  background: var(--eco-pos);
+  box-shadow: 0 0 0 2px var(--eco-pos-soft);
+}
+
+.typeBadgeExp {
+  background: var(--eco-neg-soft);
+  color: var(--eco-neg);
+}
+.typeBadgeExp .typeDot {
+  background: var(--eco-neg);
+  box-shadow: 0 0 0 2px var(--eco-neg-soft);
+}
+
+.typeBadgeTr {
+  background: var(--eco-accent-soft);
+  color: var(--eco-accent);
+}
+.typeBadgeTr .typeDot {
+  background: var(--eco-accent);
+  box-shadow: 0 0 0 2px var(--eco-accent-soft);
+}
+
+.typeBadgeFx {
+  background: var(--eco-fx-soft);
+  color: var(--eco-fx);
+}
+.typeBadgeFx .typeDot {
+  background: var(--eco-fx);
+  box-shadow: 0 0 0 2px var(--eco-fx-soft);
+}
+
+.txId {
+  font-family: 'Geist Mono', monospace;
+  font-size: 11px;
+  color: var(--eco-fg4);
+  letter-spacing: 0.02em;
+}
+
+.closeBtn {
+  margin-left: auto;
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  border: 1px solid var(--eco-line);
+  background: var(--eco-surface);
+  color: var(--eco-fg3);
+  cursor: pointer;
+  transition: all 0.12s;
+  flex-shrink: 0;
+}
+
+.closeBtn:hover {
+  background: var(--eco-surface3);
+  color: var(--eco-fg);
+  border-color: var(--eco-fg4);
+}
+
+/* ═══════ BODY ═══════ */
+.body {
+  padding: 24px 20px;
+}
+
+/* ═══════ AMOUNT ═══════ */
+.amount {
+  font-family: 'Geist Mono', monospace;
+  font-size: 28px;
+  font-weight: 600;
+  font-feature-settings: 'tnum';
+  letter-spacing: -0.02em;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.amtCur {
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--eco-fg4);
+}
+
+.amtPos { color: var(--eco-pos); }
+.amtNeg { color: var(--eco-neg); }
+.amtNeu { color: var(--eco-fg2); }
+
+.exchangeInfo {
+  font-family: 'Geist Mono', monospace;
+  font-size: 14px;
+  color: var(--eco-fx);
+  margin-top: 4px;
+  font-feature-settings: 'tnum';
+}
+
+.desc {
+  font-size: 15px;
+  font-weight: 450;
+  color: var(--eco-fg);
+  margin-top: 8px;
+  line-height: 1.4;
+}
+
+/* ═══════ META FIELDS ═══════ */
+.meta {
+  margin-top: 24px;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0;
+}
+
+.meta dt {
+  font-family: 'Geist Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  color: var(--eco-fg4);
+  text-transform: uppercase;
+  padding: 12px 16px 12px 0;
+  border-bottom: 1px solid var(--eco-line-soft);
+  display: flex;
+  align-items: center;
+}
+
+.meta dd {
+  margin: 0;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--eco-line-soft);
+  font-size: 13px;
+  color: var(--eco-fg);
+  display: flex;
+  align-items: center;
+}
+
+.meta dt:last-of-type,
+.meta dd:last-of-type {
+  border-bottom: none;
+}
+
+/* ═══════ CHIPS ═══════ */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: var(--eco-surface2);
+  border: 1px solid var(--eco-line);
+  border-radius: 6px;
+  font-family: 'Geist Mono', monospace;
+  font-size: 11px;
+  color: var(--eco-fg2);
+}
+
+.chipDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.dimmed {
+  color: var(--eco-fg4);
+  font-style: italic;
+  font-size: 12px;
+}
+
+/* ═══════ NOTES ═══════ */
+.notes {
+  background: var(--eco-surface2);
+  border: 1px solid var(--eco-line-soft);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--eco-fg2);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ═══════ FOOTER ═══════ */
+.footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 20px;
+  border-top: 1px dashed var(--eco-line);
+  background: var(--eco-surface);
+  position: sticky;
+  bottom: 0;
+}

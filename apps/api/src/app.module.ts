@@ -11,6 +11,8 @@ import { CategoriesModule } from './modules/categories/categories.module';
 import { DebtsModule } from './modules/debts/debts.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { TelegramModule } from './modules/telegram/telegram.module';
+import { TagsModule } from './modules/tags/tags.module';
+import { AuditModule } from './modules/audit/audit.module';
 import { GlobalExceptionFilter } from './common/filters';
 
 @Module({
@@ -31,6 +33,8 @@ import { GlobalExceptionFilter } from './common/filters';
     DebtsModule,
     DashboardModule,
     TelegramModule,
+    TagsModule,
+    AuditModule,
   ],
   providers: [
     // Global exception filter for consistent error responses

@@ -54,6 +54,19 @@ function getAmtPrefix(type: string, hasLinked: boolean): string {
   return '';
 }
 
+/** Compute net total per currency for a day's transactions. */
+function computeDayTotal(txs: RecentTransaction[]): Record<string, number> {
+  const totals: Record<string, number> = {};
+  for (const tx of txs) {
+    const cur = tx.account?.currency ?? 'USD';
+    if (!totals[cur]) totals[cur] = 0;
+    if (tx.type === 'INCOME') totals[cur] += tx.amount;
+    else if (tx.type === 'EXPENSE') totals[cur] -= tx.amount;
+    // TRANSFER / EXCHANGE: neutral (0)
+  }
+  return totals;
+}
+
 function getGreeting(): string {
   const h = new Date().getHours();
   if (h < 12) return 'Buenos dias';
@@ -380,6 +393,14 @@ export default function DashboardPage() {
                 {/* Day header */}
                 <div className={s.dayHeader}>
                   <span>{group.label}</span>
+                  <span className={s.dayTotal}>
+                    día: {Object.entries(computeDayTotal(group.txs)).map(([cur, net], i) => (
+                      <span key={cur} className={net >= 0 ? s.dayTotalPos : s.dayTotalNeg}>
+                        {i > 0 && ' · '}
+                        {net >= 0 ? '+' : ''}{formatCurrency(net, cur)} {cur.toLowerCase()}
+                      </span>
+                    ))}
+                  </span>
                 </div>
 
                 {/* Rows */}

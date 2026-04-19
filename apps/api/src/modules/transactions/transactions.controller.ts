@@ -17,6 +17,8 @@ import {
   UpdateTransactionDto,
   TransactionQueryDto,
   DeleteTransactionDto,
+  BulkUpdateDto,
+  BulkDeleteDto,
 } from './dto';
 import { CurrentUser, OrgId, Roles } from '../../common/decorators';
 import { RolesGuard } from '../../common/guards';
@@ -48,6 +50,26 @@ export class TransactionsController {
     return this.transactionsService.getSummary(orgId, query);
   }
 
+  @Patch('bulk')
+  @Roles(Role.OWNER, Role.ADMIN, Role.ACCOUNTANT)
+  bulkUpdate(
+    @OrgId() orgId: string,
+    @CurrentUser('id') userId: string,
+    @Body() dto: BulkUpdateDto,
+  ) {
+    return this.transactionsService.bulkUpdate(orgId, userId, dto);
+  }
+
+  @Post('bulk/delete')
+  @Roles(Role.OWNER)
+  bulkDelete(
+    @OrgId() orgId: string,
+    @CurrentUser('id') userId: string,
+    @Body() dto: BulkDeleteDto,
+  ) {
+    return this.transactionsService.bulkDelete(orgId, userId, dto);
+  }
+
   @Get(':id')
   findOne(@OrgId() orgId: string, @Param('id') id: string) {
     return this.transactionsService.findOne(orgId, id);
@@ -57,25 +79,31 @@ export class TransactionsController {
   @Roles(Role.OWNER)
   update(
     @OrgId() orgId: string,
+    @CurrentUser('id') userId: string,
     @Param('id') id: string,
     @Body() dto: UpdateTransactionDto,
   ) {
-    return this.transactionsService.update(orgId, id, dto);
+    return this.transactionsService.update(orgId, id, userId, dto);
   }
 
   @Delete(':id')
   @Roles(Role.OWNER)
   remove(
     @OrgId() orgId: string,
+    @CurrentUser('id') userId: string,
     @Param('id') id: string,
     @Body() dto: DeleteTransactionDto,
   ) {
-    return this.transactionsService.remove(orgId, id, dto.reason);
+    return this.transactionsService.remove(orgId, id, userId, dto.reason);
   }
 
   @Patch(':id/restore')
   @Roles(Role.OWNER)
-  restore(@OrgId() orgId: string, @Param('id') id: string) {
-    return this.transactionsService.restore(orgId, id);
+  restore(
+    @OrgId() orgId: string,
+    @CurrentUser('id') userId: string,
+    @Param('id') id: string,
+  ) {
+    return this.transactionsService.restore(orgId, id, userId);
   }
 }

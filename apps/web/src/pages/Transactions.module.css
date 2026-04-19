@@ -639,6 +639,166 @@
   font-family: 'Geist Mono', monospace;
 }
 
+/* ═══════ BULK SELECTION BAR ═══════ */
+.bulkBar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  background: var(--eco-accent-weak);
+  border: 1px solid color-mix(in oklab, var(--eco-accent) 35%, transparent);
+  border-radius: 10px;
+  margin-bottom: 8px;
+  animation: bulkSlide 0.15s ease-out;
+}
+
+@keyframes bulkSlide {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.bulkCount {
+  font-family: 'Geist Mono', monospace;
+  font-size: 12px;
+  color: var(--eco-accent);
+  font-weight: 500;
+}
+
+.bulkActions {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.bulkBtn {
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  border: 1px solid var(--eco-line);
+  background: var(--eco-surface);
+  color: var(--eco-fg);
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.12s;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.bulkBtn:hover { border-color: var(--eco-fg4); }
+
+.bulkBtnDanger {
+  composes: bulkBtn;
+  color: var(--eco-neg);
+  border-color: color-mix(in oklab, var(--eco-neg) 30%, transparent);
+}
+
+.bulkBtnDanger:hover {
+  background: var(--eco-neg-soft);
+  border-color: var(--eco-neg);
+}
+
+/* ═══════ CHECKBOX ═══════ */
+.chk {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  border: 1.5px solid var(--eco-fg4);
+  background: transparent;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.12s;
+  flex-shrink: 0;
+  color: transparent;
+  font-size: 10px;
+}
+
+.chk:hover { border-color: var(--eco-accent); }
+
+.chkOn {
+  composes: chk;
+  background: var(--eco-accent);
+  border-color: var(--eco-accent);
+  color: oklch(0.15 0.01 80);
+}
+
+.chkMixed {
+  composes: chk;
+  background: var(--eco-accent);
+  border-color: var(--eco-accent);
+  color: oklch(0.15 0.01 80);
+}
+
+/* ═══════ SORTABLE HEADER ═══════ */
+.hdrSort {
+  composes: hdr;
+  cursor: pointer;
+  user-select: none;
+}
+
+.hdrSort:hover { color: var(--eco-fg2); }
+
+.hdrSortRight {
+  composes: hdrRight;
+  cursor: pointer;
+  user-select: none;
+}
+
+.hdrSortRight:hover { color: var(--eco-fg2); }
+
+.sortArrow {
+  font-size: 8px;
+  color: var(--eco-accent);
+  margin-left: 2px;
+}
+
+/* ═══════ EXPORT BUTTON ═══════ */
+.exportBtn {
+  padding: 5px 10px;
+  border-radius: 6px;
+  font-family: 'Geist Mono', monospace;
+  font-size: 11px;
+  color: var(--eco-fg3);
+  background: transparent;
+  border: 1px solid var(--eco-line);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.12s;
+}
+
+.exportBtn:hover {
+  border-color: var(--eco-fg4);
+  color: var(--eco-fg);
+}
+
+/* ═══════ SAVE & CREATE ANOTHER ═══════ */
+.saveAnother {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--eco-fg3);
+  margin-top: 8px;
+}
+
+.saveAnother input[type="checkbox"] {
+  accent-color: var(--eco-accent);
+}
+
+/* ═══════ SELECTED ROW ═══════ */
+.txRowSelected {
+  composes: txRow;
+}
+
+.txRowSelected > div {
+  background: var(--eco-accent-weak) !important;
+}
+
 /* ═══════ RESPONSIVE ═══════ */
 @media (max-width: 1100px) {
   .quickStats { grid-template-columns: repeat(2, 1fr); }

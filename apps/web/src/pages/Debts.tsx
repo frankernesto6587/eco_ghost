@@ -74,17 +74,6 @@ function getInitials(name: string): string {
     .join('');
 }
 
-function splitAmount(cents: number): { sign: string; integer: string; decimal: string } {
-  const abs = Math.abs(cents / 100);
-  const parts = abs.toFixed(2).split('.');
-  const integer = new Intl.NumberFormat('en-US').format(Number(parts[0]));
-  return {
-    sign: cents < 0 ? '−' : '',
-    integer,
-    decimal: `.${parts[1]}`,
-  };
-}
-
 export default function DebtsPage() {
   const { message } = App.useApp();
   const { canWrite } = usePermissions();
@@ -123,26 +112,34 @@ export default function DebtsPage() {
     return debts.filter((d) => d.type === activeFilter);
   }, [debts, activeFilter]);
 
-  // --- Summary stats ---
+  // --- Summary stats (grouped by currency) ---
   const stats = useMemo(() => {
-    let receivable = 0;
-    let payable = 0;
+    const receivable: Record<string, number> = {};
+    const payable: Record<string, number> = {};
     let receivableCount = 0;
     let payableCount = 0;
 
     for (const d of debts) {
       const remaining = d.totalAmount - d.paidAmount;
+      const cur = d.currency ?? 'USD';
       if (d.type === DebtType.RECEIVABLE) {
-        receivable += remaining;
+        receivable[cur] = (receivable[cur] ?? 0) + remaining;
         if (d.status !== DebtStatus.PAID) receivableCount++;
       } else {
-        payable += remaining;
+        payable[cur] = (payable[cur] ?? 0) + remaining;
         if (d.status !== DebtStatus.PAID) payableCount++;
       }
     }
 
+    // Net per currency
+    const allCurs = new Set([...Object.keys(receivable), ...Object.keys(payable)]);
+    const net: Record<string, number> = {};
+    for (const cur of allCurs) {
+      net[cur] = (receivable[cur] ?? 0) - (payable[cur] ?? 0);
+    }
+
     return {
-      net: receivable - payable,
+      net,
       receivable,
       payable,
       receivableCount,
@@ -291,10 +288,6 @@ export default function DebtsPage() {
   const paymentRemaining = paymentDebt ? paymentDebt.totalAmount - paymentDebt.paidAmount : 0;
   const paymentCurrency = paymentDebt?.currency ?? 'USD';
 
-  // Net amount display
-  const netAmt = splitAmount(stats.net);
-  const recAmt = splitAmount(stats.receivable);
-  const payAmt = splitAmount(stats.payable);
 
   if (isLoading) {
     return (
@@ -355,24 +348,30 @@ export default function DebtsPage() {
               <span className={css.cardDot} />
               balance neto · deudas
             </div>
-            <div className={`${css.bigNum} ${stats.net > 0 ? css.bigNumPos : ''}`}>
-              {stats.net > 0 ? '+' : stats.net < 0 ? '−' : ''}
-              <span className={css.bigNumCur}>$</span>
-              {netAmt.integer}
-              <span className={css.bigNumDec}>{netAmt.decimal}</span>
+            <div className={css.bigNum}>
+              {Object.entries(stats.net).map(([cur, amt]) => (
+                <div key={cur} className={amt > 0 ? css.bigNumPos : ''}>
+                  {amt > 0 ? '+' : amt < 0 ? '−' : ''}{formatCurrency(Math.abs(amt), cur)}
+                  <span className={css.bigNumCur}> {cur.toLowerCase()}</span>
+                </div>
+              ))}
             </div>
             <div className={css.flowRow}>
               <div className={css.flowItem}>
                 <span className={css.flowLabel}>te deben</span>
-                <span className={`${css.flowVal} ${css.flowValPos}`}>
-                  +{formatCurrency(stats.receivable, 'USD').replace('$', '$')}
-                </span>
+                {Object.entries(stats.receivable).map(([cur, amt]) => (
+                  <span key={cur} className={`${css.flowVal} ${css.flowValPos}`}>
+                    +{formatCurrency(amt, cur)} {cur.toLowerCase()}
+                  </span>
+                ))}
               </div>
               <div className={css.flowItem}>
                 <span className={css.flowLabel}>debes</span>
-                <span className={`${css.flowVal} ${css.flowValNeg}`}>
-                  −{formatCurrency(stats.payable, 'USD').replace('$', '$').replace('-', '')}
-                </span>
+                {Object.entries(stats.payable).map(([cur, amt]) => (
+                  <span key={cur} className={`${css.flowVal} ${css.flowValNeg}`}>
+                    −{formatCurrency(amt, cur)} {cur.toLowerCase()}
+                  </span>
+                ))}
               </div>
             </div>
           </article>
@@ -384,9 +383,15 @@ export default function DebtsPage() {
               por cobrar
             </div>
             <div className={css.bigNum}>
-              <span className={css.bigNumCur}>$</span>
-              {recAmt.integer}
-              <span className={css.bigNumDec}>{recAmt.decimal}</span>
+              {Object.entries(stats.receivable).map(([cur, amt]) => (
+                <div key={cur}>
+                  {formatCurrency(amt, cur)}
+                  <span className={css.bigNumCur}> {cur.toLowerCase()}</span>
+                </div>
+              ))}
+              {Object.keys(stats.receivable).length === 0 && (
+                <span style={{ color: 'var(--eco-fg3)' }}>—</span>
+              )}
             </div>
             <div className={css.flowRow}>
               <div className={css.flowItem}>
@@ -403,9 +408,15 @@ export default function DebtsPage() {
               por pagar
             </div>
             <div className={css.bigNum}>
-              <span className={css.bigNumCur}>$</span>
-              {payAmt.integer}
-              <span className={css.bigNumDec}>{payAmt.decimal}</span>
+              {Object.entries(stats.payable).map(([cur, amt]) => (
+                <div key={cur}>
+                  {formatCurrency(amt, cur)}
+                  <span className={css.bigNumCur}> {cur.toLowerCase()}</span>
+                </div>
+              ))}
+              {Object.keys(stats.payable).length === 0 && (
+                <span style={{ color: 'var(--eco-fg3)' }}>—</span>
+              )}
             </div>
             <div className={css.flowRow}>
               <div className={css.flowItem}>

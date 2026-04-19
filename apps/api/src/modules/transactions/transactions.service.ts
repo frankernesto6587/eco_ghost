@@ -582,10 +582,29 @@ export class TransactionsService {
       if (query.from) where.date.gte = new Date(query.from);
       if (query.to) where.date.lte = new Date(query.to);
     }
+    // Intersect type filter with INCOME/EXPENSE (summary only uses these two)
+    const summaryTypes = query.type?.length
+      ? query.type.filter((t: string) => ['INCOME', 'EXPENSE'].includes(t))
+      : ['INCOME', 'EXPENSE'];
+
+    if (summaryTypes.length === 0) {
+      return { income: {}, expense: {}, balance: {} };
+    }
+    where.type = { in: summaryTypes as any };
+
+    if (query.categoryId?.length) {
+      where.categoryId = query.categoryId.length === 1 ? query.categoryId[0] : { in: query.categoryId };
+    }
+    if (query.accountId?.length) {
+      where.accountId = query.accountId.length === 1 ? query.accountId[0] : { in: query.accountId };
+    }
+    if (query.currency) {
+      where.account = { currency: query.currency };
+    }
 
     const transactions = await this.prisma.transaction.findMany({
-      where: { ...where, type: { in: ['INCOME', 'EXPENSE'] } },
-      include: { account: { select: { currency: true } } },
+      where,
+      select: { type: true, amount: true, account: { select: { currency: true } } },
     });
 
     const income: Record<string, number> = {};

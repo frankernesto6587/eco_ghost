@@ -69,7 +69,10 @@ export interface TransactionSummary {
 export interface TransactionSummaryParams {
   from?: string;
   to?: string;
-  groupBy?: string;
+  type?: string;
+  accountId?: string;
+  categoryId?: string;
+  currency?: string;
 }
 
 export const transactionsService = {

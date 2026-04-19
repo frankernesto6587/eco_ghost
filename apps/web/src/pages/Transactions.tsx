@@ -236,12 +236,17 @@ export default function TransactionsPage() {
   const totalPages = transactionsQuery.data?.meta.totalPages ?? 1;
 
   const summaryParams = useMemo(() => {
-    if (!filters.dateRange) return undefined;
-    return {
-      from: filters.dateRange[0].startOf('day').toISOString(),
-      to: filters.dateRange[1].endOf('day').toISOString(),
-    };
-  }, [filters.dateRange]);
+    const params: Record<string, string> = {};
+    if (filters.dateRange) {
+      params.from = filters.dateRange[0].startOf('day').toISOString();
+      params.to = filters.dateRange[1].endOf('day').toISOString();
+    }
+    if (filters.types.length > 0) params.type = filters.types.join(',');
+    if (filters.accountIds.length > 0) params.accountId = filters.accountIds.join(',');
+    if (filters.categoryIds.length > 0) params.categoryId = filters.categoryIds.join(',');
+    if (filters.currency) params.currency = filters.currency;
+    return Object.keys(params).length > 0 ? params : undefined;
+  }, [filters]);
 
   const summaryQuery = useQuery({
     queryKey: ['transactions-summary', summaryParams],
@@ -546,6 +551,18 @@ export default function TransactionsPage() {
 
   const activeFilterCount = [filters.dateRange, filters.types.length > 0, filters.accountIds.length > 0, filters.categoryIds.length > 0, filters.currency].filter(Boolean).length;
 
+  // Accounts with non-zero balance, grouped by currency
+  const accountsByCurrency = useMemo(() => {
+    const nonZero = accounts.filter((a) => a.balance !== 0);
+    const grouped = new Map<string, typeof nonZero>();
+    for (const acc of nonZero) {
+      const list = grouped.get(acc.currency) ?? [];
+      list.push(acc);
+      grouped.set(acc.currency, list);
+    }
+    return [...grouped.entries()].sort(([a], [b]) => a.localeCompare(b));
+  }, [accounts]);
+
   // Local search filtering + sorting
   // Local search only (sorting handled by backend)
   const displayedTransactions = useMemo(() => {
@@ -738,6 +755,26 @@ export default function TransactionsPage() {
             <div className={s.qStatSub}>este periodo</div>
           </div>
         </section>
+      )}
+
+      {/* ═══════ ACCOUNT BALANCES ═══════ */}
+      {!viewDeleted && accountsByCurrency.length > 0 && (
+        <div className={s.accountsCard}>
+          <div className={s.accountsCardLabel}><span className={s.qStatDot} style={{ background: 'var(--eco-accent)' }} />saldo por cuentas</div>
+          <div className={s.accountsList}>
+            {accountsByCurrency.map(([currency, accs], idx) => (
+              <>
+                <div key={`cur-${currency}`} className={s.accountCurDivider} style={idx === 0 ? { borderTop: 'none' } : undefined}>{currency}</div>
+                {accs.map((acc) => (
+                  <div key={acc.id} className={s.accountItem}>
+                    <span className={s.accountName}>{acc.name}</span>
+                    <span className={s.accountBal}>{formatCurrency(acc.balance, acc.currency)}</span>
+                  </div>
+                ))}
+              </>
+            ))}
+          </div>
+        </div>
       )}
 
       {/* ═══════ TOOLBAR ═══════ */}

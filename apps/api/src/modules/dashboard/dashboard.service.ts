@@ -143,12 +143,10 @@ export class DashboardService {
       totalBalance[currency] = (totalBalance[currency] ?? 0) + bal;
     }
 
-    // Range balance: cumulative balance up to end of selected range
-    const rangeBalanceMap = await computeBalanceMap({ ...baseWhere, date: { lte: endOfMonth } });
+    // Range balance: net of transactions within the selected range
     const rangeBalance: Record<string, number> = {};
-    for (const [accId, bal] of rangeBalanceMap) {
-      const currency = currencyMap.get(accId) ?? 'USD';
-      rangeBalance[currency] = (rangeBalance[currency] ?? 0) + bal;
+    for (const cur of Object.keys({ ...monthIncome, ...monthExpense })) {
+      rangeBalance[cur] = (monthIncome[cur] ?? 0) - (monthExpense[cur] ?? 0);
     }
 
     // Active projects count

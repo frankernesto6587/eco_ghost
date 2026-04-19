@@ -15,12 +15,26 @@ const ACCOUNT_TYPE_LABELS: Record<string, string> = {
   [AccountType.OTHER]: 'Otro',
 };
 
-const TYPE_COLORS: Record<string, string> = {
-  [AccountType.CASH]: 'oklch(0.55 0.04 80)',
-  [AccountType.BANK]: 'oklch(0.6 0.1 220)',
-  [AccountType.DIGITAL]: 'oklch(0.58 0.2 300)',
-  [AccountType.OTHER]: 'oklch(0.72 0.18 50)',
-};
+const ACCOUNT_COLORS = [
+  'oklch(0.6 0.1 220)',    // blue
+  'oklch(0.75 0.13 160)',  // green
+  'oklch(0.5 0.2 25)',     // red
+  'oklch(0.65 0.15 110)',  // yellow-green
+  'oklch(0.55 0.04 80)',   // warm gray
+  'oklch(0.58 0.2 300)',   // purple
+  'oklch(0.7 0.12 30)',    // warm orange
+  'oklch(0.68 0.18 350)',  // pink
+  'oklch(0.7 0.14 180)',   // teal
+  'oklch(0.72 0.16 60)',   // amber
+];
+
+function getAccountColor(id: string): string {
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) {
+    hash = ((hash << 5) - hash + id.charCodeAt(i)) | 0;
+  }
+  return ACCOUNT_COLORS[Math.abs(hash) % ACCOUNT_COLORS.length];
+}
 
 function getInitials(name: string): string {
   return name
@@ -171,6 +185,9 @@ export default function AccountsPage() {
           <h1 className={css.pageTitle}>Cuentas</h1>
           <div className={css.pageSub}>
             {totalAccounts} cuenta{totalAccounts !== 1 ? 's' : ''} activa{totalAccounts !== 1 ? 's' : ''}
+            {grouped.length > 0 && (
+              <> · consolidado {grouped.map(([cur, g]) => formatCurrency(g.total, cur)).join(' · ')}</>
+            )}
           </div>
         </div>
         <div className={css.pageActions}>
@@ -246,7 +263,7 @@ export default function AccountsPage() {
             {/* Account cards grid */}
             <div className={css.accountsGrid}>
               {group.accounts.map((account) => {
-                const color = TYPE_COLORS[account.type] ?? 'oklch(0.72 0.18 50)';
+                const color = getAccountColor(account.id);
                 const amt = splitAmount(account.balance);
                 const initials = account.icon || getInitials(account.name);
                 const typeLabel = ACCOUNT_TYPE_LABELS[account.type] ?? account.type;

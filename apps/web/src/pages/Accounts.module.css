@@ -1,24 +1,3 @@
-/* ═══════ Ember Palette (CSS vars for accounts) ═══════ */
-:root {
-  --db-accent: #d4700a;
-  --db-accent-soft: rgba(212, 112, 10, 0.16);
-  --db-accent-weak: rgba(212, 112, 10, 0.08);
-  --db-bg: #1a1715;
-  --db-surface: #282420;
-  --db-surface2: #302b27;
-  --db-surface3: #3d3730;
-  --db-line: #3d3730;
-  --db-line-soft: #332e28;
-  --db-fg: #f5f0eb;
-  --db-fg2: #bfb5a8;
-  --db-fg3: #8a7e72;
-  --db-fg4: #6b6058;
-  --db-pos: #4da666;
-  --db-pos-soft: rgba(77, 166, 102, 0.14);
-  --db-neg: #c9503c;
-  --db-neg-soft: rgba(201, 80, 60, 0.14);
-}
-
 /* ═══════ PAGE ═══════ */
 .page {
   max-width: 1360px;
@@ -40,12 +19,12 @@
   font-weight: 500;
   letter-spacing: -0.022em;
   line-height: 1.1;
-  color: var(--db-fg);
+  color: var(--eco-fg);
   margin: 0;
 }
 
 .pageSub {
-  color: var(--db-fg3);
+  color: var(--eco-fg3);
   font-size: 13px;
   margin-top: 4px;
   font-family: 'Geist Mono', monospace;
@@ -69,7 +48,7 @@
   font-size: 12px;
   font-family: 'Geist Mono', monospace;
   letter-spacing: 0.14em;
-  color: var(--db-fg3);
+  color: var(--eco-fg3);
   text-transform: uppercase;
   margin: 0;
   white-space: nowrap;
@@ -78,19 +57,19 @@
 .groupLine {
   flex: 1;
   height: 1px;
-  background: var(--db-line-soft);
+  background: var(--eco-line-soft);
 }
 
 .groupTotal {
   font-family: 'Geist Mono', monospace;
   font-size: 12px;
-  color: var(--db-fg);
+  color: var(--eco-fg);
   font-feature-settings: 'tnum';
   white-space: nowrap;
 }
 
 .groupTotalLabel {
-  color: var(--db-fg3);
+  color: var(--eco-fg3);
 }
 
 /* ═══════ ACCOUNTS GRID ═══════ */
@@ -103,8 +82,8 @@
 
 /* ═══════ ACCOUNT CARD ═══════ */
 .accCard {
-  background: var(--db-surface);
-  border: 1px solid var(--db-line);
+  background: var(--eco-surface);
+  border: 1px solid var(--eco-line);
   border-radius: 14px;
   padding: 18px 20px;
   position: relative;
@@ -114,7 +93,7 @@
 }
 
 .accCard:hover {
-  border-color: var(--db-fg4);
+  border-color: var(--eco-fg4);
 }
 
 .accCard::before {
@@ -124,7 +103,7 @@
   left: 0;
   right: 0;
   height: 2px;
-  background: var(--card-color, var(--db-accent));
+  background: var(--card-color, var(--eco-accent));
 }
 
 /* Header row */
@@ -139,8 +118,8 @@
   width: 36px;
   height: 36px;
   border-radius: 10px;
-  background: var(--card-color, var(--db-accent));
-  color: #1a1715;
+  background: var(--card-color, var(--eco-accent));
+  color: oklch(0.15 0.01 80);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -164,13 +143,13 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  color: var(--db-fg);
+  color: var(--eco-fg);
 }
 
 .accSub {
   font-family: 'Geist Mono', monospace;
   font-size: 11px;
-  color: var(--db-fg3);
+  color: var(--eco-fg3);
   letter-spacing: 0.02em;
   display: flex;
   align-items: center;
@@ -181,11 +160,11 @@
   width: 4px;
   height: 4px;
   border-radius: 50%;
-  background: var(--db-fg4);
+  background: var(--eco-fg4);
 }
 
 .accMore {
-  color: var(--db-fg4);
+  color: var(--eco-fg4);
   padding: 4px;
   border-radius: 6px;
   line-height: 1;
@@ -198,8 +177,8 @@
 }
 
 .accMore:hover {
-  color: var(--db-fg);
-  background: var(--db-surface2);
+  color: var(--eco-fg);
+  background: var(--eco-surface2);
 }
 
 /* Balance */
@@ -214,27 +193,27 @@
   gap: 3px;
   line-height: 1;
   margin-bottom: 6px;
-  color: var(--db-fg);
+  color: var(--eco-fg);
 }
 
 .accBalNeg {
-  color: var(--db-neg);
+  color: var(--eco-neg);
 }
 
 .accBalCur {
   font-size: 13px;
-  color: var(--db-fg3);
+  color: var(--eco-fg3);
 }
 
 .accBalDec {
-  color: var(--db-fg3);
+  color: var(--eco-fg3);
   font-size: 18px;
 }
 
 .accEquiv {
   font-family: 'Geist Mono', monospace;
   font-size: 11px;
-  color: var(--db-fg3);
+  color: var(--eco-fg3);
   letter-spacing: 0.02em;
   margin-bottom: 14px;
 }
@@ -257,27 +236,27 @@
   justify-content: space-between;
   margin-top: 12px;
   padding-top: 12px;
-  border-top: 1px solid var(--db-line-soft);
+  border-top: 1px solid var(--eco-line-soft);
   font-family: 'Geist Mono', monospace;
   font-size: 11px;
-  color: var(--db-fg3);
+  color: var(--eco-fg3);
   letter-spacing: 0.02em;
 }
 
 .accDeltaPos {
-  color: var(--db-pos);
+  color: var(--eco-pos);
 }
 
 .accDeltaNeg {
-  color: var(--db-neg);
+  color: var(--eco-neg);
 }
 
 /* ═══════ ADD NEW CARD ═══════ */
 .addCard {
-  background: var(--db-surface);
-  border: 1px dashed var(--db-line);
+  background: var(--eco-surface);
+  border: 1px dashed var(--eco-line);
   border-radius: 14px;
-  color: var(--db-fg3);
+  color: var(--eco-fg3);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -289,9 +268,9 @@
 }
 
 .addCard:hover {
-  border-color: var(--db-accent);
-  color: var(--db-accent);
-  background: var(--db-accent-weak);
+  border-color: var(--eco-accent);
+  color: var(--eco-accent);
+  background: var(--eco-accent-weak);
 }
 
 .addCardPlus {
@@ -312,7 +291,7 @@
 
 .addCardSub {
   font-size: 11px;
-  color: var(--db-fg4);
+  color: var(--eco-fg4);
   font-family: 'Geist Mono', monospace;
 }
 
@@ -326,7 +305,7 @@
 .emptyState {
   text-align: center;
   padding: 40px;
-  color: var(--db-fg3);
+  color: var(--eco-fg3);
   font-size: 14px;
 }
 

@@ -16,10 +16,10 @@ const ACCOUNT_TYPE_LABELS: Record<string, string> = {
 };
 
 const TYPE_COLORS: Record<string, string> = {
-  [AccountType.CASH]: '#8a7e72',
+  [AccountType.CASH]: 'oklch(0.55 0.04 80)',
   [AccountType.BANK]: 'oklch(0.6 0.1 220)',
   [AccountType.DIGITAL]: 'oklch(0.58 0.2 300)',
-  [AccountType.OTHER]: '#d4700a',
+  [AccountType.OTHER]: 'oklch(0.72 0.18 50)',
 };
 
 function getInitials(name: string): string {
@@ -155,7 +155,7 @@ export default function AccountsPage() {
     return (
       <div className={css.page}>
         <div className={css.loading}>
-          <div style={{ color: 'var(--db-fg3)', fontFamily: "'Geist Mono', monospace", fontSize: 13 }}>
+          <div style={{ color: 'var(--eco-fg3)', fontFamily: "'Geist Mono', monospace", fontSize: 13 }}>
             cargando cuentas...
           </div>
         </div>
@@ -185,7 +185,7 @@ export default function AccountsPage() {
                 padding: '8px 14px',
                 borderRadius: 8,
                 border: 'none',
-                background: 'var(--db-accent)',
+                background: 'var(--eco-accent)',
                 color: '#1a1715',
                 fontSize: 13,
                 fontWeight: 500,
@@ -215,7 +215,7 @@ export default function AccountsPage() {
                 padding: '8px 14px',
                 borderRadius: 8,
                 border: 'none',
-                background: 'var(--db-accent)',
+                background: 'var(--eco-accent)',
                 color: '#1a1715',
                 fontSize: 13,
                 fontWeight: 500,
@@ -246,7 +246,7 @@ export default function AccountsPage() {
             {/* Account cards grid */}
             <div className={css.accountsGrid}>
               {group.accounts.map((account) => {
-                const color = TYPE_COLORS[account.type] ?? '#d4700a';
+                const color = TYPE_COLORS[account.type] ?? 'oklch(0.72 0.18 50)';
                 const amt = splitAmount(account.balance);
                 const initials = account.icon || getInitials(account.name);
                 const typeLabel = ACCOUNT_TYPE_LABELS[account.type] ?? account.type;
@@ -427,9 +427,9 @@ export default function AccountsPage() {
                 style={{
                   padding: '7px 14px',
                   borderRadius: 8,
-                  border: '1px solid var(--db-line)',
-                  background: 'var(--db-surface2)',
-                  color: 'var(--db-fg2)',
+                  border: '1px solid var(--eco-line)',
+                  background: 'var(--eco-surface2)',
+                  color: 'var(--eco-fg2)',
                   fontSize: 13,
                   cursor: 'pointer',
                   fontFamily: 'inherit',
@@ -444,7 +444,7 @@ export default function AccountsPage() {
                   padding: '7px 14px',
                   borderRadius: 8,
                   border: 'none',
-                  background: 'var(--db-accent)',
+                  background: 'var(--eco-accent)',
                   color: '#1a1715',
                   fontSize: 13,
                   fontWeight: 500,

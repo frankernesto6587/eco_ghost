@@ -1,11 +1,11 @@
 import { theme as antdThemeAlg } from 'antd';
 import type { ThemeConfig } from 'antd';
 
-// Ember brand palette
-const EMBER_PRIMARY = '#d4700a'; // oklch(0.72 0.18 50) ≈ warm orange
-const EMBER_SUCCESS = '#4da666'; // oklch(0.76 0.14 150) — sobrio green
-const EMBER_ERROR = '#c9503c';   // oklch(0.70 0.18 25) — sobrio red
-const EMBER_WARNING = '#d4980a';
+// Ember brand palette (hex approximations of oklch design tokens)
+const EMBER_PRIMARY = '#d07a1c'; // oklch(0.72 0.18 50)
+const EMBER_SUCCESS = '#52b565'; // oklch(0.76 0.14 150)
+const EMBER_ERROR = '#c95640';   // oklch(0.70 0.18 25)
+const EMBER_WARNING = '#d49a0a';
 
 const sharedTokens: ThemeConfig['token'] = {
   colorPrimary: EMBER_PRIMARY,

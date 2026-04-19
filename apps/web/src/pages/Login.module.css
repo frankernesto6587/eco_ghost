@@ -1,26 +1,3 @@
-/* ═══════ Ember Palette (CSS vars for login) ═══════ */
-:root {
-  --eco-accent: #d4700a;
-  --eco-accent-soft: rgba(212, 112, 10, 0.16);
-  --eco-accent-weak: rgba(212, 112, 10, 0.08);
-  --eco-accent-ink: #3d2005;
-  --eco-bg: #1a1715;
-  --eco-surface: #282420;
-  --eco-surface2: #302b27;
-  --eco-surface3: #3d3730;
-  --eco-line: #3d3730;
-  --eco-line-soft: #332e28;
-  --eco-fg: #f5f0eb;
-  --eco-fg2: #bfb5a8;
-  --eco-fg3: #8a7e72;
-  --eco-fg4: #6b6058;
-  --eco-pos: #4da666;
-  --eco-pos-soft: rgba(77, 166, 102, 0.14);
-  --eco-neg: #c9503c;
-  --eco-shadow1: 0 1px 0 rgba(51, 46, 40, 0.6), 0 2px 4px rgba(0, 0, 0, 0.3);
-  --eco-shadow2: 0 2px 0 rgba(51, 46, 40, 0.6), 0 8px 20px rgba(0, 0, 0, 0.35);
-}
-
 /* ═══════ LAYOUT ═══════ */
 .login {
   display: grid;
@@ -94,7 +71,7 @@
   right: 3px;
   width: 14px;
   height: 7px;
-  border-top: 1.5px solid rgba(212, 112, 10, 0.55);
+  border-top: 1.5px solid color-mix(in oklab, var(--eco-accent) 55%, transparent);
   border-radius: 50% / 100% 100% 0 0;
 }
 
@@ -188,7 +165,7 @@
   left: 0;
   right: 0;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(212, 112, 10, 0.55) 50%, transparent);
+  background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--eco-accent) 55%, transparent) 50%, transparent);
 }
 
 .txCard {

@@ -300,7 +300,7 @@ export default function DebtsPage() {
     return (
       <div className={css.page}>
         <div className={css.loading}>
-          <div style={{ color: 'var(--db-fg3)', fontFamily: "'Geist Mono', monospace", fontSize: 13 }}>
+          <div style={{ color: 'var(--eco-fg3)', fontFamily: "'Geist Mono', monospace", fontSize: 13 }}>
             cargando deudas...
           </div>
         </div>
@@ -329,7 +329,7 @@ export default function DebtsPage() {
                 padding: '8px 14px',
                 borderRadius: 8,
                 border: 'none',
-                background: 'var(--db-accent)',
+                background: 'var(--eco-accent)',
                 color: '#1a1715',
                 fontSize: 13,
                 fontWeight: 500,
@@ -553,7 +553,7 @@ export default function DebtsPage() {
                             padding: '7px 12px',
                             borderRadius: 8,
                             border: 'none',
-                            background: 'var(--db-accent)',
+                            background: 'var(--eco-accent)',
                             color: '#1a1715',
                             fontSize: 12,
                             fontWeight: 500,
@@ -573,9 +573,9 @@ export default function DebtsPage() {
                             gap: 6,
                             padding: '7px 12px',
                             borderRadius: 8,
-                            border: '1px solid var(--db-line)',
-                            background: 'var(--db-surface)',
-                            color: 'var(--db-fg2)',
+                            border: '1px solid var(--eco-line)',
+                            background: 'var(--eco-surface)',
+                            color: 'var(--eco-fg2)',
                             fontSize: 12,
                             cursor: 'pointer',
                             fontFamily: 'inherit',
@@ -593,9 +593,9 @@ export default function DebtsPage() {
                             gap: 6,
                             padding: '7px 12px',
                             borderRadius: 8,
-                            border: '1px solid var(--db-neg-soft)',
+                            border: '1px solid var(--eco-neg-soft)',
                             background: 'transparent',
-                            color: 'var(--db-neg)',
+                            color: 'var(--eco-neg)',
                             fontSize: 12,
                             cursor: 'pointer',
                             fontFamily: 'inherit',
@@ -695,9 +695,9 @@ export default function DebtsPage() {
                 style={{
                   padding: '7px 14px',
                   borderRadius: 8,
-                  border: '1px solid var(--db-line)',
-                  background: 'var(--db-surface2)',
-                  color: 'var(--db-fg2)',
+                  border: '1px solid var(--eco-line)',
+                  background: 'var(--eco-surface2)',
+                  color: 'var(--eco-fg2)',
                   fontSize: 13,
                   cursor: 'pointer',
                   fontFamily: 'inherit',
@@ -712,7 +712,7 @@ export default function DebtsPage() {
                   padding: '7px 14px',
                   borderRadius: 8,
                   border: 'none',
-                  background: 'var(--db-accent)',
+                  background: 'var(--eco-accent)',
                   color: '#1a1715',
                   fontSize: 13,
                   fontWeight: 500,
@@ -740,11 +740,11 @@ export default function DebtsPage() {
           <div style={{
             marginBottom: 16,
             padding: '10px 14px',
-            background: 'var(--db-surface2)',
+            background: 'var(--eco-surface2)',
             borderRadius: 8,
             fontFamily: "'Geist Mono', monospace",
             fontSize: 12,
-            color: 'var(--db-fg3)',
+            color: 'var(--eco-fg3)',
           }}>
             {paymentDebt.personName} · Restante: {formatCurrency(paymentRemaining, paymentCurrency)}
           </div>
@@ -814,7 +814,7 @@ export default function DebtsPage() {
                 padding: '9px 14px',
                 borderRadius: 8,
                 border: 'none',
-                background: 'var(--db-accent)',
+                background: 'var(--eco-accent)',
                 color: '#1a1715',
                 fontSize: 13,
                 fontWeight: 500,

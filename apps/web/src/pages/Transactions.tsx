@@ -522,12 +522,12 @@ export default function TransactionsPage() {
                       {formatCurrency(amt, cur)}
                     </div>
                   ))
-                : <span style={{ color: 'var(--tx-fg3)' }}>—</span>
+                : <span style={{ color: 'var(--eco-fg3)' }}>—</span>
               }
             </div>
           </div>
           <div className={s.qStat}>
-            <div className={s.qStatLabel}><span className={`${s.qStatDot} ${s.qStatDot}.pos`} style={{ background: 'var(--tx-pos)' }} />ingresos</div>
+            <div className={s.qStatLabel}><span className={`${s.qStatDot} ${s.qStatDot}.pos`} style={{ background: 'var(--eco-pos)' }} />ingresos</div>
             <div className={`${s.qStatNum} ${s.qStatNumPos}`}>
               {summary?.income
                 ? Object.entries(summary.income).map(([cur, amt]) => (
@@ -536,12 +536,12 @@ export default function TransactionsPage() {
                       {formatCurrency(amt, cur)}
                     </div>
                   ))
-                : <span style={{ color: 'var(--tx-fg3)' }}>—</span>
+                : <span style={{ color: 'var(--eco-fg3)' }}>—</span>
               }
             </div>
           </div>
           <div className={s.qStat}>
-            <div className={s.qStatLabel}><span className={s.qStatDot} style={{ background: 'var(--tx-neg)' }} />gastos</div>
+            <div className={s.qStatLabel}><span className={s.qStatDot} style={{ background: 'var(--eco-neg)' }} />gastos</div>
             <div className={s.qStatNum}>
               {summary?.expense
                 ? Object.entries(summary.expense).map(([cur, amt]) => (
@@ -550,12 +550,12 @@ export default function TransactionsPage() {
                       {formatCurrency(amt, cur)}
                     </div>
                   ))
-                : <span style={{ color: 'var(--tx-fg3)' }}>—</span>
+                : <span style={{ color: 'var(--eco-fg3)' }}>—</span>
               }
             </div>
           </div>
           <div className={s.qStat}>
-            <div className={s.qStatLabel}><span className={s.qStatDot} style={{ background: 'var(--tx-accent)' }} />transacciones</div>
+            <div className={s.qStatLabel}><span className={s.qStatDot} style={{ background: 'var(--eco-accent)' }} />transacciones</div>
             <div className={s.qStatNum}>{allTransactions.length}</div>
             <div className={s.qStatSub}>este periodo</div>
           </div>
@@ -578,17 +578,17 @@ export default function TransactionsPage() {
           <div className={s.stateSeg}>
             <button
               className={`${s.stateBtn} ${!viewDeleted ? s.stateBtn + ' ' + 'on' : ''}`}
-              style={!viewDeleted ? { background: 'var(--tx-surface)', color: 'var(--tx-fg)', boxShadow: 'var(--tx-shadow1)' } : undefined}
+              style={!viewDeleted ? { background: 'var(--eco-surface)', color: 'var(--eco-fg)', boxShadow: 'var(--eco-shadow1)' } : undefined}
               onClick={() => setViewDeleted(false)}
             >
               Activas
-              <span className={s.stateCount} style={!viewDeleted ? { background: 'var(--tx-accent-weak)', color: 'var(--tx-accent)' } : undefined}>
+              <span className={s.stateCount} style={!viewDeleted ? { background: 'var(--eco-accent-weak)', color: 'var(--eco-accent)' } : undefined}>
                 {allTransactions.length}
               </span>
             </button>
             <button
               className={s.stateBtn}
-              style={viewDeleted ? { background: 'var(--tx-surface)', color: 'var(--tx-fg)', boxShadow: 'var(--tx-shadow1)' } : undefined}
+              style={viewDeleted ? { background: 'var(--eco-surface)', color: 'var(--eco-fg)', boxShadow: 'var(--eco-shadow1)' } : undefined}
               onClick={() => setViewDeleted(true)}
             >
               Eliminadas
@@ -604,7 +604,7 @@ export default function TransactionsPage() {
           <Dropdown
             trigger={['click']}
             dropdownRender={() => (
-              <div style={{ padding: 12, background: 'var(--tx-surface)', border: '1px solid var(--tx-line)', borderRadius: 10 }}>
+              <div style={{ padding: 12, background: 'var(--eco-surface)', border: '1px solid var(--eco-line)', borderRadius: 10 }}>
                 <RangePicker
                   value={filters.dateRange}
                   onChange={handleDateRangeChange}
@@ -673,7 +673,7 @@ export default function TransactionsPage() {
           <Dropdown
             trigger={['click']}
             dropdownRender={() => (
-              <div style={{ padding: 12, background: 'var(--tx-surface)', border: '1px solid var(--tx-line)', borderRadius: 10, width: 240 }}>
+              <div style={{ padding: 12, background: 'var(--eco-surface)', border: '1px solid var(--eco-line)', borderRadius: 10, width: 240 }}>
                 <TreeSelect
                   style={{ width: '100%' }}
                   placeholder="Categoria"
@@ -769,7 +769,7 @@ export default function TransactionsPage() {
       <div className={s.tableWrap}>
         {isError && (
           <div className={s.errorState}>
-            <span style={{ color: 'var(--tx-neg)' }}>Error al cargar las transacciones.</span>
+            <span style={{ color: 'var(--eco-neg)' }}>Error al cargar las transacciones.</span>
             <br />
             <Button style={{ marginTop: 8 }} onClick={() => transactionsQuery.refetch()}>
               Reintentar
@@ -904,7 +904,7 @@ export default function TransactionsPage() {
                     <div className={s.descSub}>
                       {tx.notes && <span>{tx.notes}</span>}
                       {viewDeleted && tx.deleteReason && (
-                        <span className={s.descTag} style={{ color: 'var(--tx-neg)', borderColor: 'var(--tx-neg)' }}>
+                        <span className={s.descTag} style={{ color: 'var(--eco-neg)', borderColor: 'var(--eco-neg)' }}>
                           {tx.deleteReason}
                         </span>
                       )}
@@ -918,11 +918,11 @@ export default function TransactionsPage() {
                   <div className={s.cCat}>
                     {tx.category ? (
                       <span className={s.catChip}>
-                        <span className={s.catSq} style={{ background: tx.category.color ?? 'var(--tx-fg4)' }} />
+                        <span className={s.catSq} style={{ background: tx.category.color ?? 'var(--eco-fg4)' }} />
                         {tx.category.name}
                       </span>
                     ) : (
-                      <span style={{ color: 'var(--tx-fg4)' }}>—</span>
+                      <span style={{ color: 'var(--eco-fg4)' }}>—</span>
                     )}
                   </div>
 
@@ -930,11 +930,11 @@ export default function TransactionsPage() {
                   <div className={s.cAcc}>
                     {tx.account ? (
                       <span className={s.catChip}>
-                        <span className={s.catSq} style={{ background: 'var(--tx-accent)' }} />
+                        <span className={s.catSq} style={{ background: 'var(--eco-accent)' }} />
                         {tx.account.name}
                       </span>
                     ) : (
-                      <span style={{ color: 'var(--tx-fg4)' }}>—</span>
+                      <span style={{ color: 'var(--eco-fg4)' }}>—</span>
                     )}
                   </div>
 

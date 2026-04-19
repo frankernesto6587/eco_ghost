@@ -191,19 +191,19 @@ export default function DashboardPage() {
             {Object.keys(totalBalance).length > 0
               ? Object.entries(totalBalance).map(([cur, amt], i) => (
                   <span key={cur}>
-                    {i > 0 && <span style={{ color: 'var(--db-fg4)', fontSize: 18, margin: '0 8px' }}>·</span>}
+                    {i > 0 && <span style={{ color: 'var(--eco-fg4)', fontSize: 18, margin: '0 8px' }}>·</span>}
                     <span className={s.heroCur}>{cur}</span>
                     {' '}{formatCurrency(amt, cur)}
                   </span>
                 ))
-              : <span style={{ color: 'var(--db-fg3)' }}>$0.00</span>
+              : <span style={{ color: 'var(--eco-fg3)' }}>$0.00</span>
             }
           </div>
           {sparklinePath && (
             <div className={s.heroChart}>
               <svg viewBox="0 0 600 100" preserveAspectRatio="none">
                 {/* Grid lines */}
-                <g stroke="var(--db-line-soft)" strokeDasharray="2 4" strokeWidth="0.5" opacity="0.5">
+                <g stroke="var(--eco-line-soft)" strokeDasharray="2 4" strokeWidth="0.5" opacity="0.5">
                   <line x1="0" x2="600" y1="25" y2="25" />
                   <line x1="0" x2="600" y1="50" y2="50" />
                   <line x1="0" x2="600" y1="75" y2="75" />
@@ -211,14 +211,14 @@ export default function DashboardPage() {
                 {/* Area fill */}
                 <path d={sparklinePath.areaPath} fill="url(#hero-grad)" />
                 {/* Line */}
-                <path d={sparklinePath.linePath} fill="none" stroke="var(--db-accent)" strokeWidth="1.75" />
+                <path d={sparklinePath.linePath} fill="none" stroke="var(--eco-accent)" strokeWidth="1.75" />
                 {/* End dot */}
-                <circle cx={sparklinePath.lastX} cy={sparklinePath.lastY} r="3" fill="var(--db-accent)" />
-                <circle cx={sparklinePath.lastX} cy={sparklinePath.lastY} r="7" fill="var(--db-accent)" opacity="0.22" />
+                <circle cx={sparklinePath.lastX} cy={sparklinePath.lastY} r="3" fill="var(--eco-accent)" />
+                <circle cx={sparklinePath.lastX} cy={sparklinePath.lastY} r="7" fill="var(--eco-accent)" opacity="0.22" />
                 <defs>
                   <linearGradient id="hero-grad" x1="0" x2="0" y1="0" y2="1">
-                    <stop offset="0" stopColor="var(--db-accent)" stopOpacity="0.28" />
-                    <stop offset="1" stopColor="var(--db-accent)" stopOpacity="0" />
+                    <stop offset="0" stopColor="var(--eco-accent)" stopOpacity="0.28" />
+                    <stop offset="1" stopColor="var(--eco-accent)" stopOpacity="0" />
                   </linearGradient>
                 </defs>
               </svg>
@@ -240,7 +240,7 @@ export default function DashboardPage() {
                     {' '}{formatCurrency(amt, cur)}
                   </div>
                 ))
-              : <span style={{ color: 'var(--db-fg3)' }}>—</span>
+              : <span style={{ color: 'var(--eco-fg3)' }}>—</span>
             }
           </div>
           <div className={s.statNote}>{typeCounts.INCOME} transacciones</div>
@@ -268,7 +268,7 @@ export default function DashboardPage() {
                     {' '}{formatCurrency(amt, cur)}
                   </div>
                 ))
-              : <span style={{ color: 'var(--db-fg3)' }}>—</span>
+              : <span style={{ color: 'var(--eco-fg3)' }}>—</span>
             }
           </div>
           <div className={s.statNote}>{typeCounts.EXPENSE} transacciones</div>
@@ -291,15 +291,15 @@ export default function DashboardPage() {
           <div className={s.statNum}>
             {Object.keys(pendingDebtsReceivable).length > 0 || Object.keys(pendingDebtsPayable).length > 0
               ? <span style={{ fontSize: 20 }}>neto</span>
-              : <span style={{ color: 'var(--db-fg3)' }}>—</span>
+              : <span style={{ color: 'var(--eco-fg3)' }}>—</span>
             }
           </div>
           <div className={s.statNote}>
             {Object.entries(pendingDebtsReceivable).map(([cur, amt]) => (
-              <span key={`r-${cur}`} style={{ color: 'var(--db-pos)' }}>cobro {formatCurrency(amt, cur)}</span>
+              <span key={`r-${cur}`} style={{ color: 'var(--eco-pos)' }}>cobro {formatCurrency(amt, cur)}</span>
             ))}
             {Object.entries(pendingDebtsPayable).map(([cur, amt]) => (
-              <span key={`p-${cur}`} style={{ color: 'var(--db-neg)' }}>pago {formatCurrency(amt, cur)}</span>
+              <span key={`p-${cur}`} style={{ color: 'var(--eco-neg)' }}>pago {formatCurrency(amt, cur)}</span>
             ))}
           </div>
           <div className={s.statBar}>
@@ -403,21 +403,21 @@ export default function DashboardPage() {
                       <div className={s.cCat}>
                         {tx.category ? (
                           <span className={s.catChip}>
-                            <span className={s.catSq} style={{ background: tx.category.color ?? 'var(--db-fg4)' }} />
+                            <span className={s.catSq} style={{ background: tx.category.color ?? 'var(--eco-fg4)' }} />
                             {tx.category.name}
                           </span>
                         ) : (
-                          <span style={{ color: 'var(--db-fg4)' }}>—</span>
+                          <span style={{ color: 'var(--eco-fg4)' }}>—</span>
                         )}
                       </div>
                       <div className={s.cAcc}>
                         {tx.account ? (
                           <span className={s.catChip}>
-                            <span className={s.catSq} style={{ background: 'var(--db-accent)' }} />
+                            <span className={s.catSq} style={{ background: 'var(--eco-accent)' }} />
                             {tx.account.name}
                           </span>
                         ) : (
-                          <span style={{ color: 'var(--db-fg4)' }}>—</span>
+                          <span style={{ color: 'var(--eco-fg4)' }}>—</span>
                         )}
                       </div>
                       <div className={`${s.cAmt} ${amtClass}`}>

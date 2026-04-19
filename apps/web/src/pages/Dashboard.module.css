@@ -1,26 +1,3 @@
-/* ═══════ Ember Palette (CSS vars for dashboard) ═══════ */
-:root {
-  --db-accent: #d4700a;
-  --db-accent-soft: rgba(212, 112, 10, 0.16);
-  --db-accent-weak: rgba(212, 112, 10, 0.08);
-  --db-bg: #1a1715;
-  --db-surface: #282420;
-  --db-surface2: #302b27;
-  --db-surface3: #3d3730;
-  --db-line: #3d3730;
-  --db-line-soft: #332e28;
-  --db-fg: #f5f0eb;
-  --db-fg2: #bfb5a8;
-  --db-fg3: #8a7e72;
-  --db-fg4: #6b6058;
-  --db-pos: #4da666;
-  --db-pos-soft: rgba(77, 166, 102, 0.14);
-  --db-neg: #c9503c;
-  --db-neg-soft: rgba(201, 80, 60, 0.14);
-  --db-fx: #5b9bd5;
-  --db-shadow1: 0 1px 0 rgba(51, 46, 40, 0.6), 0 2px 4px rgba(0, 0, 0, 0.3);
-}
-
 /* ═══════ PAGE ═══════ */
 .page {
   max-width: 1360px;
@@ -42,12 +19,12 @@
   font-weight: 500;
   letter-spacing: -0.022em;
   line-height: 1.1;
-  color: var(--db-fg);
+  color: var(--eco-fg);
   margin: 0;
 }
 
 .pageSub {
-  color: var(--db-fg3);
+  color: var(--eco-fg3);
   font-size: 13px;
   margin-top: 4px;
   font-family: 'Geist Mono', monospace;
@@ -69,8 +46,8 @@
 
 /* ═══════ CARD BASE ═══════ */
 .card {
-  background: var(--db-surface);
-  border: 1px solid var(--db-line);
+  background: var(--eco-surface);
+  border: 1px solid var(--eco-line);
   border-radius: 14px;
   padding: 18px 20px;
   position: relative;
@@ -83,8 +60,8 @@
   top: 0; left: 0; right: 0; height: 1px;
   background: linear-gradient(90deg,
     transparent,
-    rgba(212, 112, 10, 0.55) 40%,
-    rgba(212, 112, 10, 0.55) 60%,
+    color-mix(in oklab, var(--eco-accent) 55%, transparent) 40%,
+    color-mix(in oklab, var(--eco-accent) 55%, transparent) 60%,
     transparent);
 }
 
@@ -92,7 +69,7 @@
   font-family: 'Geist Mono', monospace;
   font-size: 10px;
   letter-spacing: 0.14em;
-  color: var(--db-fg3);
+  color: var(--eco-fg3);
   text-transform: uppercase;
   display: flex;
   align-items: center;
@@ -105,20 +82,20 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--db-accent);
-  box-shadow: 0 0 0 3px var(--db-accent-weak);
+  background: var(--eco-accent);
+  box-shadow: 0 0 0 3px var(--eco-accent-weak);
 }
 
 .cardDotPos {
   composes: cardDot;
-  background: var(--db-pos);
-  box-shadow: 0 0 0 3px var(--db-pos-soft);
+  background: var(--eco-pos);
+  box-shadow: 0 0 0 3px var(--eco-pos-soft);
 }
 
 .cardDotNeg {
   composes: cardDot;
-  background: var(--db-neg);
-  box-shadow: 0 0 0 3px var(--db-neg-soft);
+  background: var(--eco-neg);
+  box-shadow: 0 0 0 3px var(--eco-neg-soft);
 }
 
 /* ═══════ HERO CARD ═══════ */
@@ -140,8 +117,8 @@
   gap: 4px;
 }
 
-.heroCur { font-size: 18px; color: var(--db-fg3); }
-.heroDec { color: var(--db-fg3); font-size: 24px; }
+.heroCur { font-size: 18px; color: var(--eco-fg3); }
+.heroDec { color: var(--eco-fg3); font-size: 24px; }
 
 .deltaRow {
   display: flex;
@@ -158,18 +135,18 @@
   font-size: 12px;
   padding: 3px 8px;
   border-radius: 6px;
-  color: var(--db-pos);
-  background: var(--db-pos-soft);
+  color: var(--eco-pos);
+  background: var(--eco-pos-soft);
 }
 
 .deltaNeg {
   composes: delta;
-  color: var(--db-neg);
-  background: var(--db-neg-soft);
+  color: var(--eco-neg);
+  background: var(--eco-neg-soft);
 }
 
 .heroNote {
-  color: var(--db-fg3);
+  color: var(--eco-fg3);
   font-size: 12px;
   font-family: 'Geist Mono', monospace;
   letter-spacing: 0.02em;
@@ -208,11 +185,11 @@
 
 .statCur {
   font-size: 13px;
-  color: var(--db-fg3);
+  color: var(--eco-fg3);
 }
 
 .statNote {
-  color: var(--db-fg3);
+  color: var(--eco-fg3);
   font-size: 11px;
   font-family: 'Geist Mono', monospace;
   margin-top: 8px;
@@ -225,20 +202,20 @@
 .statBar {
   margin-top: 12px;
   height: 4px;
-  background: var(--db-surface3);
+  background: var(--eco-surface3);
   border-radius: 2px;
   overflow: hidden;
 }
 
 .statBarFill {
   height: 100%;
-  background: var(--db-accent);
+  background: var(--eco-accent);
   border-radius: 2px;
   transition: width 0.6s ease;
 }
 
-.statBarPos .statBarFill { background: var(--db-pos); }
-.statBarNeg .statBarFill { background: var(--db-neg); }
+.statBarPos .statBarFill { background: var(--eco-pos); }
+.statBarNeg .statBarFill { background: var(--eco-neg); }
 
 .multiCur {
   display: flex;
@@ -246,14 +223,14 @@
   margin-top: 8px;
   font-family: 'Geist Mono', monospace;
   font-size: 11px;
-  color: var(--db-fg3);
+  color: var(--eco-fg3);
   flex-wrap: wrap;
 }
 
 /* ═══════ LEDGER CARD ═══════ */
 .ledgerCard {
-  background: var(--db-surface);
-  border: 1px solid var(--db-line);
+  background: var(--eco-surface);
+  border: 1px solid var(--eco-line);
   border-radius: 14px;
   overflow: hidden;
 }
@@ -263,7 +240,7 @@
   align-items: center;
   gap: 12px;
   padding: 14px 20px;
-  border-bottom: 1px solid var(--db-line-soft);
+  border-bottom: 1px solid var(--eco-line-soft);
 }
 
 .ledgerTitle {
@@ -276,18 +253,18 @@
 .ledgerCount {
   font-family: 'Geist Mono', monospace;
   font-size: 11px;
-  color: var(--db-fg3);
+  color: var(--eco-fg3);
   letter-spacing: 0.04em;
   padding: 2px 8px;
-  background: var(--db-surface2);
+  background: var(--eco-surface2);
   border-radius: 6px;
 }
 
 /* Segmented filter */
 .seg {
   display: inline-flex;
-  background: var(--db-surface2);
-  border: 1px solid var(--db-line);
+  background: var(--eco-surface2);
+  border: 1px solid var(--eco-line);
   border-radius: 8px;
   padding: 2px;
   margin-left: auto;
@@ -297,7 +274,7 @@
   padding: 5px 12px;
   border-radius: 6px;
   font-size: 12px;
-  color: var(--db-fg3);
+  color: var(--eco-fg3);
   font-weight: 500;
   display: inline-flex;
   align-items: center;
@@ -311,18 +288,18 @@
 
 .segBtnOn {
   composes: segBtn;
-  background: var(--db-surface);
-  color: var(--db-fg);
-  box-shadow: var(--db-shadow1);
+  background: var(--eco-surface);
+  color: var(--eco-fg);
+  box-shadow: var(--eco-shadow1);
 }
 
 .segMini {
   font-family: 'Geist Mono', monospace;
   font-size: 10px;
-  color: var(--db-fg4);
+  color: var(--eco-fg4);
 }
 
-.segBtnOn .segMini { color: var(--db-fg3); }
+.segBtnOn .segMini { color: var(--eco-fg3); }
 
 /* ═══════ LEDGER GRID ═══════ */
 .ledgerGrid {
@@ -342,11 +319,11 @@
   font-family: 'Geist Mono', monospace;
   font-size: 10px;
   letter-spacing: 0.12em;
-  color: var(--db-fg4);
+  color: var(--eco-fg4);
   text-transform: uppercase;
   padding: 8px 8px;
-  border-bottom: 1px solid var(--db-line-soft);
-  background: var(--db-surface2);
+  border-bottom: 1px solid var(--eco-line-soft);
+  background: var(--eco-surface2);
 }
 
 .hdrRight {
@@ -370,13 +347,13 @@
   font-size: 11px;
   letter-spacing: 0.10em;
   text-transform: uppercase;
-  color: var(--db-fg3);
-  border-bottom: 1px dashed var(--db-line-soft);
+  color: var(--eco-fg3);
+  border-bottom: 1px dashed var(--eco-line-soft);
 }
 
-.dayTotal { color: var(--db-fg2); }
-.dayTotalPos { color: var(--db-pos); }
-.dayTotalNeg { color: var(--db-neg); }
+.dayTotal { color: var(--eco-fg2); }
+.dayTotalPos { color: var(--eco-pos); }
+.dayTotalNeg { color: var(--eco-neg); }
 
 /* ═══════ LEDGER ROW ═══════ */
 .row {
@@ -386,7 +363,7 @@
 
 .row > div {
   padding: 10px 8px;
-  border-bottom: 1px solid var(--db-line-soft);
+  border-bottom: 1px solid var(--eco-line-soft);
   min-height: 44px;
   display: flex;
   align-items: center;
@@ -394,10 +371,10 @@
   transition: background 0.08s;
 }
 
-.row:hover > div { background: var(--db-surface2); }
+.row:hover > div { background: var(--eco-surface2); }
 
 .cDate {
-  color: var(--db-fg3);
+  color: var(--eco-fg3);
   font-family: 'Geist Mono', monospace;
   font-size: 11px;
   letter-spacing: 0.02em;
@@ -411,10 +388,10 @@
   height: 8px;
   border-radius: 50%;
 }
-.typeDotInc { background: var(--db-pos); box-shadow: 0 0 0 3px var(--db-pos-soft); }
-.typeDotExp { background: var(--db-neg); box-shadow: 0 0 0 3px var(--db-neg-soft); }
-.typeDotTr { background: var(--db-accent); box-shadow: 0 0 0 3px var(--db-accent-soft); }
-.typeDotFx { background: var(--db-fx); box-shadow: 0 0 0 3px rgba(91, 155, 213, 0.16); }
+.typeDotInc { background: var(--eco-pos); box-shadow: 0 0 0 3px var(--eco-pos-soft); }
+.typeDotExp { background: var(--eco-neg); box-shadow: 0 0 0 3px var(--eco-neg-soft); }
+.typeDotTr { background: var(--eco-accent); box-shadow: 0 0 0 3px var(--eco-accent-soft); }
+.typeDotFx { background: var(--eco-fx); box-shadow: 0 0 0 3px var(--eco-fx-soft); }
 
 .cDesc {
   flex-direction: column;
@@ -427,7 +404,7 @@
 .descTitle {
   font-size: 13px;
   font-weight: 450;
-  color: var(--db-fg);
+  color: var(--eco-fg);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -437,7 +414,7 @@
 .descSub {
   font-family: 'Geist Mono', monospace;
   font-size: 11px;
-  color: var(--db-fg3);
+  color: var(--eco-fg3);
   letter-spacing: 0.02em;
 }
 
@@ -448,11 +425,11 @@
   align-items: center;
   gap: 5px;
   padding: 2px 8px;
-  background: var(--db-surface2);
-  border: 1px solid var(--db-line);
+  background: var(--eco-surface2);
+  border: 1px solid var(--eco-line);
   border-radius: 6px;
   font-size: 11px;
-  color: var(--db-fg2);
+  color: var(--eco-fg2);
   font-family: 'Geist Mono', monospace;
   letter-spacing: 0.01em;
   white-space: nowrap;
@@ -476,11 +453,11 @@
   letter-spacing: -0.005em;
 }
 
-.amtPos { color: var(--db-pos); }
-.amtNeg { color: var(--db-fg); }
-.amtNeu { color: var(--db-fg2); }
-.amtCur { color: var(--db-fg4); font-size: 11px; margin-right: 2px; }
-.amtCurSuffix { color: var(--db-fg4); font-size: 10px; margin-left: 3px; font-weight: 400; }
+.amtPos { color: var(--eco-pos); }
+.amtNeg { color: var(--eco-fg); }
+.amtNeu { color: var(--eco-fg2); }
+.amtCur { color: var(--eco-fg4); font-size: 11px; margin-right: 2px; }
+.amtCurSuffix { color: var(--eco-fg4); font-size: 10px; margin-left: 3px; font-weight: 400; }
 
 /* ═══════ LEDGER FOOTER ═══════ */
 .ledgerFoot {
@@ -488,12 +465,12 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-top: 1px solid var(--db-line-soft);
-  background: var(--db-surface);
+  border-top: 1px solid var(--eco-line-soft);
+  background: var(--eco-surface);
 }
 
 .ledgerFootCount {
-  color: var(--db-fg3);
+  color: var(--eco-fg3);
   font-size: 12px;
   font-family: 'Geist Mono', monospace;
 }
@@ -508,7 +485,7 @@
 .emptyState {
   text-align: center;
   padding: 40px;
-  color: var(--db-fg3);
+  color: var(--eco-fg3);
   font-size: 14px;
 }
 
@@ -518,12 +495,12 @@
   align-items: center;
   gap: 12px;
   padding: 12px 16px;
-  border-bottom: 1px solid var(--db-line-soft);
+  border-bottom: 1px solid var(--eco-line-soft);
   cursor: pointer;
   transition: background 0.08s;
 }
 
-.mobileCard:hover { background: var(--db-surface2); }
+.mobileCard:hover { background: var(--eco-surface2); }
 .mobileCard:last-child { border-bottom: 0; }
 
 .mobileCardLeft {
@@ -534,7 +511,7 @@
 .mobileCardDesc {
   font-size: 14px;
   font-weight: 450;
-  color: var(--db-fg);
+  color: var(--eco-fg);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -543,7 +520,7 @@
 .mobileCardSub {
   font-family: 'Geist Mono', monospace;
   font-size: 11px;
-  color: var(--db-fg3);
+  color: var(--eco-fg3);
   margin-top: 2px;
 }
 

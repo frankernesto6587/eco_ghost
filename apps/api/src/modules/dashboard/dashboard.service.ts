@@ -16,25 +16,10 @@ export class DashboardService {
       select: { id: true, currency: true },
     });
 
-    // Single query: aggregate all transactions grouped by account + type
     const accountIds = accounts.map((a) => a.id);
-    const balanceRows = await this.prisma.transaction.groupBy({
-      by: ['accountId', 'type'],
-      where: { orgId, accountId: { in: accountIds }, deletedAt: null },
-      _sum: { amount: true },
-    });
 
     // Build currency map for accounts
     const currencyMap = new Map(accounts.map((a) => [a.id, a.currency]));
-
-    // Aggregate balances by currency
-    const totalBalance: Record<string, number> = {};
-    for (const row of balanceRows) {
-      const currency = currencyMap.get(row.accountId) ?? 'USD';
-      const amount = row._sum.amount ?? 0;
-      const sign = row.type === 'INCOME' ? 1 : -1;
-      totalBalance[currency] = (totalBalance[currency] ?? 0) + sign * amount;
-    }
 
     // Month income grouped by currency
     const monthTransactions = await this.prisma.transaction.findMany({
@@ -87,41 +72,53 @@ export class DashboardService {
       }
     }
 
-    // Balance 30 days ago (for % change calculation)
+    // Helper: compute balance map from a base where clause
+    const computeBalanceMap = async (baseWhere: any) => {
+      const [ieRows, transferInRows, transferOutRows] = await Promise.all([
+        this.prisma.transaction.groupBy({
+          by: ['accountId', 'type'],
+          where: { ...baseWhere, type: { in: ['INCOME', 'EXPENSE'] } },
+          _sum: { amount: true },
+        }),
+        this.prisma.transaction.groupBy({
+          by: ['accountId'],
+          where: { ...baseWhere, type: { in: ['TRANSFER', 'EXCHANGE'] }, linkedTransactionId: null },
+          _sum: { amount: true },
+        }),
+        this.prisma.transaction.groupBy({
+          by: ['accountId'],
+          where: { ...baseWhere, type: { in: ['TRANSFER', 'EXCHANGE'] }, linkedTransactionId: { not: null } },
+          _sum: { amount: true },
+        }),
+      ]);
+
+      const map = new Map<string, number>();
+      for (const row of ieRows) {
+        const sign = row.type === 'INCOME' ? 1 : -1;
+        map.set(row.accountId, (map.get(row.accountId) ?? 0) + sign * (row._sum.amount ?? 0));
+      }
+      for (const row of transferInRows) {
+        map.set(row.accountId, (map.get(row.accountId) ?? 0) + (row._sum.amount ?? 0));
+      }
+      for (const row of transferOutRows) {
+        map.set(row.accountId, (map.get(row.accountId) ?? 0) - (row._sum.amount ?? 0));
+      }
+      return map;
+    };
+
+    const baseWhere = { orgId, accountId: { in: accountIds }, deletedAt: null };
+
+    // Current account balances
+    const accountBalanceMap = await computeBalanceMap(baseWhere);
+
+    // Balance 30 days ago
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-    const balanceRows30d = await this.prisma.transaction.groupBy({
-      by: ['accountId', 'type'],
-      where: {
-        orgId,
-        accountId: { in: accountIds },
-        deletedAt: null,
-        date: { lte: thirtyDaysAgo },
-      },
-      _sum: { amount: true },
-    });
+    const balanceMap30d = await computeBalanceMap({ ...baseWhere, date: { lte: thirtyDaysAgo } });
 
     const balance30dAgo: Record<string, number> = {};
-    for (const row of balanceRows30d) {
-      const currency = currencyMap.get(row.accountId) ?? 'USD';
-      const amount = row._sum.amount ?? 0;
-      const sign = row.type === 'INCOME' ? 1 : -1;
-      balance30dAgo[currency] = (balance30dAgo[currency] ?? 0) + sign * amount;
-    }
-
-    // Account balances for expanded view
-    const accountBalanceRows = await this.prisma.transaction.groupBy({
-      by: ['accountId', 'type'],
-      where: { orgId, deletedAt: null },
-      _sum: { amount: true },
-    });
-
-    const accountBalanceMap = new Map<string, number>();
-    for (const row of accountBalanceRows) {
-      const sign = row.type === 'INCOME' ? 1 : -1;
-      accountBalanceMap.set(
-        row.accountId,
-        (accountBalanceMap.get(row.accountId) ?? 0) + sign * (row._sum.amount ?? 0),
-      );
+    for (const [accId, bal] of balanceMap30d) {
+      const currency = currencyMap.get(accId) ?? 'USD';
+      balance30dAgo[currency] = (balance30dAgo[currency] ?? 0) + bal;
     }
 
     const allAccounts = await this.prisma.account.findMany({
@@ -138,6 +135,13 @@ export class DashboardService {
         balance: accountBalanceMap.get(a.id) ?? 0,
       }))
       .filter((a) => a.balance !== 0);
+
+    // Total balance by currency (derived from correct per-account balances)
+    const totalBalance: Record<string, number> = {};
+    for (const [accId, bal] of accountBalanceMap) {
+      const currency = currencyMap.get(accId) ?? 'USD';
+      totalBalance[currency] = (totalBalance[currency] ?? 0) + bal;
+    }
 
     // Active projects count
     const activeProjects = await this.prisma.project.count({

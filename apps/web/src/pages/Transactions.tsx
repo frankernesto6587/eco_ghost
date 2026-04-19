@@ -163,14 +163,21 @@ export default function TransactionsPage() {
   const watchedAccountId = Form.useWatch('accountId', form);
 
   // ---- State ----
-  const [filters, setFilters] = useState<Filters>(() => ({
-    dateRange: null,
-    types: [],
-    accountIds: [],
-    categoryIds: [],
-    currency: localStorage.getItem('txFilterCurrency') || undefined,
-  }));
-  const { pageSize, setPageSize } = useUIStore();
+  const { pageSize, setPageSize, txFilters, setTxFilters, clearTxFilters } = useUIStore();
+
+  const filters = useMemo<Filters>(() => ({
+    dateRange: txFilters.dateFrom && txFilters.dateTo
+      ? [dayjs(txFilters.dateFrom), dayjs(txFilters.dateTo)]
+      : null,
+    types: txFilters.types,
+    accountIds: txFilters.accountIds,
+    categoryIds: txFilters.categoryIds,
+    currency: txFilters.currency,
+  }), [txFilters]);
+
+  const sortBy = txFilters.sortBy;
+  const sortOrder = txFilters.sortOrder;
+
   const [viewDeleted, setViewDeleted] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
@@ -181,8 +188,6 @@ export default function TransactionsPage() {
   const [drawerTx, setDrawerTx] = useState<Transaction | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [saveAnother, setSaveAnother] = useState(false);
-  const [sortBy, setSortBy] = useState<string>('createdAt');
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const searchRef = useRef<HTMLInputElement>(null);
 
   // ---- Keyboard shortcuts ----
@@ -352,15 +357,12 @@ export default function TransactionsPage() {
 
   const handleSort = useCallback((field: string) => {
     setPage(1);
-    setSortBy((prev) => {
-      if (prev === field) {
-        setSortOrder((o) => (o === 'desc' ? 'asc' : 'desc'));
-        return prev;
-      }
-      setSortOrder('desc');
-      return field;
-    });
-  }, []);
+    if (sortBy === field) {
+      setTxFilters({ sortOrder: sortOrder === 'desc' ? 'asc' : 'desc' });
+    } else {
+      setTxFilters({ sortBy: field, sortOrder: 'desc' });
+    }
+  }, [sortBy, sortOrder, setTxFilters]);
 
   const toggleSelect = useCallback((id: string) => {
     setSelectedIds((prev) => {
@@ -505,40 +507,34 @@ export default function TransactionsPage() {
   const handleDateRangeChange = useCallback(
     (dates: [Dayjs | null, Dayjs | null] | null) => {
       setPage(1);
-      setFilters((prev) => ({
-        ...prev,
-        dateRange: dates && dates[0] && dates[1] ? [dates[0], dates[1]] : null,
-      }));
+      if (dates && dates[0] && dates[1]) {
+        setTxFilters({ dateFrom: dates[0].toISOString(), dateTo: dates[1].toISOString() });
+      } else {
+        setTxFilters({ dateFrom: null, dateTo: null });
+      }
     },
-    [],
+    [setTxFilters],
   );
 
   const handleTypesChange = useCallback((values: string[]) => {
     setPage(1);
-    setFilters((prev) => ({ ...prev, types: values }));
-  }, []);
+    setTxFilters({ types: values });
+  }, [setTxFilters]);
 
   const handleAccountsChange = useCallback((values: string[]) => {
     setPage(1);
-    setFilters((prev) => ({ ...prev, accountIds: values }));
-  }, []);
+    setTxFilters({ accountIds: values });
+  }, [setTxFilters]);
 
   const handleCurrencyChange = useCallback((value: string | undefined) => {
     setPage(1);
-    if (value) {
-      localStorage.setItem('txFilterCurrency', value);
-    } else {
-      localStorage.removeItem('txFilterCurrency');
-    }
-    setFilters((prev) => ({ ...prev, currency: value }));
-  }, []);
-
+    setTxFilters({ currency: value });
+  }, [setTxFilters]);
 
   const clearAllFilters = useCallback(() => {
-    localStorage.removeItem('txFilterCurrency');
     setPage(1);
-    setFilters({ dateRange: null, types: [], accountIds: [], categoryIds: [], currency: undefined });
-  }, []);
+    clearTxFilters();
+  }, [clearTxFilters]);
 
   // ---- Derived ----
   const isLoading = transactionsQuery.isLoading;
@@ -647,8 +643,8 @@ export default function TransactionsPage() {
 
   const handleCategoryTreeChange = useCallback((selectedIds: string[]) => {
     setPage(1);
-    setFilters((prev) => ({ ...prev, categoryIds: selectedIds }));
-  }, []);
+    setTxFilters({ categoryIds: selectedIds });
+  }, [setTxFilters]);
 
   // Find category name by id
   const getCategoryName = useCallback((catId: string): string => {

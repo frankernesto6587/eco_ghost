@@ -32,16 +32,58 @@ function loadPageSize(): number {
   return 15;
 }
 
+export interface StoredFilters {
+  types: string[];
+  accountIds: string[];
+  categoryIds: string[];
+  currency: string | undefined;
+  dateFrom: string | null;
+  dateTo: string | null;
+  sortBy: string;
+  sortOrder: 'asc' | 'desc';
+}
+
+const FILTERS_KEY = 'ecoghost_tx_filters';
+
+const defaultFilters: StoredFilters = {
+  types: [],
+  accountIds: [],
+  categoryIds: [],
+  currency: undefined,
+  dateFrom: null,
+  dateTo: null,
+  sortBy: 'createdAt',
+  sortOrder: 'desc',
+};
+
+function loadFilters(): StoredFilters {
+  try {
+    const stored = localStorage.getItem(FILTERS_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      return { ...defaultFilters, ...parsed };
+    }
+  } catch {}
+  return { ...defaultFilters };
+}
+
+function saveFilters(filters: StoredFilters) {
+  localStorage.setItem(FILTERS_KEY, JSON.stringify(filters));
+}
+
 interface UIState {
   sidebarCollapsed: boolean;
   themeMode: ThemeMode;
   isDark: boolean;
   isMobile: boolean;
   pageSize: number;
+  txFilters: StoredFilters;
   toggleSidebar: () => void;
   setThemeMode: (mode: ThemeMode) => void;
   setIsMobile: (value: boolean) => void;
   setPageSize: (size: number) => void;
+  setTxFilters: (filters: Partial<StoredFilters>) => void;
+  clearTxFilters: () => void;
 }
 
 const initialMode = loadThemeMode();
@@ -52,6 +94,7 @@ export const useUIStore = create<UIState>((set) => ({
   isDark: resolveIsDark(initialMode),
   isMobile: false,
   pageSize: loadPageSize(),
+  txFilters: loadFilters(),
 
   toggleSidebar: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
 
@@ -65,6 +108,20 @@ export const useUIStore = create<UIState>((set) => ({
   setPageSize: (size) => {
     localStorage.setItem('ecoghost_page_size', String(size));
     set({ pageSize: size });
+  },
+
+  setTxFilters: (partial) => {
+    set((state) => {
+      const updated = { ...state.txFilters, ...partial };
+      saveFilters(updated);
+      return { txFilters: updated };
+    });
+  },
+
+  clearTxFilters: () => {
+    const cleared = { ...defaultFilters };
+    saveFilters(cleared);
+    set({ txFilters: cleared });
   },
 }));
 

@@ -137,8 +137,8 @@
   justify-content: center;
   font-size: 14px;
   font-weight: 500;
-  background: linear-gradient(135deg, var(--eco-accent), color-mix(in oklab, var(--eco-accent) 60%, #3d3730));
-  color: oklch(0.15 0.01 80);
+  background: linear-gradient(135deg, var(--eco-accent), color-mix(in oklab, var(--eco-accent) 60%, var(--eco-surface3)));
+  color: var(--eco-accent-ink);
   flex-shrink: 0;
   overflow: hidden;
 }

@@ -119,7 +119,7 @@
   height: 36px;
   border-radius: 10px;
   background: var(--card-color, var(--eco-accent));
-  color: oklch(0.15 0.01 80);
+  color: var(--eco-accent-ink);
   display: inline-flex;
   align-items: center;
   justify-content: center;

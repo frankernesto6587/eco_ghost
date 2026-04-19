@@ -96,7 +96,7 @@ function flattenCategories(
     id: cat.id,
     title: (
       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-        <CategoryIcon name={cat.icon} style={{ color: cat.color ?? '#8c8c8c' }} />
+        <CategoryIcon name={cat.icon} style={{ color: cat.color ?? 'var(--eco-fg3)' }} />
         {cat.name}
       </span>
     ),

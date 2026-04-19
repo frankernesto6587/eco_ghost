@@ -84,7 +84,7 @@
   padding: 3px 8px;
   border: 1px solid var(--eco-line);
   border-radius: 6px;
-  background: rgba(26, 23, 21, 0.6);
+  background: oklch(0.13 0.008 80 / 0.6);
 }
 
 /* Headline */
@@ -147,12 +147,12 @@
 }
 
 .floatCard {
-  background: rgba(40, 36, 32, 0.9);
+  background: oklch(0.17 0.010 80 / 0.9);
   border: 1px solid var(--eco-line);
   border-radius: 14px;
   padding: 14px 16px;
   min-width: 240px;
-  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 18px 40px oklch(0 0 0 / 0.4);
   backdrop-filter: blur(8px);
   position: relative;
   overflow: hidden;
@@ -405,7 +405,7 @@
   font-family: 'Geist Mono', monospace;
   font-size: 10px;
   padding: 1px 5px;
-  background: rgba(0, 0, 0, 0.15);
+  background: oklch(0 0 0 / 0.15);
   border-radius: 4px;
   font-weight: 500;
   opacity: 0.8;

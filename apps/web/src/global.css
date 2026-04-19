@@ -39,7 +39,42 @@
   --eco-radius-sm: 10px;
 }
 
-/* ═══════ Ant Design — Ember Dark Overrides ═══════ */
+/* ═══════ Light Theme Overrides ═══════ */
+[data-theme="light"] {
+  /* Ember accent — slightly darker for better contrast on light bg */
+  --eco-accent: oklch(0.62 0.18 50);
+  --eco-accent-soft: oklch(0.62 0.18 50 / 0.12);
+  --eco-accent-weak: oklch(0.62 0.18 50 / 0.06);
+  --eco-accent-ink: oklch(0.98 0.005 80);
+
+  /* Warm neutrals — inverted */
+  --eco-bg: oklch(0.97 0.004 80);
+  --eco-surface: oklch(1 0 0);
+  --eco-surface2: oklch(0.96 0.004 80);
+  --eco-surface3: oklch(0.93 0.006 80);
+  --eco-line: oklch(0.88 0.008 80);
+  --eco-line-soft: oklch(0.92 0.006 80);
+
+  /* Foreground — dark text on light bg */
+  --eco-fg: oklch(0.18 0.010 80);
+  --eco-fg2: oklch(0.35 0.010 80);
+  --eco-fg3: oklch(0.50 0.010 80);
+  --eco-fg4: oklch(0.64 0.008 80);
+
+  /* Semantic — slightly deeper for light bg contrast */
+  --eco-pos: oklch(0.52 0.16 150);
+  --eco-pos-soft: oklch(0.52 0.16 150 / 0.10);
+  --eco-neg: oklch(0.55 0.20 25);
+  --eco-neg-soft: oklch(0.55 0.20 25 / 0.10);
+  --eco-fx: oklch(0.55 0.14 220);
+  --eco-fx-soft: oklch(0.55 0.14 220 / 0.10);
+
+  /* Elevation — softer shadows for light mode */
+  --eco-shadow1: 0 1px 2px oklch(0 0 0 / 0.06), 0 1px 3px oklch(0 0 0 / 0.08);
+  --eco-shadow2: 0 2px 4px oklch(0 0 0 / 0.06), 0 8px 16px oklch(0 0 0 / 0.08);
+}
+
+/* ═══════ Ant Design — Ember Overrides ═══════ */
 
 /* Modal */
 .ant-modal .ant-modal-content {
@@ -236,7 +271,7 @@ textarea.ant-input {
 
 .ant-picker-cell-selected .ant-picker-cell-inner {
   background: var(--eco-accent) !important;
-  color: oklch(0.15 0.01 80) !important;
+  color: var(--eco-accent-ink) !important;
 }
 
 .ant-picker-cell-today .ant-picker-cell-inner::before {
@@ -292,7 +327,7 @@ textarea.ant-input {
 .ant-btn-primary {
   background: var(--eco-accent) !important;
   border-color: var(--eco-accent) !important;
-  color: oklch(0.15 0.01 80) !important;
+  color: var(--eco-accent-ink) !important;
   font-weight: 500 !important;
   border-radius: 8px !important;
 }

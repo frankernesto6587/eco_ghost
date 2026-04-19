@@ -520,7 +520,7 @@
 .pageBtnActive {
   background: var(--eco-accent) !important;
   border-color: var(--eco-accent) !important;
-  color: oklch(0.15 0.01 80) !important;
+  color: var(--eco-accent-ink) !important;
   font-weight: 600;
 }
 
@@ -838,14 +838,14 @@
   composes: chk;
   background: var(--eco-accent);
   border-color: var(--eco-accent);
-  color: oklch(0.15 0.01 80);
+  color: var(--eco-accent-ink);
 }
 
 .chkMixed {
   composes: chk;
   background: var(--eco-accent);
   border-color: var(--eco-accent);
-  color: oklch(0.15 0.01 80);
+  color: var(--eco-accent-ink);
 }
 
 /* ═══════ SORTABLE HEADER ═══════ */

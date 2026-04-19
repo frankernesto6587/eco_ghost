@@ -163,7 +163,7 @@
   composes: stepNum;
   background: var(--eco-accent);
   border-color: var(--eco-accent);
-  color: oklch(0.15 0.01 80);
+  color: var(--eco-accent-ink);
 }
 
 .stepNumDone {
@@ -237,7 +237,7 @@
   height: 20px;
   border-radius: 50%;
   background: var(--eco-pos);
-  color: oklch(0.15 0.01 80);
+  color: var(--eco-accent-ink);
   display: inline-flex;
   align-items: center;
   justify-content: center;

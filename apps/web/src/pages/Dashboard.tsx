@@ -329,7 +329,7 @@ export default function DashboardPage() {
   }, []);
 
   // Stat helpers
-  const totalBalance = overview?.totalBalance ?? {};
+  const rangeBalance: Record<string, number> = (overview as any)?.rangeBalance ?? {};
   const monthIncome = overview?.monthIncome ?? {};
   const monthExpense = overview?.monthExpense ?? {};
 
@@ -392,8 +392,8 @@ export default function DashboardPage() {
             balance total
           </div>
           <div className={s.heroNum}>
-            {Object.keys(totalBalance).length > 0
-              ? Object.entries(totalBalance).map(([cur, amt]) => (
+            {Object.keys(rangeBalance).length > 0
+              ? Object.entries(rangeBalance).map(([cur, amt]) => (
                   <div key={cur}>
                     <span className={s.heroCur}>{cur}</span>
                     {' '}{formatCurrency(amt, cur)}

@@ -143,6 +143,14 @@ export class DashboardService {
       totalBalance[currency] = (totalBalance[currency] ?? 0) + bal;
     }
 
+    // Range balance: cumulative balance up to end of selected range
+    const rangeBalanceMap = await computeBalanceMap({ ...baseWhere, date: { lte: endOfMonth } });
+    const rangeBalance: Record<string, number> = {};
+    for (const [accId, bal] of rangeBalanceMap) {
+      const currency = currencyMap.get(accId) ?? 'USD';
+      rangeBalance[currency] = (rangeBalance[currency] ?? 0) + bal;
+    }
+
     // Active projects count
     const activeProjects = await this.prisma.project.count({
       where: { orgId, status: 'ACTIVE' },
@@ -230,6 +238,7 @@ export class DashboardService {
 
     return {
       totalBalance,
+      rangeBalance,
       balance30dAgo,
       accountBalances,
       monthIncome,

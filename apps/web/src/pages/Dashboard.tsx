@@ -6,7 +6,6 @@ import { PlusOutlined } from '@ant-design/icons';
 import { TransactionType } from '@ecoghost/shared';
 import type { DashboardOverview } from '@ecoghost/shared';
 import { dashboardService } from '@/services/dashboard.service';
-import { accountsService, type Account } from '@/services/accounts.service';
 import { formatCurrency, formatDate } from '@/lib/formatters';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { useNavigate } from 'react-router-dom';
@@ -69,6 +68,18 @@ function computeDayTotal(txs: RecentTransaction[]): Record<string, number> {
     // TRANSFER / EXCHANGE: neutral (0)
   }
   return totals;
+}
+
+const CURRENCY_ICONS: Record<string, string> = {
+  USD: '/icons/currencies/usd.png',
+  EUR: '/icons/currencies/eur.png',
+  MN: '/icons/currencies/mn.png',
+  MLC: '/icons/currencies/mlc.png',
+  USDT: '/icons/currencies/usdt.png',
+};
+
+function getCurrencyIcon(currency: string): string | null {
+  return CURRENCY_ICONS[currency] ?? null;
 }
 
 function getGreeting(): string {
@@ -134,21 +145,7 @@ export default function DashboardPage() {
     [],
   );
 
-  const { data: accountsData } = useQuery<Account[]>({
-    queryKey: ['accounts'],
-    queryFn: () => accountsService.getAll(),
-  });
-
-  const accountsByCurrency = useMemo(() => {
-    const accs = (accountsData ?? []).filter((a) => a.balance !== 0);
-    const grouped = new Map<string, Account[]>();
-    for (const acc of accs) {
-      const list = grouped.get(acc.currency) ?? [];
-      list.push(acc);
-      grouped.set(acc.currency, list);
-    }
-    return [...grouped.entries()].sort(([a], [b]) => a.localeCompare(b));
-  }, [accountsData]);
+  const [expandedCurrencies, setExpandedCurrencies] = useState<Set<string>>(new Set());
 
   const transactions = useMemo(
     () => (overview?.recentTransactions ?? []) as unknown as RecentTransaction[],
@@ -194,6 +191,37 @@ export default function DashboardPage() {
     const lastY = pad + ((max - balances[balances.length - 1]) / range) * (h - 2 * pad);
     return { linePath, areaPath, lastX, lastY };
   }, [overview]);
+
+  // Account balances from overview (grouped by currency)
+  const accountBalances = (overview as any)?.accountBalances ?? [];
+  const balance30dAgo: Record<string, number> = (overview as any)?.balance30dAgo ?? {};
+
+  const balanceByCurrency = useMemo(() => {
+    const grouped = new Map<string, { name: string; balance: number }[]>();
+    for (const acc of accountBalances) {
+      const list = grouped.get(acc.currency) ?? [];
+      list.push({ name: acc.name, balance: acc.balance });
+      grouped.set(acc.currency, list);
+    }
+    return [...grouped.entries()].sort(([a], [b]) => a.localeCompare(b));
+  }, [accountBalances]);
+
+  const currencyTotals = useMemo(() => {
+    const totals: Record<string, number> = {};
+    for (const acc of accountBalances) {
+      totals[acc.currency] = (totals[acc.currency] ?? 0) + acc.balance;
+    }
+    return totals;
+  }, [accountBalances]);
+
+  const toggleCurrency = useCallback((cur: string) => {
+    setExpandedCurrencies((prev) => {
+      const next = new Set(prev);
+      if (next.has(cur)) next.delete(cur);
+      else next.add(cur);
+      return next;
+    });
+  }, []);
 
   // Stat helpers
   const totalBalance = overview?.totalBalance ?? {};
@@ -381,24 +409,50 @@ export default function DashboardPage() {
       </section>
 
       {/* ═══════ ACCOUNT BALANCES ═══════ */}
-      {accountsByCurrency.length > 0 && (
-        <article className={s.accountsCard}>
-          <div className={s.accountsCardLabel}>
-            <span className={s.cardDot} />
-            saldo por cuentas
-          </div>
-          <div className={s.accountsList}>
-            {accountsByCurrency.map(([currency, accs], idx) => (
-              <div key={currency} style={{ display: 'contents' }}>
-                <div className={s.accountCurDivider} style={idx === 0 ? { borderTop: 'none' } : undefined}>{currency}</div>
-                {accs.map((acc) => (
-                  <div key={acc.id} className={s.accountItem}>
-                    <span className={s.accountName}>{acc.name}</span>
-                    <span className={s.accountBal}>{formatCurrency(acc.balance, acc.currency)}</span>
+      {balanceByCurrency.length > 0 && (
+        <article className={s.balanceCard}>
+          <div className={s.balanceCardLabel}>saldo total de cuentas</div>
+          <div className={s.balanceList}>
+            {balanceByCurrency.map(([currency, accs]) => {
+              const total = currencyTotals[currency] ?? 0;
+              const prev = balance30dAgo[currency] ?? 0;
+              const pct = prev !== 0 ? ((total - prev) / Math.abs(prev)) * 100 : null;
+              const icon = getCurrencyIcon(currency);
+              const expanded = expandedCurrencies.has(currency);
+
+              return (
+                <div key={currency} className={s.balanceCurGroup}>
+                  <div className={s.balanceCurRow} onClick={() => toggleCurrency(currency)}>
+                    <div className={s.balanceCurLeft}>
+                      {icon
+                        ? <img src={icon} alt={currency} className={s.balanceCurIcon} />
+                        : <span className={s.balanceCurFallback}>{currency[0]}</span>
+                      }
+                      <span className={s.balanceCurCode}>{currency}</span>
+                    </div>
+                    <div className={s.balanceCurRight}>
+                      <span className={s.balanceCurAmt}>{formatCurrency(total, currency)}</span>
+                      {pct !== null && (
+                        <span className={pct >= 0 ? s.balancePctPos : s.balancePctNeg}>
+                          {pct >= 0 ? '↑' : '↓'} {Math.abs(pct).toFixed(1)}%
+                        </span>
+                      )}
+                      <span className={s.balanceChevron}>{expanded ? '‹' : '›'}</span>
+                    </div>
                   </div>
-                ))}
-              </div>
-            ))}
+                  {expanded && (
+                    <div className={s.balanceAccList}>
+                      {accs.map((acc, i) => (
+                        <div key={i} className={s.balanceAccRow}>
+                          <span className={s.balanceAccName}>{acc.name}</span>
+                          <span className={s.balanceAccAmt}>{formatCurrency(acc.balance, currency)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </article>
       )}

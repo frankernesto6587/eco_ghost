@@ -87,6 +87,58 @@ export class DashboardService {
       }
     }
 
+    // Balance 30 days ago (for % change calculation)
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const balanceRows30d = await this.prisma.transaction.groupBy({
+      by: ['accountId', 'type'],
+      where: {
+        orgId,
+        accountId: { in: accountIds },
+        deletedAt: null,
+        date: { lte: thirtyDaysAgo },
+      },
+      _sum: { amount: true },
+    });
+
+    const balance30dAgo: Record<string, number> = {};
+    for (const row of balanceRows30d) {
+      const currency = currencyMap.get(row.accountId) ?? 'USD';
+      const amount = row._sum.amount ?? 0;
+      const sign = row.type === 'INCOME' ? 1 : -1;
+      balance30dAgo[currency] = (balance30dAgo[currency] ?? 0) + sign * amount;
+    }
+
+    // Account balances for expanded view
+    const accountBalanceRows = await this.prisma.transaction.groupBy({
+      by: ['accountId', 'type'],
+      where: { orgId, deletedAt: null },
+      _sum: { amount: true },
+    });
+
+    const accountBalanceMap = new Map<string, number>();
+    for (const row of accountBalanceRows) {
+      const sign = row.type === 'INCOME' ? 1 : -1;
+      accountBalanceMap.set(
+        row.accountId,
+        (accountBalanceMap.get(row.accountId) ?? 0) + sign * (row._sum.amount ?? 0),
+      );
+    }
+
+    const allAccounts = await this.prisma.account.findMany({
+      where: { orgId, isActive: true },
+      select: { id: true, name: true, currency: true },
+      orderBy: { name: 'asc' },
+    });
+
+    const accountBalances = allAccounts
+      .map((a) => ({
+        id: a.id,
+        name: a.name,
+        currency: a.currency,
+        balance: accountBalanceMap.get(a.id) ?? 0,
+      }))
+      .filter((a) => a.balance !== 0);
+
     // Active projects count
     const activeProjects = await this.prisma.project.count({
       where: { orgId, status: 'ACTIVE' },
@@ -147,6 +199,8 @@ export class DashboardService {
 
     return {
       totalBalance,
+      balance30dAgo,
+      accountBalances,
       monthIncome,
       monthExpense,
       pendingDebtsReceivable,

@@ -272,70 +272,158 @@
   flex-wrap: wrap;
 }
 
-/* ═══════ ACCOUNT BALANCES ═══════ */
-.accountsCard {
+/* ═══════ BALANCE CARD ═══════ */
+.balanceCard {
   composes: card;
   margin-bottom: 12px;
+  padding: 20px;
 }
 
-.accountsCardLabel {
+.balanceCardLabel {
   font-family: 'Geist Mono', monospace;
   font-size: 10px;
   letter-spacing: 0.14em;
   color: var(--eco-fg3);
   text-transform: uppercase;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 10px;
+  margin-bottom: 14px;
 }
 
-.accountsList {
+.balanceList {
   display: flex;
   flex-direction: column;
+  gap: 2px;
 }
 
-.accountItem {
+.balanceCurGroup {
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.balanceCurRow {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 7px 10px;
+  justify-content: space-between;
+  padding: 12px 14px;
+  background: var(--eco-surface2);
+  cursor: pointer;
+  transition: background 0.1s;
+  border-radius: 10px;
+}
+
+.balanceCurGroup:has(.balanceAccList) .balanceCurRow {
+  border-radius: 10px 10px 0 0;
+}
+
+.balanceCurRow:hover {
+  background: var(--eco-surface3);
+}
+
+.balanceCurLeft {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.balanceCurIcon {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  object-fit: cover;
+  border: 1px solid var(--eco-line);
+}
+
+.balanceCurFallback {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: var(--eco-accent-weak);
+  color: var(--eco-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Geist Mono', monospace;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.balanceCurCode {
+  font-family: 'Geist Mono', monospace;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--eco-fg);
+}
+
+.balanceCurRight {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.balanceCurAmt {
+  font-family: 'Geist Mono', monospace;
+  font-size: 18px;
+  font-weight: 500;
+  font-feature-settings: 'tnum';
+  letter-spacing: -0.01em;
+  color: var(--eco-fg);
+}
+
+.balancePctPos {
+  font-family: 'Geist Mono', monospace;
+  font-size: 11px;
+  color: var(--eco-pos);
+  padding: 2px 6px;
+  background: var(--eco-pos-soft);
+  border-radius: 5px;
+  white-space: nowrap;
+}
+
+.balancePctNeg {
+  composes: balancePctPos;
+  color: var(--eco-neg);
+  background: var(--eco-neg-soft);
+}
+
+.balanceChevron {
+  color: var(--eco-fg4);
+  font-size: 16px;
+  width: 16px;
+  text-align: center;
+  transition: transform 0.15s;
+}
+
+/* Expanded accounts */
+.balanceAccList {
+  background: var(--eco-surface2);
+  border-top: 1px solid var(--eco-line-soft);
+  border-radius: 0 0 10px 10px;
+  padding: 4px 0;
+}
+
+.balanceAccRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px 8px 52px;
   font-family: 'Geist Mono', monospace;
   font-feature-settings: 'tnum';
-  border-bottom: 1px solid oklch(0.5 0 0 / 0.06);
 }
 
-.accountItem:last-child {
-  border-bottom: none;
-}
-
-.accountName {
+.balanceAccName {
   font-size: 12px;
   color: var(--eco-fg2);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  margin-right: 8px;
+  margin-right: 12px;
 }
 
-.accountBal {
+.balanceAccAmt {
   font-size: 13px;
   font-weight: 500;
+  color: var(--eco-fg);
   white-space: nowrap;
-}
-
-.accountCurDivider {
-  padding: 6px 10px 3px;
-  font-family: 'Geist Mono', monospace;
-  font-size: 10px;
-  letter-spacing: 0.1em;
-  color: var(--eco-fg4);
-  text-transform: uppercase;
-  border-top: 1px solid oklch(0.5 0 0 / 0.08);
-}
-
-.accountCurDivider:first-child {
-  border-top: none;
 }
 
 /* ═══════ LEDGER CARD ═══════ */

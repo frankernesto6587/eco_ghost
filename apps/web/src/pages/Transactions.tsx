@@ -2,37 +2,22 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   App,
   Button,
-  Card,
-  Col,
-  Collapse,
   DatePicker,
+  Dropdown,
   Form,
   Input,
   InputNumber,
   Modal,
-  Row,
-  Segmented,
   Select,
-  Space,
   Spin,
-  Statistic,
-  Table,
-  Tag,
   TreeSelect,
-  Typography,
 } from 'antd';
-import type { ColumnsType } from 'antd/es/table';
 import {
   PlusOutlined,
-  EditOutlined,
   DeleteOutlined,
-  DollarOutlined,
-  ArrowUpOutlined,
-  ArrowDownOutlined,
-  SwapOutlined,
   LoadingOutlined,
-  FilterOutlined,
   UndoOutlined,
+  SearchOutlined,
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -52,8 +37,8 @@ import { formatCurrency, formatDate } from '@/lib/formatters';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import CategoryIcon from '@/components/common/CategoryIcon';
+import s from './Transactions.module.css';
 
-const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;
 const { TextArea } = Input;
 
@@ -119,128 +104,51 @@ function flattenCategories(
   }));
 }
 
-function getTypeColor(type: string): string {
+function getTypeDotClass(type: string): string {
   switch (type) {
-    case 'INCOME':
-      return 'green';
-    case 'EXPENSE':
-      return 'red';
-    case 'TRANSFER':
-      return 'blue';
-    case 'EXCHANGE':
-      return 'orange';
-    default:
-      return 'default';
+    case 'INCOME': return s.typeDotInc;
+    case 'EXPENSE': return s.typeDotExp;
+    case 'TRANSFER': return s.typeDotTr;
+    case 'EXCHANGE': return s.typeDotFx;
+    default: return '';
   }
 }
 
 function getTypeLabel(type: string): string {
   switch (type) {
-    case 'INCOME':
-      return 'Ingreso';
-    case 'EXPENSE':
-      return 'Gasto';
-    case 'TRANSFER':
-      return 'Transferencia';
-    case 'EXCHANGE':
-      return 'Cambio';
-    default:
-      return type;
+    case 'INCOME': return 'Ingreso';
+    case 'EXPENSE': return 'Gasto';
+    case 'TRANSFER': return 'Transferencia';
+    case 'EXCHANGE': return 'Cambio';
+    default: return type;
   }
+}
+
+function getAmtClass(type: string, hasLinked: boolean): string {
+  if (type === 'INCOME') return s.amtPos;
+  if (type === 'EXPENSE' || ((['TRANSFER', 'EXCHANGE'].includes(type)) && hasLinked)) return s.amtNeg;
+  if (type === 'TRANSFER' || type === 'EXCHANGE') return s.amtNeu;
+  return '';
+}
+
+function getAmtPrefix(type: string, hasLinked: boolean): string {
+  if (type === 'INCOME') return '+';
+  if (type === 'EXPENSE' || ((['TRANSFER', 'EXCHANGE'].includes(type)) && hasLinked)) return '−';
+  if (type === 'TRANSFER' || type === 'EXCHANGE') return '↔ ';
+  return '';
+}
+
+function formatShortDate(date: string): { day: string; time: string } {
+  const d = dayjs(date);
+  return {
+    day: d.format('DD MMM').toLowerCase(),
+    time: d.format('HH:mm'),
+  };
 }
 
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
-
-function TransactionCard({
-  transaction,
-  canEdit,
-  isDeleted,
-  onEdit,
-  onDelete,
-  onRestore,
-}: {
-  transaction: Transaction;
-  canEdit: boolean;
-  isDeleted?: boolean;
-  onEdit: (t: Transaction) => void;
-  onDelete: (t: Transaction) => void;
-  onRestore?: (t: Transaction) => void;
-}) {
-  const currency = transaction.account?.currency ?? 'USD';
-  const isOutgoing = ['TRANSFER', 'EXCHANGE'].includes(transaction.type) && !!transaction.linkedTransactionId;
-  const color = transaction.type === 'INCOME' ? '#52c41a' : transaction.type === 'EXPENSE' || isOutgoing ? '#ff4d4f' : transaction.type === 'EXCHANGE' ? '#fa8c16' : '#1677ff';
-  const prefix = transaction.type === 'INCOME' ? '+' : transaction.type === 'EXPENSE' || isOutgoing ? '-' : '+';
-
-  return (
-    <Card
-      size="small"
-      style={{ marginBottom: 8, opacity: isDeleted ? 0.7 : 1 }}
-      onClick={() => !isDeleted && canEdit && onEdit(transaction)}
-      hoverable={!isDeleted && canEdit}
-    >
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <Text strong ellipsis style={{ display: 'block', marginBottom: 4 }}>
-            {transaction.description}
-          </Text>
-          <Space size={4} wrap>
-            <Tag color={getTypeColor(transaction.type)}>{getTypeLabel(transaction.type)}</Tag>
-            {transaction.category && <Tag>{transaction.category.name}</Tag>}
-          </Space>
-          {isDeleted && transaction.deleteReason && (
-            <div style={{ marginTop: 4 }}>
-              <Text type="danger" style={{ fontSize: 12 }}>
-                Motivo: {transaction.deleteReason}
-              </Text>
-            </div>
-          )}
-          <div style={{ marginTop: 4 }}>
-            <Text type="secondary" style={{ fontSize: 12 }}>
-              {formatDate(transaction.date)}
-              {transaction.account && ` · ${transaction.account.name}`}
-              {isDeleted && transaction.deletedAt && ` · Eliminada: ${formatDate(transaction.deletedAt)}`}
-            </Text>
-          </div>
-        </div>
-        <div style={{ textAlign: 'right', marginLeft: 8, flexShrink: 0 }}>
-          <Text strong style={{ color, fontSize: 15 }}>
-            {prefix}{formatCurrency(Math.abs(transaction.amount), currency)}
-          </Text>
-          {isDeleted && onRestore ? (
-            <div style={{ marginTop: 4 }}>
-              <Button
-                type="text"
-                size="small"
-                icon={<UndoOutlined />}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onRestore(transaction);
-                }}
-              >
-                Restaurar
-              </Button>
-            </div>
-          ) : canEdit && !isDeleted ? (
-            <div style={{ marginTop: 4 }}>
-              <Button
-                type="text"
-                size="small"
-                danger
-                icon={<DeleteOutlined />}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDelete(transaction);
-                }}
-              />
-            </div>
-          ) : null}
-        </div>
-      </div>
-    </Card>
-  );
-}
 
 export default function TransactionsPage() {
   const { t } = useTranslation();
@@ -266,6 +174,8 @@ export default function TransactionsPage() {
   const [allTransactions, setAllTransactions] = useState<Transaction[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
+  const [searchText, setSearchText] = useState('');
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
 
   // ---- Data fetching ----
   const transactionsQuery = useQuery<TransactionListResponse>({
@@ -276,7 +186,6 @@ export default function TransactionsPage() {
     },
   });
 
-  // Sync local pagination state from query result (works for both refetch and cache hits)
   useEffect(() => {
     if (transactionsQuery.data) {
       setAllTransactions(transactionsQuery.data.data);
@@ -337,7 +246,7 @@ export default function TransactionsPage() {
     onSuccess: () => {
       message.success('Transaccion creada exitosamente');
       invalidateAll();
-      closeModal();
+      closeFormModal();
     },
     onError: () => {
       message.error('Error al crear la transaccion');
@@ -350,7 +259,7 @@ export default function TransactionsPage() {
     onSuccess: () => {
       message.success('Transaccion actualizada exitosamente');
       invalidateAll();
-      closeModal();
+      closeFormModal();
     },
     onError: () => {
       message.error('Error al actualizar la transaccion');
@@ -388,7 +297,7 @@ export default function TransactionsPage() {
     queryClient.invalidateQueries({ queryKey: ['dashboard'] });
   }, [queryClient]);
 
-  const closeModal = useCallback(() => {
+  const closeFormModal = useCallback(() => {
     setModalOpen(false);
     setEditingTransaction(null);
     form.resetFields();
@@ -487,7 +396,7 @@ export default function TransactionsPage() {
         createMutation.mutate(dto);
       }
     } catch {
-      // form validation failed - antd shows inline errors
+      // form validation failed
     }
   }, [form, editingTransaction, createMutation, updateMutation]);
 
@@ -523,162 +432,12 @@ export default function TransactionsPage() {
     setFilters((prev) => ({ ...prev, categoryId: value }));
   }, []);
 
-  // ---- Table columns ----
-  const columns = useMemo<ColumnsType<Transaction>>(
-    () => [
-      {
-        title: 'Fecha',
-        dataIndex: 'date',
-        key: 'date',
-        width: 120,
-        render: (date: string) => formatDate(date),
-      },
-      {
-        title: 'Descripcion',
-        dataIndex: 'description',
-        key: 'description',
-        ellipsis: true,
-        render: (_: string, record: Transaction) => (
-          <span>
-            {record.description}
-            {record.notes && <Text type="secondary" style={{ fontSize: 12 }}> ({record.notes})</Text>}
-          </span>
-        ),
-      },
-      {
-        title: 'Monto',
-        dataIndex: 'amount',
-        key: 'amount',
-        width: 150,
-        align: 'right',
-        render: (amount: number, record: Transaction) => {
-          const currency = record.account?.currency ?? 'USD';
-          const isOutgoing = ['TRANSFER', 'EXCHANGE'].includes(record.type) && !!record.linkedTransactionId;
-          const color = record.type === 'INCOME' ? '#52c41a' : record.type === 'EXPENSE' || isOutgoing ? '#ff4d4f' : record.type === 'EXCHANGE' ? '#fa8c16' : '#1677ff';
-          const prefix = record.type === 'INCOME' ? '+' : record.type === 'EXPENSE' || isOutgoing ? '-' : '+';
-          return (
-            <Text strong style={{ color }}>
-              {prefix}{formatCurrency(Math.abs(amount), currency)}
-            </Text>
-          );
-        },
-      },
-      {
-        title: 'Tipo',
-        dataIndex: 'type',
-        key: 'type',
-        width: 130,
-        render: (type: string) => (
-          <Tag color={getTypeColor(type)} icon={
-            type === 'INCOME' ? <ArrowUpOutlined /> : type === 'EXPENSE' ? <ArrowDownOutlined /> : type === 'EXCHANGE' ? <DollarOutlined /> : <SwapOutlined />
-          }>
-            {getTypeLabel(type)}
-          </Tag>
-        ),
-      },
-      {
-        title: 'Categoria',
-        key: 'category',
-        width: 150,
-        render: (_: unknown, record: Transaction) =>
-          record.category ? (
-            <Tag>{record.category.name}</Tag>
-          ) : (
-            <Text type="secondary">--</Text>
-          ),
-      },
-      {
-        title: 'Cuenta',
-        key: 'account',
-        width: 150,
-        render: (_: unknown, record: Transaction) =>
-          record.account ? record.account.name : <Text type="secondary">--</Text>,
-      },
-      ...(viewDeleted
-        ? [
-            {
-              title: 'Motivo',
-              key: 'deleteReason',
-              width: 200,
-              ellipsis: true,
-              render: (_: unknown, record: Transaction) => (
-                <Text type="danger" style={{ fontSize: 12 }}>{record.deleteReason ?? '--'}</Text>
-              ),
-            },
-            {
-              title: 'Eliminada',
-              key: 'deletedAt',
-              width: 120,
-              render: (_: unknown, record: Transaction) => (
-                <Text type="secondary" style={{ fontSize: 12 }}>
-                  {record.deletedAt ? formatDate(record.deletedAt) : '--'}
-                </Text>
-              ),
-            },
-            ...(canManageOrg
-              ? [
-                  {
-                    title: 'Acciones',
-                    key: 'actions',
-                    width: 120,
-                    align: 'center' as const,
-                    render: (_: unknown, record: Transaction) => (
-                      <Button
-                        type="link"
-                        size="small"
-                        icon={<UndoOutlined />}
-                        loading={restoreMutation.isPending}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleRestore(record);
-                        }}
-                      >
-                        Restaurar
-                      </Button>
-                    ),
-                  },
-                ]
-              : []),
-          ]
-        : canManageOrg
-          ? [
-              {
-                title: 'Acciones',
-                key: 'actions',
-                width: 100,
-                align: 'center' as const,
-                render: (_: unknown, record: Transaction) => (
-                  <Space size="small">
-                    <Button
-                      type="text"
-                      size="small"
-                      icon={<EditOutlined />}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        openEditModal(record);
-                      }}
-                    />
-                    <Button
-                      type="text"
-                      size="small"
-                      danger
-                      icon={<DeleteOutlined />}
-                      loading={deleteMutation.isPending}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDelete(record);
-                      }}
-                    />
-                  </Space>
-                ),
-              },
-            ]
-          : []),
-    ],
-    [canManageOrg, viewDeleted, openEditModal, handleDelete, handleRestore, deleteMutation.isPending, restoreMutation.isPending],
-  );
+  const clearAllFilters = useCallback(() => {
+    localStorage.removeItem('txFilterCurrency');
+    setFilters({ dateRange: null, type: undefined, accountId: undefined, categoryId: undefined, currency: undefined });
+  }, []);
 
-  // ---- Render ----
+  // ---- Derived ----
   const isLoading = transactionsQuery.isLoading;
   const isError = transactionsQuery.isError;
   const summary = summaryQuery.data;
@@ -686,148 +445,273 @@ export default function TransactionsPage() {
   const currencies = useMemo(() => [...new Set(accounts.map((a) => a.currency))].sort(), [accounts]);
   const isSaving = createMutation.isPending || updateMutation.isPending;
 
+  const activeFilterCount = [filters.dateRange, filters.type, filters.accountId, filters.categoryId, filters.currency].filter(Boolean).length;
+
+  // Local search filtering
+  const displayedTransactions = useMemo(() => {
+    if (!searchText.trim()) return allTransactions;
+    const q = searchText.toLowerCase();
+    return allTransactions.filter((tx) =>
+      tx.description.toLowerCase().includes(q) ||
+      tx.notes?.toLowerCase().includes(q) ||
+      tx.category?.name.toLowerCase().includes(q) ||
+      tx.account?.name.toLowerCase().includes(q)
+    );
+  }, [allTransactions, searchText]);
+
+  // ---- Type tab helper for modal ----
+  const typeTabDotClass = (type: string): string => {
+    switch (type) {
+      case 'INCOME': return s.typeTabDotInc;
+      case 'EXPENSE': return s.typeTabDotExp;
+      case 'TRANSFER': return s.typeTabDotTr;
+      case 'EXCHANGE': return s.typeTabDotFx;
+      default: return '';
+    }
+  };
+
+  // ---- Filter chip dropdown items ----
+  const typeFilterItems = [
+    { key: '', label: 'Todos' },
+    { key: 'INCOME', label: 'Ingreso' },
+    { key: 'EXPENSE', label: 'Gasto' },
+    { key: 'TRANSFER', label: 'Transferencia' },
+    { key: 'EXCHANGE', label: 'Cambio' },
+  ];
+
+  const accountFilterItems = [
+    { key: '', label: 'Todas' },
+    ...accounts.map((a) => ({ key: a.id, label: `${a.name} (${a.currency})` })),
+  ];
+
+  const currencyFilterItems = [
+    { key: '', label: 'Todas' },
+    ...currencies.map((c) => ({ key: c, label: c })),
+  ];
+
+  // ---- Render ----
   return (
-    <div>
-      {/* Page Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 8 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-          <Title level={isMobile ? 3 : 2} style={{ margin: 0 }}>
-            {t('nav.transactions')}
-          </Title>
-          {canManageOrg && (
-            <Segmented
-              value={viewDeleted ? 'deleted' : 'active'}
-              onChange={(val) => setViewDeleted(val === 'deleted')}
-              options={[
-                { label: 'Activas', value: 'active' },
-                { label: 'Eliminadas', value: 'deleted' },
-              ]}
-            />
+    <div className={s.page}>
+      {/* ═══════ PAGE HEADER ═══════ */}
+      <header className={s.pageHead}>
+        <div>
+          <h1 className={s.pageTitle}>Transacciones</h1>
+          <div className={s.pageSub}>
+            {allTransactions.length} transacciones{summaryParams ? ' en rango' : ''}
+          </div>
+        </div>
+        <div className={s.pageActions}>
+          {canWrite && !viewDeleted && (
+            <Button type="primary" icon={<PlusOutlined />} onClick={openCreateModal}>
+              {isMobile ? 'Nueva' : 'Nueva'}
+            </Button>
           )}
         </div>
-        {canWrite && !viewDeleted && (
-          <Button type="primary" icon={<PlusOutlined />} onClick={openCreateModal}>
-            {isMobile ? 'Nueva' : 'Nueva transaccion'}
-          </Button>
+      </header>
+
+      {/* ═══════ QUICK STATS ═══════ */}
+      {!viewDeleted && (
+        <section className={s.quickStats}>
+          <div className={s.qStat}>
+            <div className={s.qStatLabel}><span className={s.qStatDot} />balance neto</div>
+            <div className={s.qStatNum}>
+              {summary?.balance
+                ? Object.entries(summary.balance).map(([cur, amt]) => (
+                    <div key={cur}>
+                      <span className={s.qStatCur}>{cur}</span>
+                      {formatCurrency(amt, cur)}
+                    </div>
+                  ))
+                : <span style={{ color: 'var(--tx-fg3)' }}>—</span>
+              }
+            </div>
+          </div>
+          <div className={s.qStat}>
+            <div className={s.qStatLabel}><span className={`${s.qStatDot} ${s.qStatDot}.pos`} style={{ background: 'var(--tx-pos)' }} />ingresos</div>
+            <div className={`${s.qStatNum} ${s.qStatNumPos}`}>
+              {summary?.income
+                ? Object.entries(summary.income).map(([cur, amt]) => (
+                    <div key={cur}>
+                      <span className={s.qStatCur}>{cur}</span>
+                      {formatCurrency(amt, cur)}
+                    </div>
+                  ))
+                : <span style={{ color: 'var(--tx-fg3)' }}>—</span>
+              }
+            </div>
+          </div>
+          <div className={s.qStat}>
+            <div className={s.qStatLabel}><span className={s.qStatDot} style={{ background: 'var(--tx-neg)' }} />gastos</div>
+            <div className={s.qStatNum}>
+              {summary?.expense
+                ? Object.entries(summary.expense).map(([cur, amt]) => (
+                    <div key={cur}>
+                      <span className={s.qStatCur}>{cur}</span>
+                      {formatCurrency(amt, cur)}
+                    </div>
+                  ))
+                : <span style={{ color: 'var(--tx-fg3)' }}>—</span>
+              }
+            </div>
+          </div>
+          <div className={s.qStat}>
+            <div className={s.qStatLabel}><span className={s.qStatDot} style={{ background: 'var(--tx-accent)' }} />transacciones</div>
+            <div className={s.qStatNum}>{allTransactions.length}</div>
+            <div className={s.qStatSub}>este periodo</div>
+          </div>
+        </section>
+      )}
+
+      {/* ═══════ TOOLBAR ═══════ */}
+      <div className={s.toolbar}>
+        <div className={s.searchInp}>
+          <SearchOutlined style={{ fontSize: 14 }} />
+          <input
+            placeholder="Buscar por descripcion, monto, ref..."
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+          />
+          <kbd className={s.searchKbd}>/</kbd>
+        </div>
+        <div className={s.toolbarDivider} />
+        {canManageOrg && (
+          <div className={s.stateSeg}>
+            <button
+              className={`${s.stateBtn} ${!viewDeleted ? s.stateBtn + ' ' + 'on' : ''}`}
+              style={!viewDeleted ? { background: 'var(--tx-surface)', color: 'var(--tx-fg)', boxShadow: 'var(--tx-shadow1)' } : undefined}
+              onClick={() => setViewDeleted(false)}
+            >
+              Activas
+              <span className={s.stateCount} style={!viewDeleted ? { background: 'var(--tx-accent-weak)', color: 'var(--tx-accent)' } : undefined}>
+                {allTransactions.length}
+              </span>
+            </button>
+            <button
+              className={s.stateBtn}
+              style={viewDeleted ? { background: 'var(--tx-surface)', color: 'var(--tx-fg)', boxShadow: 'var(--tx-shadow1)' } : undefined}
+              onClick={() => setViewDeleted(true)}
+            >
+              Eliminadas
+            </button>
+          </div>
         )}
       </div>
 
-      {/* Summary Cards */}
-      {!viewDeleted && <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
-        <Col xs={24} sm={8}>
-          <Card loading={summaryQuery.isLoading}>
-            <Statistic
-              title="Ingresos"
-              prefix={<ArrowUpOutlined />}
-              valueStyle={{ color: '#52c41a' }}
-              value=" "
-            />
-            {summary?.income &&
-              Object.entries(summary.income).map(([currency, amount]) => (
-                <div key={currency} style={{ marginTop: 4 }}>
-                  <Text strong style={{ color: '#52c41a', fontSize: 16 }}>
-                    {formatCurrency(amount, currency)}
-                  </Text>
-                  <Text type="secondary" style={{ marginLeft: 6, fontSize: 13 }}>
-                    {currency}
-                  </Text>
-                </div>
-              ))}
-          </Card>
-        </Col>
-        <Col xs={24} sm={8}>
-          <Card loading={summaryQuery.isLoading}>
-            <Statistic
-              title="Gastos"
-              prefix={<ArrowDownOutlined />}
-              valueStyle={{ color: '#ff4d4f' }}
-              value=" "
-            />
-            {summary?.expense &&
-              Object.entries(summary.expense).map(([currency, amount]) => (
-                <div key={currency} style={{ marginTop: 4 }}>
-                  <Text strong style={{ color: '#ff4d4f', fontSize: 16 }}>
-                    {formatCurrency(amount, currency)}
-                  </Text>
-                  <Text type="secondary" style={{ marginLeft: 6, fontSize: 13 }}>
-                    {currency}
-                  </Text>
-                </div>
-              ))}
-          </Card>
-        </Col>
-        <Col xs={24} sm={8}>
-          <Card loading={summaryQuery.isLoading}>
-            <Statistic
-              title="Balance"
-              prefix={<DollarOutlined />}
-              value=" "
-            />
-            {summary?.balance &&
-              Object.entries(summary.balance).map(([currency, amount]) => (
-                <div key={currency} style={{ marginTop: 4 }}>
-                  <Text strong style={{ color: amount >= 0 ? '#52c41a' : '#ff4d4f', fontSize: 16 }}>
-                    {formatCurrency(amount, currency)}
-                  </Text>
-                  <Text type="secondary" style={{ marginLeft: 6, fontSize: 13 }}>
-                    {currency}
-                  </Text>
-                </div>
-              ))}
-          </Card>
-        </Col>
-      </Row>}
+      {/* ═══════ FILTERS ═══════ */}
+      {!isMobile ? (
+        <div className={s.filters}>
+          {/* Date range */}
+          <Dropdown
+            trigger={['click']}
+            dropdownRender={() => (
+              <div style={{ padding: 12, background: 'var(--tx-surface)', border: '1px solid var(--tx-line)', borderRadius: 10 }}>
+                <RangePicker
+                  value={filters.dateRange}
+                  onChange={handleDateRangeChange}
+                  allowClear
+                  style={{ width: 280 }}
+                />
+              </div>
+            )}
+          >
+            <span className={filters.dateRange ? s.filterChipActive : s.filterChip}>
+              <span className={s.filterKey}>rango:</span>
+              <span className={s.filterVal}>{filters.dateRange ? `${filters.dateRange[0].format('DD/MM')} – ${filters.dateRange[1].format('DD/MM')}` : 'todo'}</span>
+              <span className={s.filterCaret}>▾</span>
+            </span>
+          </Dropdown>
 
-      {/* Filter Bar */}
-      {isMobile ? (
-        <Collapse
-          ghost
-          style={{ marginBottom: 16 }}
-          items={[{
-            key: 'filters',
-            label: <Space><FilterOutlined />Filtros</Space>,
-            children: (
-              <Row gutter={[12, 12]}>
-                <Col span={24}>
-                  <RangePicker
-                    style={{ width: '100%' }}
-                    placeholder={['Fecha inicio', 'Fecha fin']}
-                    value={filters.dateRange}
-                    onChange={handleDateRangeChange}
-                    allowClear
-                  />
-                </Col>
-                <Col span={24}>
-                  <Select style={{ width: '100%' }} placeholder="Tipo" value={filters.type} onChange={handleTypeChange} allowClear
-                    options={[{ label: 'Ingreso', value: 'INCOME' }, { label: 'Gasto', value: 'EXPENSE' }, { label: 'Transferencia', value: 'TRANSFER' }, { label: 'Cambio', value: 'EXCHANGE' }]}
-                  />
-                </Col>
-                <Col span={24}>
-                  <Select style={{ width: '100%' }} placeholder="Cuenta" value={filters.accountId} onChange={handleAccountChange} allowClear loading={accountsQuery.isLoading}
-                    options={accounts.map((acc) => ({ label: acc.name, value: acc.id }))}
-                  />
-                </Col>
-                <Col span={24}>
-                  <Select style={{ width: '100%' }} placeholder="Moneda" value={filters.currency} onChange={handleCurrencyChange} allowClear
-                    options={currencies.map((c) => ({ label: c, value: c }))}
-                  />
-                </Col>
-                <Col span={24}>
-                  <TreeSelect style={{ width: '100%' }} placeholder="Categoria" value={filters.categoryId} onChange={handleCategoryChange} allowClear treeData={categoryTree} loading={categoriesQuery.isLoading} treeDefaultExpandAll />
-                </Col>
-                <Col span={24}>
-                  <Button block onClick={() => { localStorage.removeItem('txFilterCurrency'); setFilters({ dateRange: null, type: undefined, accountId: undefined, categoryId: undefined, currency: undefined }); }}>
-                    Limpiar
-                  </Button>
-                </Col>
-              </Row>
-            ),
-          }]}
-        />
+          {/* Account */}
+          <Dropdown
+            menu={{
+              items: accountFilterItems,
+              onClick: ({ key }) => handleAccountChange(key || undefined),
+              selectedKeys: filters.accountId ? [filters.accountId] : [],
+            }}
+            trigger={['click']}
+          >
+            <span className={filters.accountId ? s.filterChipActive : s.filterChip}>
+              <span className={s.filterKey}>cuenta:</span>
+              <span className={s.filterVal}>{filters.accountId ? accounts.find((a) => a.id === filters.accountId)?.name ?? '...' : 'todas'}</span>
+              <span className={s.filterCaret}>▾</span>
+            </span>
+          </Dropdown>
+
+          {/* Currency */}
+          <Dropdown
+            menu={{
+              items: currencyFilterItems,
+              onClick: ({ key }) => handleCurrencyChange(key || undefined),
+              selectedKeys: filters.currency ? [filters.currency] : [],
+            }}
+            trigger={['click']}
+          >
+            <span className={filters.currency ? s.filterChipActive : s.filterChip}>
+              <span className={s.filterKey}>moneda:</span>
+              <span className={s.filterVal}>{filters.currency ?? 'todas'}</span>
+              <span className={s.filterCaret}>▾</span>
+            </span>
+          </Dropdown>
+
+          {/* Type */}
+          <Dropdown
+            menu={{
+              items: typeFilterItems,
+              onClick: ({ key }) => handleTypeChange(key || undefined),
+              selectedKeys: filters.type ? [filters.type] : [],
+            }}
+            trigger={['click']}
+          >
+            <span className={filters.type ? s.filterChipActive : s.filterChip}>
+              <span className={s.filterKey}>tipo:</span>
+              <span className={s.filterVal}>{filters.type ? getTypeLabel(filters.type).toLowerCase() : 'todos'}</span>
+              <span className={s.filterCaret}>▾</span>
+            </span>
+          </Dropdown>
+
+          {/* Category */}
+          <Dropdown
+            trigger={['click']}
+            dropdownRender={() => (
+              <div style={{ padding: 12, background: 'var(--tx-surface)', border: '1px solid var(--tx-line)', borderRadius: 10, width: 240 }}>
+                <TreeSelect
+                  style={{ width: '100%' }}
+                  placeholder="Categoria"
+                  value={filters.categoryId}
+                  onChange={handleCategoryChange}
+                  allowClear
+                  treeData={categoryTree}
+                  loading={categoriesQuery.isLoading}
+                  treeDefaultExpandAll
+                />
+              </div>
+            )}
+          >
+            <span className={filters.categoryId ? s.filterChipActive : s.filterChip}>
+              <span className={s.filterKey}>categoria:</span>
+              <span className={s.filterVal}>{filters.categoryId ? '...' : 'cualquiera'}</span>
+              <span className={s.filterCaret}>▾</span>
+            </span>
+          </Dropdown>
+
+          {activeFilterCount > 0 && (
+            <button className={s.clearFilters} onClick={clearAllFilters}>
+              limpiar {activeFilterCount} filtro{activeFilterCount > 1 ? 's' : ''}
+            </button>
+          )}
+        </div>
       ) : (
-        <Card style={{ marginBottom: 24 }}>
-          <Row gutter={[12, 12]} align="middle">
-            <Col xs={24} sm={12} md={6}>
+        <>
+          <button
+            className={s.mobileFilterToggle}
+            onClick={() => setMobileFiltersOpen(!mobileFiltersOpen)}
+          >
+            <SearchOutlined style={{ fontSize: 13 }} />
+            Filtros{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
+            <span style={{ marginLeft: 'auto', fontSize: 10 }}>{mobileFiltersOpen ? '▲' : '▼'}</span>
+          </button>
+          {mobileFiltersOpen && (
+            <div className={s.mobileFiltersBody}>
               <RangePicker
                 style={{ width: '100%' }}
                 placeholder={['Fecha inicio', 'Fecha fin']}
@@ -835,8 +719,6 @@ export default function TransactionsPage() {
                 onChange={handleDateRangeChange}
                 allowClear
               />
-            </Col>
-            <Col xs={24} sm={12} md={5}>
               <Select
                 style={{ width: '100%' }}
                 placeholder="Tipo"
@@ -850,8 +732,6 @@ export default function TransactionsPage() {
                   { label: 'Cambio', value: 'EXCHANGE' },
                 ]}
               />
-            </Col>
-            <Col xs={24} sm={12} md={5}>
               <Select
                 style={{ width: '100%' }}
                 placeholder="Cuenta"
@@ -859,13 +739,8 @@ export default function TransactionsPage() {
                 onChange={handleAccountChange}
                 allowClear
                 loading={accountsQuery.isLoading}
-                options={accounts.map((acc) => ({
-                  label: acc.name,
-                  value: acc.id,
-                }))}
+                options={accounts.map((acc) => ({ label: acc.name, value: acc.id }))}
               />
-            </Col>
-            <Col xs={24} sm={12} md={3}>
               <Select
                 style={{ width: '100%' }}
                 placeholder="Moneda"
@@ -874,8 +749,6 @@ export default function TransactionsPage() {
                 allowClear
                 options={currencies.map((c) => ({ label: c, value: c }))}
               />
-            </Col>
-            <Col xs={24} sm={12} md={4}>
               <TreeSelect
                 style={{ width: '100%' }}
                 placeholder="Categoria"
@@ -886,86 +759,202 @@ export default function TransactionsPage() {
                 loading={categoriesQuery.isLoading}
                 treeDefaultExpandAll
               />
-            </Col>
-            <Col xs={24} md={2}>
-              <Button
-                block
-                onClick={() => {
-                  localStorage.removeItem('txFilterCurrency');
-                  setFilters({
-                    dateRange: null,
-                    type: undefined,
-                    accountId: undefined,
-                    categoryId: undefined,
-                    currency: undefined,
-                  });
-                }}
-              >
-                Limpiar
-              </Button>
-            </Col>
-          </Row>
-        </Card>
+              <Button block onClick={clearAllFilters}>Limpiar</Button>
+            </div>
+          )}
+        </>
       )}
 
-      {/* Transactions Table / Cards */}
-      <Card bodyStyle={isMobile ? { padding: 12 } : undefined}>
+      {/* ═══════ TABLE ═══════ */}
+      <div className={s.tableWrap}>
         {isError && (
-          <div style={{ textAlign: 'center', padding: 24 }}>
-            <Text type="danger">Error al cargar las transacciones. Intente de nuevo.</Text>
+          <div className={s.errorState}>
+            <span style={{ color: 'var(--tx-neg)' }}>Error al cargar las transacciones.</span>
             <br />
-            <Button
-              style={{ marginTop: 8 }}
-              onClick={() => transactionsQuery.refetch()}
-            >
+            <Button style={{ marginTop: 8 }} onClick={() => transactionsQuery.refetch()}>
               Reintentar
             </Button>
           </div>
         )}
 
-        {isMobile ? (
-          isLoading ? (
-            <div style={{ textAlign: 'center', padding: 24 }}><Spin /></div>
-          ) : allTransactions.length === 0 ? (
-            <Text type="secondary">{viewDeleted ? 'No hay transacciones eliminadas' : 'No hay transacciones'}</Text>
-          ) : (
-            allTransactions.map((tx) => (
-              <TransactionCard
+        {isLoading ? (
+          <div className={s.loading}><Spin /></div>
+        ) : displayedTransactions.length === 0 ? (
+          <div className={s.emptyState}>
+            {viewDeleted ? 'No hay transacciones eliminadas' : 'No hay transacciones'}
+          </div>
+        ) : isMobile ? (
+          /* ---- MOBILE CARDS ---- */
+          displayedTransactions.map((tx) => {
+            const currency = tx.account?.currency ?? 'USD';
+            const isOutgoing = ['TRANSFER', 'EXCHANGE'].includes(tx.type) && !!tx.linkedTransactionId;
+            const prefix = getAmtPrefix(tx.type, isOutgoing);
+            const colorClass = getAmtClass(tx.type, isOutgoing);
+            const { day } = formatShortDate(tx.date);
+
+            return (
+              <div
                 key={tx.id}
-                transaction={tx}
-                canEdit={canManageOrg}
-                isDeleted={viewDeleted}
-                onEdit={openEditModal}
-                onDelete={handleDelete}
-                onRestore={viewDeleted ? handleRestore : undefined}
-              />
-            ))
-          )
+                className={s.mobileCard}
+                onClick={() => {
+                  if (canManageOrg && !viewDeleted) openEditModal(tx);
+                }}
+                style={viewDeleted ? { opacity: 0.6 } : undefined}
+              >
+                <span className={`${s.typeDot} ${getTypeDotClass(tx.type)}`} />
+                <div className={s.mobileCardLeft}>
+                  <div className={s.mobileCardDate}>
+                    {day}
+                    {tx.account && <> · {tx.account.name}</>}
+                  </div>
+                  <div className={s.mobileCardDesc}>{tx.description}</div>
+                  {tx.notes && <div className={s.mobileCardSub}>{tx.notes}</div>}
+                  {viewDeleted && tx.deleteReason && (
+                    <div className={s.deleteReason}>Motivo: {tx.deleteReason}</div>
+                  )}
+                </div>
+                <div className={`${s.mobileCardAmt} ${colorClass}`}>
+                  {prefix}{formatCurrency(Math.abs(tx.amount), currency)}
+                </div>
+                {viewDeleted && canManageOrg && (
+                  <Button
+                    type="text"
+                    size="small"
+                    icon={<UndoOutlined />}
+                    onClick={(e) => { e.stopPropagation(); handleRestore(tx); }}
+                  />
+                )}
+                {!viewDeleted && canManageOrg && (
+                  <Button
+                    type="text"
+                    size="small"
+                    danger
+                    icon={<DeleteOutlined />}
+                    onClick={(e) => { e.stopPropagation(); handleDelete(tx); }}
+                    style={{ fontSize: 12 }}
+                  />
+                )}
+              </div>
+            );
+          })
         ) : (
-          <Table<Transaction>
-            dataSource={allTransactions}
-            columns={columns}
-            rowKey="id"
-            loading={isLoading}
-            pagination={false}
-            scroll={{ x: 800 }}
-            locale={{
-              emptyText: isLoading ? 'Cargando...' : viewDeleted ? 'No hay transacciones eliminadas' : 'No hay transacciones',
-            }}
-            onRow={(record) => ({
-              style: { cursor: canManageOrg && !viewDeleted ? 'pointer' : 'default' },
-              onClick: () => {
-                if (canManageOrg && !viewDeleted) {
-                  openEditModal(record);
-                }
-              },
+          /* ---- DESKTOP GRID ---- */
+          <div className={s.txGrid}>
+            {/* Headers */}
+            <div className={s.hdrChk} />
+            <div className={s.hdr}>Fecha</div>
+            <div className={s.hdrCenter}>T</div>
+            <div className={s.hdr}>Descripcion</div>
+            <div className={s.hdr}>Categoria</div>
+            <div className={s.hdr}>Cuenta</div>
+            <div className={s.hdrRight}>Monto</div>
+
+            {/* Rows */}
+            {displayedTransactions.map((tx) => {
+              const currency = tx.account?.currency ?? 'USD';
+              const isOutgoing = ['TRANSFER', 'EXCHANGE'].includes(tx.type) && !!tx.linkedTransactionId;
+              const prefix = getAmtPrefix(tx.type, isOutgoing);
+              const amtClass = getAmtClass(tx.type, isOutgoing);
+              const { day, time } = formatShortDate(tx.date);
+
+              return (
+                <div
+                  key={tx.id}
+                  className={viewDeleted ? s.txRowDeleted : s.txRow}
+                  onClick={() => {
+                    if (canManageOrg && !viewDeleted) openEditModal(tx);
+                  }}
+                >
+                  {/* Checkbox column — actions */}
+                  <div className={s.cChk} onClick={(e) => e.stopPropagation()}>
+                    {viewDeleted && canManageOrg ? (
+                      <Button
+                        type="text"
+                        size="small"
+                        icon={<UndoOutlined />}
+                        onClick={() => handleRestore(tx)}
+                        style={{ fontSize: 11 }}
+                      />
+                    ) : !viewDeleted && canManageOrg ? (
+                      <Button
+                        type="text"
+                        size="small"
+                        danger
+                        icon={<DeleteOutlined />}
+                        onClick={() => handleDelete(tx)}
+                        style={{ fontSize: 11 }}
+                      />
+                    ) : null}
+                  </div>
+
+                  {/* Date */}
+                  <div className={s.cDate}>
+                    <span className={s.cDateDay}>{day}</span>
+                    <span className={s.cDateTime}>{time}</span>
+                  </div>
+
+                  {/* Type dot */}
+                  <div className={s.cType}>
+                    <span className={`${s.typeDot} ${getTypeDotClass(tx.type)}`} />
+                  </div>
+
+                  {/* Description */}
+                  <div className={s.cDesc}>
+                    <div className={s.descTitle}>{tx.description}</div>
+                    <div className={s.descSub}>
+                      {tx.notes && <span>{tx.notes}</span>}
+                      {viewDeleted && tx.deleteReason && (
+                        <span className={s.descTag} style={{ color: 'var(--tx-neg)', borderColor: 'var(--tx-neg)' }}>
+                          {tx.deleteReason}
+                        </span>
+                      )}
+                      {viewDeleted && tx.deletedAt && (
+                        <span>Elim: {formatDate(tx.deletedAt)}</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Category */}
+                  <div className={s.cCat}>
+                    {tx.category ? (
+                      <span className={s.catChip}>
+                        <span className={s.catSq} style={{ background: tx.category.color ?? 'var(--tx-fg4)' }} />
+                        {tx.category.name}
+                      </span>
+                    ) : (
+                      <span style={{ color: 'var(--tx-fg4)' }}>—</span>
+                    )}
+                  </div>
+
+                  {/* Account */}
+                  <div className={s.cAcc}>
+                    {tx.account ? (
+                      <span className={s.catChip}>
+                        <span className={s.catSq} style={{ background: 'var(--tx-accent)' }} />
+                        {tx.account.name}
+                      </span>
+                    ) : (
+                      <span style={{ color: 'var(--tx-fg4)' }}>—</span>
+                    )}
+                  </div>
+
+                  {/* Amount */}
+                  <div className={`${s.cAmt} ${amtClass}`}>
+                    {prefix}{formatCurrency(Math.abs(tx.amount), currency)}
+                    <span className={s.amtCur}>{currency.toLowerCase()}</span>
+                  </div>
+                </div>
+              );
             })}
-          />
+          </div>
         )}
 
-        {/* Load More */}
+        {/* Pagination */}
         {hasMore && (
-          <div style={{ textAlign: 'center', marginTop: 16 }}>
+          <div className={s.pagination}>
+            <span className={s.paginationInfo}>
+              mostrando {displayedTransactions.length} transacciones
+            </span>
             <Button
               onClick={() => loadMoreMutation.mutate()}
               loading={loadMoreMutation.isPending}
@@ -975,13 +964,13 @@ export default function TransactionsPage() {
             </Button>
           </div>
         )}
-      </Card>
+      </div>
 
-      {/* Create / Edit Modal */}
+      {/* ═══════ CREATE / EDIT MODAL ═══════ */}
       <Modal
-        title={editingTransaction ? 'Editar transaccion' : 'Nueva transaccion'}
+        title={null}
         open={modalOpen}
-        onCancel={closeModal}
+        onCancel={closeFormModal}
         onOk={handleFormSubmit}
         okText={editingTransaction ? t('common.save') : t('common.create')}
         cancelText={t('common.cancel')}
@@ -989,6 +978,30 @@ export default function TransactionsPage() {
         destroyOnClose
         width={isMobile ? '100%' : 560}
       >
+        <div style={{ marginBottom: 18 }}>
+          <h2 style={{ fontSize: 17, fontWeight: 500, letterSpacing: '-0.01em', marginBottom: 14 }}>
+            {editingTransaction ? 'Editar transaccion' : 'Nueva transaccion'}
+          </h2>
+
+          {/* Type tabs */}
+          {!editingTransaction && (
+            <div className={s.typeTabs}>
+              {(['INCOME', 'EXPENSE', 'TRANSFER', 'EXCHANGE'] as const).map((type) => (
+                <button
+                  key={type}
+                  className={watchedType === type ? s.typeTabOn : s.typeTab}
+                  onClick={() => form.setFieldValue('type', type)}
+                  type="button"
+                >
+                  <span className={`${s.typeTabDot} ${typeTabDotClass(type)}`} />
+                  {getTypeLabel(type).slice(0, type === 'TRANSFER' ? 10 : undefined)}
+                  {type === 'TRANSFER' ? '.' : ''}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
         <Spin spinning={isSaving}>
           <Form
             form={form}
@@ -999,33 +1012,37 @@ export default function TransactionsPage() {
               type: 'EXPENSE',
             }}
           >
-            <Row gutter={16}>
-              <Col xs={24} sm={12}>
-                <Form.Item
-                  name="date"
-                  label="Fecha"
-                  rules={[{ required: true, message: 'La fecha es requerida' }]}
-                >
-                  <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" />
-                </Form.Item>
-              </Col>
-              <Col xs={24} sm={12}>
-                <Form.Item
-                  name="type"
-                  label="Tipo"
-                  rules={[{ required: true, message: 'El tipo es requerido' }]}
-                >
-                  <Select
-                    options={[
-                      { label: 'Ingreso', value: 'INCOME' },
-                      { label: 'Gasto', value: 'EXPENSE' },
-                      { label: 'Transferencia', value: 'TRANSFER' },
-                      { label: 'Cambio', value: 'EXCHANGE' },
-                    ]}
-                  />
-                </Form.Item>
-              </Col>
-            </Row>
+            {/* Hidden type field when using tabs */}
+            <Form.Item name="type" hidden>
+              <Input />
+            </Form.Item>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <Form.Item
+                name="amount"
+                label="Monto ($)"
+                rules={[
+                  { required: true, message: 'El monto es requerido' },
+                  { type: 'number', min: 0.01, message: 'El monto debe ser mayor a 0' },
+                ]}
+              >
+                <InputNumber
+                  style={{ width: '100%' }}
+                  placeholder="0.00"
+                  min={0.01}
+                  step={0.01}
+                  precision={2}
+                  prefix="$"
+                />
+              </Form.Item>
+              <Form.Item
+                name="date"
+                label="Fecha"
+                rules={[{ required: true, message: 'La fecha es requerida' }]}
+              >
+                <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" />
+              </Form.Item>
+            </div>
 
             <Form.Item
               name="description"
@@ -1038,48 +1055,37 @@ export default function TransactionsPage() {
               <Input placeholder="Ej: Compra de supermercado" />
             </Form.Item>
 
-            <Row gutter={16}>
-              <Col xs={24} sm={12}>
-                <Form.Item
-                  name="amount"
-                  label="Monto ($)"
-                  rules={[
-                    { required: true, message: 'El monto es requerido' },
-                    {
-                      type: 'number',
-                      min: 0.01,
-                      message: 'El monto debe ser mayor a 0',
-                    },
-                  ]}
-                >
-                  <InputNumber
-                    style={{ width: '100%' }}
-                    placeholder="0.00"
-                    min={0.01}
-                    step={0.01}
-                    precision={2}
-                    prefix="$"
-                  />
-                </Form.Item>
-              </Col>
-              <Col xs={24} sm={12}>
-                <Form.Item
-                  name="accountId"
-                  label="Cuenta"
-                  rules={[{ required: true, message: 'La cuenta es requerida' }]}
-                >
-                  <Select
-                    placeholder="Seleccionar cuenta"
-                    loading={accountsQuery.isLoading}
-                    onChange={() => form.setFieldValue('toAccountId', undefined)}
-                    options={accounts.map((acc) => ({
-                      label: `${acc.name} (${acc.currency})`,
-                      value: acc.id,
-                    }))}
-                  />
-                </Form.Item>
-              </Col>
-            </Row>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <Form.Item
+                name="accountId"
+                label={watchedType === 'INCOME' ? 'Cuenta destino' : 'Cuenta origen'}
+                rules={[{ required: true, message: 'La cuenta es requerida' }]}
+              >
+                <Select
+                  placeholder="Seleccionar cuenta"
+                  loading={accountsQuery.isLoading}
+                  onChange={() => form.setFieldValue('toAccountId', undefined)}
+                  options={accounts.map((acc) => ({
+                    label: `${acc.name} (${acc.currency})`,
+                    value: acc.id,
+                  }))}
+                />
+              </Form.Item>
+              <Form.Item name="categoryId" label="Categoria">
+                <TreeSelect
+                  placeholder="Seleccionar"
+                  allowClear
+                  showSearch
+                  treeNodeFilterProp="label"
+                  filterTreeNode={(input, node) =>
+                    String((node as any)?.name ?? '').toLowerCase().includes(input.toLowerCase())
+                  }
+                  treeData={categoryTree}
+                  loading={categoriesQuery.isLoading}
+                  treeDefaultExpandAll
+                />
+              </Form.Item>
+            </div>
 
             {(watchedType === 'TRANSFER' || watchedType === 'EXCHANGE') && (
               <>
@@ -1128,24 +1134,9 @@ export default function TransactionsPage() {
               </>
             )}
 
-            <Form.Item name="categoryId" label="Categoria">
-              <TreeSelect
-                placeholder="Seleccionar categoria"
-                allowClear
-                showSearch
-                treeNodeFilterProp="label"
-                filterTreeNode={(input, node) =>
-                  String((node as any)?.name ?? '').toLowerCase().includes(input.toLowerCase())
-                }
-                treeData={categoryTree}
-                loading={categoriesQuery.isLoading}
-                treeDefaultExpandAll
-              />
-            </Form.Item>
-
             <Form.Item name="notes" label="Notas">
               <TextArea
-                rows={3}
+                rows={2}
                 placeholder="Notas adicionales (opcional)"
                 maxLength={500}
                 showCount

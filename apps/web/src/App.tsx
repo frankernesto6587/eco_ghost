@@ -23,8 +23,8 @@ function App() {
   const themeConfig = useMemo(() => getAntdTheme(isDark), [isDark]);
 
   useEffect(() => {
-    document.documentElement.style.background = isDark ? '#000000' : '#f5f5f5';
-    document.body.style.background = isDark ? '#000000' : '#f5f5f5';
+    document.documentElement.style.background = isDark ? '#1a1715' : '#f7f5f3';
+    document.body.style.background = isDark ? '#1a1715' : '#f7f5f3';
   }, [isDark]);
 
   return (

@@ -1,0 +1,293 @@
+/* ═══════ ONBOARDING — Full-page setup wizard ═══════ */
+.wrap {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 40px 20px 80px;
+  font-family: 'Geist', 'Inter', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+  color: var(--eco-fg);
+}
+
+/* ═══════ HERO ═══════ */
+.hero {
+  text-align: center;
+  margin-bottom: 36px;
+}
+
+.logo {
+  font-size: 36px;
+  font-weight: 500;
+  letter-spacing: -0.04em;
+  display: inline-block;
+  position: relative;
+  padding-top: 14px;
+  margin-bottom: 20px;
+}
+
+.logo::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 28px;
+  height: 10px;
+  border-top: 2.5px solid var(--eco-accent);
+  border-radius: 50% / 100% 100% 0 0;
+}
+
+.logo::before {
+  content: '';
+  position: absolute;
+  top: -6px;
+  right: 4px;
+  width: 19px;
+  height: 9px;
+  border-top: 2px solid color-mix(in oklab, var(--eco-accent) 55%, transparent);
+  border-radius: 50% / 100% 100% 0 0;
+}
+
+.heroTitle {
+  font-size: 40px;
+  font-weight: 500;
+  letter-spacing: -0.025em;
+  line-height: 1.05;
+  margin: 0 0 14px;
+  text-wrap: pretty;
+}
+
+.heroTitleAccent {
+  color: var(--eco-accent);
+  font-weight: 500;
+}
+
+.heroSub {
+  color: var(--eco-fg3);
+  font-size: 15px;
+  max-width: 560px;
+  margin: 0 auto;
+  line-height: 1.55;
+}
+
+/* ═══════ PROGRESS ═══════ */
+.progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 24px;
+  justify-content: center;
+}
+
+.progressBar {
+  width: 180px;
+  height: 4px;
+  background: var(--eco-surface3);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.progressFill {
+  height: 100%;
+  background: var(--eco-accent);
+  border-radius: 2px;
+  transition: width 0.3s cubic-bezier(0.2, 0, 0, 1);
+}
+
+.progressText {
+  font-family: 'Geist Mono', monospace;
+  font-size: 11px;
+  color: var(--eco-fg3);
+  letter-spacing: 0.06em;
+}
+
+.progressCount {
+  color: var(--eco-accent);
+  font-weight: 500;
+}
+
+/* ═══════ STEPS ═══════ */
+.steps {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.step {
+  background: var(--eco-surface);
+  border: 1px solid var(--eco-line);
+  border-radius: 14px;
+  padding: 20px 24px;
+  display: grid;
+  grid-template-columns: 42px 1fr auto;
+  gap: 18px;
+  align-items: center;
+  transition: border-color 0.12s, background 0.12s;
+  cursor: pointer;
+}
+
+.step:hover {
+  border-color: var(--eco-fg4);
+}
+
+.stepDone {
+  composes: step;
+  background: color-mix(in oklab, var(--eco-surface) 60%, transparent);
+  border-color: var(--eco-line-soft);
+  opacity: 0.7;
+}
+
+.stepActive {
+  composes: step;
+  border-color: color-mix(in oklab, var(--eco-accent) 45%, var(--eco-line));
+  box-shadow: 0 0 0 3px var(--eco-accent-weak);
+  background: var(--eco-surface);
+}
+
+/* Step number */
+.stepNum {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--eco-surface2);
+  border: 1px solid var(--eco-line);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Geist Mono', monospace;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--eco-fg2);
+}
+
+.stepNumActive {
+  composes: stepNum;
+  background: var(--eco-accent);
+  border-color: var(--eco-accent);
+  color: oklch(0.15 0.01 80);
+}
+
+.stepNumDone {
+  composes: stepNum;
+  background: var(--eco-pos-soft);
+  border-color: color-mix(in oklab, var(--eco-pos) 40%, transparent);
+  color: var(--eco-pos);
+}
+
+/* Step body */
+.stepTitle {
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  margin-bottom: 3px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--eco-fg);
+}
+
+.stepTitleDone {
+  text-decoration: line-through;
+  text-decoration-color: var(--eco-fg4);
+}
+
+.skipChip {
+  font-family: 'Geist Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  padding: 1px 6px;
+  background: var(--eco-surface2);
+  border: 1px solid var(--eco-line);
+  border-radius: 4px;
+  color: var(--eco-fg3);
+  font-weight: 400;
+  text-transform: uppercase;
+  text-decoration: none !important;
+}
+
+.stepDesc {
+  font-size: 13px;
+  color: var(--eco-fg3);
+  line-height: 1.45;
+  max-width: 420px;
+}
+
+.stepDescStrong {
+  color: var(--eco-fg);
+  font-weight: 500;
+}
+
+.stepTime {
+  font-family: 'Geist Mono', monospace;
+  font-size: 10px;
+  color: var(--eco-fg4);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-top: 6px;
+}
+
+/* Step CTA */
+.stepCta {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.doneIcon {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--eco-pos);
+  color: oklch(0.15 0.01 80);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ═══════ SKIP ═══════ */
+.skip {
+  margin-top: 24px;
+  text-align: center;
+  color: var(--eco-fg3);
+  font-size: 13px;
+}
+
+.skipLink {
+  color: var(--eco-fg);
+  font-weight: 500;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: inherit;
+  font-family: inherit;
+  text-decoration: none;
+}
+
+.skipLink:hover {
+  color: var(--eco-accent);
+}
+
+/* ═══════ LOADING ═══════ */
+.loading {
+  display: flex;
+  justify-content: center;
+  padding-top: 120px;
+}
+
+/* ═══════ RESPONSIVE ═══════ */
+@media (max-width: 900px) {
+  .step,
+  .stepDone,
+  .stepActive {
+    grid-template-columns: 36px 1fr;
+  }
+
+  .stepCta {
+    grid-column: 1 / -1;
+    justify-content: flex-end;
+    margin-top: 4px;
+  }
+
+  .heroTitle {
+    font-size: 28px;
+  }
+}

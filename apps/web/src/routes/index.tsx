@@ -16,6 +16,7 @@ const DebtsPage = lazy(() => import('@/pages/Debts'));
 const CategoriesPage = lazy(() => import('@/pages/Categories'));
 const SettingsPage = lazy(() => import('@/pages/Settings'));
 const OrganizationPage = lazy(() => import('@/pages/Organization'));
+const OnboardingPage = lazy(() => import('@/pages/Onboarding'));
 
 function LazyPage({ children }: { children: React.ReactNode }) {
   return <Suspense fallback={<LoadingScreen />}>{children}</Suspense>;
@@ -56,6 +57,8 @@ export function AppRoutes() {
 
       {/* Protected routes */}
       <Route element={<ProtectedRoute />}>
+        {/* Onboarding — standalone page, no app layout */}
+        <Route path="/onboarding" element={<LazyPage><OnboardingPage /></LazyPage>} />
         <Route element={<AppLayout />}>
           <Route path="/dashboard" element={<LazyPage><DashboardPage /></LazyPage>} />
           <Route path="/transactions" element={<LazyPage><TransactionsPage /></LazyPage>} />

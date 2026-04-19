@@ -159,46 +159,73 @@ export class DashboardService {
       },
     });
 
-    // Monthly trend: income/expense per month for the last 6 months
-    const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
-    const trendTransactions = await this.prisma.transaction.findMany({
-      where: {
-        orgId,
-        type: { in: ['INCOME', 'EXPENSE'] },
-        date: { gte: sixMonthsAgo, lte: endOfMonth },
-        deletedAt: null,
-      },
-      select: { date: true, amount: true, type: true },
+    // Daily balance trend per currency for the selected range
+    // 1. Starting balance per currency (all tx before range start)
+    const startBalanceMap = await computeBalanceMap({
+      ...baseWhere,
+      date: { lt: startOfMonth },
     });
 
-    const trendMap = new Map<string, { income: number; expense: number }>();
-    for (const tx of trendTransactions) {
-      const key = `${tx.date.getFullYear()}-${String(tx.date.getMonth() + 1).padStart(2, '0')}`;
-      const entry = trendMap.get(key) ?? { income: 0, expense: 0 };
-      if (tx.type === 'INCOME') {
-        entry.income += tx.amount;
-      } else {
-        entry.expense += tx.amount;
-      }
-      trendMap.set(key, entry);
+    const startBalanceByCur: Record<string, number> = {};
+    for (const [accId, bal] of startBalanceMap) {
+      const cur = currencyMap.get(accId) ?? 'USD';
+      startBalanceByCur[cur] = (startBalanceByCur[cur] ?? 0) + bal;
     }
 
-    // Get org creation date to determine chart start
-    const org = await this.prisma.organization.findUnique({
-      where: { id: orgId },
-      select: { createdAt: true },
+    // 2. All transactions in the range to compute daily deltas
+    const rangeTxs = await this.prisma.transaction.findMany({
+      where: {
+        orgId,
+        accountId: { in: accountIds },
+        deletedAt: null,
+        date: { gte: startOfMonth, lte: endOfMonth },
+      },
+      select: { date: true, amount: true, type: true, accountId: true, linkedTransactionId: true },
+      orderBy: { date: 'asc' },
     });
-    const orgCreatedAt = org?.createdAt ?? sixMonthsAgo;
 
-    const monthlyTrend: { month: string; income: number; expense: number }[] = [];
-    for (let i = 5; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      if (d < new Date(orgCreatedAt.getFullYear(), orgCreatedAt.getMonth(), 1)) {
-        continue; // skip months before org was created
+    // Build daily deltas per currency
+    const dailyDeltas = new Map<string, Map<string, number>>(); // date -> currency -> delta
+    for (const tx of rangeTxs) {
+      const dayKey = tx.date.toISOString().slice(0, 10);
+      const cur = currencyMap.get(tx.accountId) ?? 'USD';
+      if (!dailyDeltas.has(dayKey)) dailyDeltas.set(dayKey, new Map());
+      const dayMap = dailyDeltas.get(dayKey)!;
+
+      let sign: number;
+      if (tx.type === 'INCOME') sign = 1;
+      else if (tx.type === 'EXPENSE') sign = -1;
+      else if (tx.linkedTransactionId) sign = -1; // outgoing transfer
+      else sign = 1; // incoming transfer
+
+      dayMap.set(cur, (dayMap.get(cur) ?? 0) + sign * tx.amount);
+    }
+
+    // 3. Build daily balance array
+    const allCurrencies = new Set<string>([
+      ...Object.keys(startBalanceByCur),
+      ...Object.keys(totalBalance),
+    ]);
+
+    const dailyBalance: { date: string; balances: Record<string, number> }[] = [];
+    const running: Record<string, number> = {};
+    for (const cur of allCurrencies) {
+      running[cur] = startBalanceByCur[cur] ?? 0;
+    }
+
+    // Iterate each day in the range
+    const cursor = new Date(startOfMonth);
+    const end = new Date(endOfMonth);
+    while (cursor <= end) {
+      const dayKey = cursor.toISOString().slice(0, 10);
+      const dayMap = dailyDeltas.get(dayKey);
+      if (dayMap) {
+        for (const [cur, delta] of dayMap) {
+          running[cur] = (running[cur] ?? 0) + delta;
+        }
       }
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      const entry = trendMap.get(key) ?? { income: 0, expense: 0 };
-      monthlyTrend.push({ month: key, ...entry });
+      dailyBalance.push({ date: dayKey, balances: { ...running } });
+      cursor.setDate(cursor.getDate() + 1);
     }
 
     return {
@@ -211,7 +238,7 @@ export class DashboardService {
       pendingDebtsPayable,
       activeProjects,
       recentTransactions,
-      monthlyTrend,
+      dailyBalance,
     };
   }
 }

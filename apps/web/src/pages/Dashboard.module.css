@@ -205,8 +205,30 @@
 
 .heroChart svg {
   width: 100%;
-  height: 100%;
+  height: 100px;
   display: block;
+}
+
+.heroChartLegend {
+  display: flex;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.heroLegendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: 'Geist Mono', monospace;
+  font-size: 10px;
+  color: var(--eco-fg3);
+  letter-spacing: 0.04em;
+}
+
+.heroLegendDot {
+  width: 8px;
+  height: 3px;
+  border-radius: 1px;
 }
 
 /* ═══════ STAT CARD ═══════ */

@@ -70,6 +70,31 @@ function computeDayTotal(txs: RecentTransaction[]): Record<string, number> {
   return totals;
 }
 
+const CURRENCY_COLORS: Record<string, string> = {
+  USD: '#3b82f6',
+  EUR: '#a855f7',
+  MN: '#f59e0b',
+  MLC: '#06b6d4',
+  USDT: '#22c55e',
+};
+
+function getCurrencyColor(currency: string): string {
+  return CURRENCY_COLORS[currency] ?? 'var(--eco-accent)';
+}
+
+/** Build a smooth cubic bezier path from points */
+function smoothPath(points: { x: number; y: number }[]): string {
+  if (points.length < 2) return '';
+  let d = `M${points[0].x},${points[0].y}`;
+  for (let i = 1; i < points.length; i++) {
+    const prev = points[i - 1];
+    const cur = points[i];
+    const cpx = (prev.x + cur.x) / 2;
+    d += ` C${cpx},${prev.y} ${cpx},${cur.y} ${cur.x},${cur.y}`;
+  }
+  return d;
+}
+
 const CURRENCY_ICONS: Record<string, string> = {
   USD: '/icons/currencies/usd.png',
   EUR: '/icons/currencies/eur.png',
@@ -169,27 +194,46 @@ export default function DashboardPage() {
     return c;
   }, [transactions]);
 
-  // Sparkline from monthlyTrend
-  const sparklinePath = useMemo(() => {
-    const trend = (overview as DashboardOverview & { monthlyTrend?: { month: string; income: number; expense: number }[] })?.monthlyTrend;
-    if (!trend || trend.length < 2) return null;
-    const balances = trend.map((e) => e.income - e.expense);
-    const max = Math.max(...balances);
-    const min = Math.min(...balances);
-    const range = max - min || 1;
+  // Daily balance chart data per currency
+  const dailyChartData = useMemo(() => {
+    const daily = (overview as any)?.dailyBalance as { date: string; balances: Record<string, number> }[] | undefined;
+    if (!daily || daily.length < 2) return null;
+
+    // Get all currencies present
+    const currencies = new Set<string>();
+    for (const d of daily) {
+      for (const cur of Object.keys(d.balances)) currencies.add(cur);
+    }
+
+    // Find global min/max across all currencies for shared Y axis
+    let globalMin = Infinity;
+    let globalMax = -Infinity;
+    for (const d of daily) {
+      for (const val of Object.values(d.balances)) {
+        if (val < globalMin) globalMin = val;
+        if (val > globalMax) globalMax = val;
+      }
+    }
+    const range = globalMax - globalMin || 1;
+
     const w = 600;
     const h = 100;
-    const pad = 5;
-    const points = balances.map((v, i) => {
-      const x = (i / (balances.length - 1)) * w;
-      const y = pad + ((max - v) / range) * (h - 2 * pad);
-      return `${x},${y}`;
-    });
-    const linePath = `M${points.join(' L')}`;
-    const areaPath = `${linePath} L${w},${h} L0,${h} Z`;
-    const lastX = (balances.length - 1) / (balances.length - 1) * w;
-    const lastY = pad + ((max - balances[balances.length - 1]) / range) * (h - 2 * pad);
-    return { linePath, areaPath, lastX, lastY };
+    const pad = 8;
+
+    const lines: { currency: string; path: string; color: string; lastX: number; lastY: number }[] = [];
+
+    for (const cur of currencies) {
+      const values = daily.map((d) => d.balances[cur] ?? 0);
+      const points = values.map((v, i) => ({
+        x: (i / (daily.length - 1)) * w,
+        y: pad + ((globalMax - v) / range) * (h - 2 * pad),
+      }));
+      const path = smoothPath(points);
+      const last = points[points.length - 1];
+      lines.push({ currency: cur, path, color: getCurrencyColor(cur), lastX: last.x, lastY: last.y });
+    }
+
+    return { lines, w, h };
   }, [overview]);
 
   // Account balances from overview (grouped by currency)
@@ -294,29 +338,39 @@ export default function DashboardPage() {
               : <span style={{ color: 'var(--eco-fg3)' }}>$0</span>
             }
           </div>
-          {sparklinePath && (
+          {dailyChartData && (
             <div className={s.heroChart}>
-              <svg viewBox="0 0 600 100" preserveAspectRatio="none">
-                {/* Grid lines */}
-                <g stroke="var(--eco-line-soft)" strokeDasharray="2 4" strokeWidth="0.5" opacity="0.5">
-                  <line x1="0" x2="600" y1="25" y2="25" />
-                  <line x1="0" x2="600" y1="50" y2="50" />
-                  <line x1="0" x2="600" y1="75" y2="75" />
+              <svg viewBox={`0 0 ${dailyChartData.w} ${dailyChartData.h}`} preserveAspectRatio="none">
+                <g stroke="var(--eco-line-soft)" strokeDasharray="2 4" strokeWidth="0.5" opacity="0.4">
+                  <line x1="0" x2={dailyChartData.w} y1="25" y2="25" />
+                  <line x1="0" x2={dailyChartData.w} y1="50" y2="50" />
+                  <line x1="0" x2={dailyChartData.w} y1="75" y2="75" />
                 </g>
-                {/* Area fill */}
-                <path d={sparklinePath.areaPath} fill="url(#hero-grad)" />
-                {/* Line */}
-                <path d={sparklinePath.linePath} fill="none" stroke="var(--eco-accent)" strokeWidth="1.75" />
-                {/* End dot */}
-                <circle cx={sparklinePath.lastX} cy={sparklinePath.lastY} r="3" fill="var(--eco-accent)" />
-                <circle cx={sparklinePath.lastX} cy={sparklinePath.lastY} r="7" fill="var(--eco-accent)" opacity="0.22" />
                 <defs>
-                  <linearGradient id="hero-grad" x1="0" x2="0" y1="0" y2="1">
-                    <stop offset="0" stopColor="var(--eco-accent)" stopOpacity="0.28" />
-                    <stop offset="1" stopColor="var(--eco-accent)" stopOpacity="0" />
-                  </linearGradient>
+                  {dailyChartData.lines.map((line) => (
+                    <linearGradient key={`grad-${line.currency}`} id={`grad-${line.currency}`} x1="0" x2="0" y1="0" y2="1">
+                      <stop offset="0" stopColor={line.color} stopOpacity="0.2" />
+                      <stop offset="1" stopColor={line.color} stopOpacity="0" />
+                    </linearGradient>
+                  ))}
                 </defs>
+                {dailyChartData.lines.map((line) => (
+                  <g key={line.currency}>
+                    <path d={`${line.path} L${dailyChartData.w},${dailyChartData.h} L0,${dailyChartData.h} Z`} fill={`url(#grad-${line.currency})`} />
+                    <path d={line.path} fill="none" stroke={line.color} strokeWidth="1.75" />
+                    <circle cx={line.lastX} cy={line.lastY} r="3" fill={line.color} />
+                    <circle cx={line.lastX} cy={line.lastY} r="6" fill={line.color} opacity="0.2" />
+                  </g>
+                ))}
               </svg>
+              <div className={s.heroChartLegend}>
+                {dailyChartData.lines.map((line) => (
+                  <span key={line.currency} className={s.heroLegendItem}>
+                    <span className={s.heroLegendDot} style={{ background: line.color }} />
+                    {line.currency}
+                  </span>
+                ))}
+              </div>
             </div>
           )}
         </article>

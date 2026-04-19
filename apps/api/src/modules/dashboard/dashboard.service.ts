@@ -5,10 +5,10 @@ import { PrismaService } from '../../prisma/prisma.service';
 export class DashboardService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getOverview(orgId: string) {
+  async getOverview(orgId: string, from?: string, to?: string) {
     const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+    const startOfMonth = from ? new Date(from) : new Date(now.getFullYear(), now.getMonth(), 1);
+    const endOfMonth = to ? new Date(to) : new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
 
     // Get all active accounts
     const accounts = await this.prisma.account.findMany({

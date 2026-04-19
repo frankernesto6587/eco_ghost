@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
-import { Button, Spin } from 'antd';
+import { Button, DatePicker, Dropdown, Spin } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import { TransactionType } from '@ecoghost/shared';
 import type { DashboardOverview } from '@ecoghost/shared';
@@ -11,6 +11,9 @@ import { formatCurrency, formatDate } from '@/lib/formatters';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
+import type { Dayjs } from 'dayjs';
+
+const { RangePicker } = DatePicker;
 import s from './Dashboard.module.css';
 
 /** Shape of a transaction coming from the API overview endpoint. */
@@ -109,11 +112,27 @@ export default function DashboardPage() {
   const isMobile = useIsMobile();
   const navigate = useNavigate();
   const [typeFilter, setTypeFilter] = useState<string>('ALL');
+  const [dateRange, setDateRange] = useState<[Dayjs, Dayjs] | null>(null);
+
+  const dashParams = useMemo(() => {
+    if (!dateRange) return undefined;
+    return {
+      from: dateRange[0].startOf('day').toISOString(),
+      to: dateRange[1].endOf('day').toISOString(),
+    };
+  }, [dateRange]);
 
   const { data: overview, isLoading } = useQuery<DashboardOverview>({
-    queryKey: ['dashboard', 'overview'],
-    queryFn: dashboardService.getOverview,
+    queryKey: ['dashboard', 'overview', dashParams],
+    queryFn: () => dashboardService.getOverview(dashParams),
   });
+
+  const handleDateRangeChange = useCallback(
+    (dates: [Dayjs | null, Dayjs | null] | null) => {
+      setDateRange(dates && dates[0] && dates[1] ? [dates[0], dates[1]] : null);
+    },
+    [],
+  );
 
   const { data: accountsData } = useQuery<Account[]>({
     queryKey: ['accounts'],
@@ -203,6 +222,25 @@ export default function DashboardPage() {
           <div className={s.pageSub}>{todayStr}</div>
         </div>
         <div className={s.pageActions}>
+          <Dropdown
+            trigger={['click']}
+            dropdownRender={() => (
+              <div style={{ padding: 12, background: 'var(--eco-surface)', border: '1px solid var(--eco-line)', borderRadius: 10 }}>
+                <RangePicker
+                  value={dateRange}
+                  onChange={handleDateRangeChange}
+                  allowClear
+                  style={{ width: 280 }}
+                />
+              </div>
+            )}
+          >
+            <span className={dateRange ? s.filterChipActive : s.filterChip}>
+              <span className={s.filterKey}>rango:</span>
+              <span className={s.filterVal}>{dateRange ? `${dateRange[0].format('DD/MM')} – ${dateRange[1].format('DD/MM')}` : 'este mes'}</span>
+              <span className={s.filterCaret}>▾</span>
+            </span>
+          </Dropdown>
           <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/transactions')}>
             {isMobile ? 'Nueva' : 'Nueva transaccion'}
           </Button>
@@ -259,7 +297,7 @@ export default function DashboardPage() {
         <article className={s.statCard}>
           <div className={s.cardLabel}>
             <span className={s.cardDotPos} />
-            ingresos · 30d
+            ingresos{dateRange ? '' : ' · 30d'}
           </div>
           <div className={s.statNum}>
             {Object.keys(monthIncome).length > 0
@@ -287,7 +325,7 @@ export default function DashboardPage() {
         <article className={s.statCard}>
           <div className={s.cardLabel}>
             <span className={s.cardDotNeg} />
-            gastos · 30d
+            gastos{dateRange ? '' : ' · 30d'}
           </div>
           <div className={s.statNum}>
             {Object.keys(monthExpense).length > 0

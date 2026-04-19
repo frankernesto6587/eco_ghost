@@ -34,6 +34,51 @@
 .pageActions {
   display: flex;
   gap: 8px;
+  align-items: center;
+}
+
+/* ═══════ DATE FILTER ═══════ */
+.filterChip {
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-family: 'Geist Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: var(--eco-fg2);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid var(--eco-line);
+  background: var(--eco-surface);
+  transition: border-color 0.15s;
+  user-select: none;
+}
+
+.filterChip:hover {
+  border-color: var(--eco-fg4);
+}
+
+.filterChipActive {
+  composes: filterChip;
+  background: var(--eco-accent-weak);
+  border-color: color-mix(in oklab, var(--eco-accent) 35%, transparent);
+}
+
+.filterKey {
+  color: var(--eco-fg3);
+  margin-right: 2px;
+}
+
+.filterVal {
+  color: var(--eco-fg);
+  font-weight: 500;
+}
+
+.filterCaret {
+  color: var(--eco-fg4);
+  font-size: 9px;
+  margin-left: 4px;
 }
 
 /* ═══════ HERO GRID ═══════ */

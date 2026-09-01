@@ -124,6 +124,50 @@ function saveAnalyticsFilters(filters: AnalyticsFilters) {
   }
 }
 
+/**
+ * Filtros de la pagina Deudas.
+ *
+ * Solo se persiste el estado. El filtro por tipo (todas / te deben / debes)
+ * sigue siendo efimero, en el useState de la pagina.
+ */
+export type DebtStatusFilter = 'PENDING' | 'PAID' | 'ALL';
+
+const DEBT_STATUS_FILTERS: DebtStatusFilter[] = ['PENDING', 'PAID', 'ALL'];
+
+export interface DebtFilters {
+  /** PENDING = deuda viva (PENDING + PARTIAL). PAID = liquidadas. */
+  status: DebtStatusFilter;
+}
+
+const DEBTS_KEY = 'ecoghost_debt_filters';
+
+const defaultDebtFilters: DebtFilters = {
+  status: 'PENDING',
+};
+
+function loadDebtFilters(): DebtFilters {
+  try {
+    const stored = localStorage.getItem(DEBTS_KEY);
+    if (stored) {
+      const merged = { ...defaultDebtFilters, ...JSON.parse(stored) };
+      // Un valor corrupto dejaria la lista vacia y ningun boton activo, sin
+      // forma de recuperarse desde la UI.
+      if (DEBT_STATUS_FILTERS.includes(merged.status)) return merged;
+    }
+  } catch {
+    // ignore
+  }
+  return { ...defaultDebtFilters };
+}
+
+function saveDebtFilters(filters: DebtFilters) {
+  try {
+    localStorage.setItem(DEBTS_KEY, JSON.stringify(filters));
+  } catch {
+    // ignore
+  }
+}
+
 interface UIState {
   sidebarCollapsed: boolean;
   themeMode: ThemeMode;
@@ -132,6 +176,7 @@ interface UIState {
   pageSize: number;
   txFilters: StoredFilters;
   analyticsFilters: AnalyticsFilters;
+  debtFilters: DebtFilters;
   toggleSidebar: () => void;
   setThemeMode: (mode: ThemeMode) => void;
   setIsMobile: (value: boolean) => void;
@@ -139,6 +184,7 @@ interface UIState {
   setTxFilters: (filters: Partial<StoredFilters>) => void;
   clearTxFilters: () => void;
   setAnalyticsFilters: (filters: Partial<AnalyticsFilters>) => void;
+  setDebtFilters: (filters: Partial<DebtFilters>) => void;
 }
 
 const initialMode = loadThemeMode();
@@ -151,6 +197,7 @@ export const useUIStore = create<UIState>((set) => ({
   pageSize: loadPageSize(),
   txFilters: loadFilters(),
   analyticsFilters: loadAnalyticsFilters(),
+  debtFilters: loadDebtFilters(),
 
   toggleSidebar: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
 
@@ -185,6 +232,14 @@ export const useUIStore = create<UIState>((set) => ({
       const updated = { ...state.analyticsFilters, ...partial };
       saveAnalyticsFilters(updated);
       return { analyticsFilters: updated };
+    });
+  },
+
+  setDebtFilters: (partial) => {
+    set((state) => {
+      const updated = { ...state.debtFilters, ...partial };
+      saveDebtFilters(updated);
+      return { debtFilters: updated };
     });
   },
 }));

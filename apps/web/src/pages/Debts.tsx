@@ -6,6 +6,7 @@ import { debtsService, type CreateDebtDto, type AddPaymentDto } from '@/services
 import { accountsService } from '@/services/accounts.service';
 import type { Account } from '@/services/accounts.service';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useUIStore, type DebtStatusFilter } from '@/store/ui.store';
 import { formatCurrency, formatDate, formatRelativeDate } from '@/lib/formatters';
 import { DebtType, DebtStatus } from '@ecoghost/shared';
 import css from './Debts.module.css';
@@ -80,6 +81,9 @@ export default function DebtsPage() {
   const queryClient = useQueryClient();
 
   const [activeFilter, setActiveFilter] = useState<FilterTab>('ALL');
+  // El filtro de estado se recuerda entre sesiones; el de tipo es efimero.
+  const debtStatusFilter = useUIStore((st) => st.debtFilters.status);
+  const setDebtFilters = useUIStore((st) => st.setDebtFilters);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingDebt, setEditingDebt] = useState<Debt | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -107,10 +111,29 @@ export default function DebtsPage() {
   });
 
   // --- Filtered data ---
-  const filteredDebts = useMemo(() => {
+  // Primero el tipo, despues el estado. Los contadores se calculan en medio para
+  // que se lean dentro de lo que estas viendo: en "Te deben", "Liquidadas 3" son
+  // tres cobros liquidados, no tres deudas cualesquiera.
+  const typeFiltered = useMemo(() => {
     if (activeFilter === 'ALL') return debts;
     return debts.filter((d) => d.type === activeFilter);
   }, [debts, activeFilter]);
+
+  const statusCounts = useMemo(
+    () => ({
+      pending: typeFiltered.filter((d) => d.status !== DebtStatus.PAID).length,
+      paid: typeFiltered.filter((d) => d.status === DebtStatus.PAID).length,
+    }),
+    [typeFiltered],
+  );
+
+  const filteredDebts = useMemo(() => {
+    if (debtStatusFilter === 'ALL') return typeFiltered;
+    if (debtStatusFilter === 'PAID') {
+      return typeFiltered.filter((d) => d.status === DebtStatus.PAID);
+    }
+    return typeFiltered.filter((d) => d.status !== DebtStatus.PAID);
+  }, [typeFiltered, debtStatusFilter]);
 
   // --- Summary stats (grouped by currency) ---
   const stats = useMemo(() => {
@@ -288,6 +311,20 @@ export default function DebtsPage() {
   const paymentRemaining = paymentDebt ? paymentDebt.totalAmount - paymentDebt.paidAmount : 0;
   const paymentCurrency = paymentDebt?.currency ?? 'USD';
 
+  // Con el filtro por defecto, "No hay deudas registradas" mentiria a quien lo
+  // tiene todo liquidado y ademas le ocultaria que si tiene deudas.
+  let emptyText = 'No hay deudas registradas';
+  if (debts.length > 0) {
+    if (debtStatusFilter === 'PAID') emptyText = 'No hay deudas liquidadas';
+    else if (debtStatusFilter === 'PENDING') {
+      emptyText =
+        statusCounts.paid > 0
+          ? 'Todo liquidado — no hay deudas pendientes'
+          : 'No hay deudas pendientes';
+    } else emptyText = 'No hay deudas para este filtro';
+  }
+  const showPaidHint = debtStatusFilter === 'PENDING' && statusCounts.paid > 0;
+
 
   if (isLoading) {
     return (
@@ -432,7 +469,9 @@ export default function DebtsPage() {
       <div className={css.peopleList}>
         <header className={css.plHead}>
           <h3 className={css.plTitle}>Deudas</h3>
-          <span className={css.plCount}>{filteredDebts.length} total</span>
+          <span className={css.plCount}>
+            {filteredDebts.length} {debtStatusFilter === 'ALL' ? 'total' : 'en vista'}
+          </span>
 
           <div className={css.seg}>
             {([
@@ -449,15 +488,45 @@ export default function DebtsPage() {
               </button>
             ))}
           </div>
+
+          <div className={css.segStatus}>
+            {([
+              { label: 'Pendientes', value: 'PENDING' as DebtStatusFilter, count: statusCounts.pending },
+              { label: 'Liquidadas', value: 'PAID' as DebtStatusFilter, count: statusCounts.paid },
+              { label: 'Todas', value: 'ALL' as DebtStatusFilter, count: null },
+            ]).map((opt) => (
+              <button
+                key={opt.value}
+                className={debtStatusFilter === opt.value ? css.segBtnOn : css.segBtn}
+                onClick={() => {
+                  // La fila abierta puede salir del filtro
+                  setExpandedId(null);
+                  setDebtFilters({ status: opt.value });
+                }}
+              >
+                {opt.label}
+                {opt.count !== null && <span className={css.segCount}>{opt.count}</span>}
+              </button>
+            ))}
+          </div>
         </header>
 
         {filteredDebts.length === 0 ? (
           <div className={css.emptyState}>
-            No hay deudas registradas
+            {emptyText}
+            {showPaidHint && (
+              <button
+                className={css.emptyLink}
+                onClick={() => setDebtFilters({ status: 'PAID' })}
+              >
+                Ver {statusCounts.paid} liquidada{statusCounts.paid !== 1 ? 's' : ''}
+              </button>
+            )}
           </div>
         ) : (
           filteredDebts.map((debt) => {
             const remaining = debt.totalAmount - debt.paidAmount;
+            const isPaid = debt.status === DebtStatus.PAID;
             const isReceivable = debt.type === DebtType.RECEIVABLE;
             const isExpanded = expandedId === debt.id;
             const color = getPersonColor(debt.personName);
@@ -486,6 +555,7 @@ export default function DebtsPage() {
                       {debt.status === DebtStatus.PARTIAL && (
                         <span className={css.statusPartial}>parcial</span>
                       )}
+                      {isPaid && <span className={css.statusPaid}>liquidada</span>}
                       {isOverdue && debt.status !== DebtStatus.PAID && (
                         <span className={css.statusOverdue}>{daysLabel}</span>
                       )}
@@ -500,11 +570,19 @@ export default function DebtsPage() {
                     </div>
                   </div>
                   <div className={css.personAmt}>
-                    <span className={`${css.personAmtNum} ${isReceivable ? css.personAmtPos : css.personAmtNeg}`}>
-                      {isReceivable ? '+' : '−'}{formatCurrency(remaining, debt.currency)}
+                    {/* Liquidada: `remaining` es 0, mostrar "+$0.00" no dice nada.
+                        El dato util es cuanto se salda. */}
+                    <span
+                      className={`${css.personAmtNum} ${
+                        isPaid ? css.personAmtPaid : isReceivable ? css.personAmtPos : css.personAmtNeg
+                      }`}
+                    >
+                      {isPaid ? '' : isReceivable ? '+' : '−'}
+                      {formatCurrency(isPaid ? debt.totalAmount : remaining, debt.currency)}
                     </span>
                     <span className={css.personAmtSub}>
-                      {isReceivable ? 'te debe' : 'le debes'} · {debt.currency.toLowerCase()}
+                      {isPaid ? 'liquidada' : isReceivable ? 'te debe' : 'le debes'} ·{' '}
+                      {debt.currency.toLowerCase()}
                     </span>
                   </div>
                 </div>

@@ -191,6 +191,7 @@
 
 .segBtn {
   padding: 5px 12px;
+  white-space: nowrap;
   border-radius: 6px;
   font-size: 12px;
   color: var(--eco-fg3);
@@ -210,6 +211,23 @@
   background: var(--eco-surface);
   color: var(--eco-fg);
   box-shadow: var(--eco-shadow1);
+}
+
+/* Segundo segmentado en la misma fila: el margin-left:auto ya lo pone el primero.
+   Con dos, el espacio libre se repartiria entre ambos y partiria la cabecera. */
+.segStatus {
+  composes: seg;
+  margin-left: 0;
+}
+
+.segCount {
+  font-family: 'Geist Mono', monospace;
+  font-size: 10px;
+  line-height: 1;
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: var(--eco-surface3);
+  color: var(--eco-fg3);
 }
 
 /* ═══════ PERSON ROW ═══════ */
@@ -286,6 +304,12 @@
   color: var(--eco-fx);
 }
 
+.statusPaid {
+  composes: statusBadge;
+  background: var(--eco-pos-soft);
+  color: var(--eco-pos);
+}
+
 .personSub {
   font-family: 'Geist Mono', monospace;
   font-size: 11px;
@@ -322,6 +346,8 @@
 
 .personAmtPos { color: var(--eco-pos); }
 .personAmtNeg { color: var(--eco-neg); }
+/* Liquidada: el importe es historia, no dinero en juego */
+.personAmtPaid { color: var(--eco-fg3); }
 
 .personAmtSub {
   font-family: 'Geist Mono', monospace;
@@ -428,6 +454,18 @@
   font-size: 14px;
 }
 
+.emptyLink {
+  display: block;
+  margin: 8px auto 0;
+  padding: 0;
+  background: none;
+  border: none;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--eco-accent);
+  cursor: pointer;
+}
+
 /* ═══════ RESPONSIVE ═══════ */
 @media (max-width: 1000px) {
   .heroGrid {
@@ -465,5 +503,19 @@
 
   .seg {
     margin-left: 0;
+  }
+}
+
+/* Dos segmentados no caben en una linea de movil estrecho: cada uno a ancho
+   completo, en tercios iguales. */
+@media (max-width: 560px) {
+  .seg {
+    width: 100%;
+  }
+
+  .segBtn {
+    flex: 1;
+    justify-content: center;
+    padding: 5px 8px;
   }
 }

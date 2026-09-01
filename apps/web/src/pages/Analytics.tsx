@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { App, Button, Spin } from 'antd';
-import { PlusOutlined } from '@ant-design/icons';
+import { LeftOutlined, PlusOutlined, SwapOutlined } from '@ant-design/icons';
 import type { BudgetProgressItem, CategoryRollupNode } from '@ecoghost/shared';
 
 import { analyticsService } from '@/services/analytics.service';
@@ -37,6 +37,33 @@ import c from '@/components/analytics/Analytics.module.css';
 import s from './Analytics.module.css';
 
 const TREND_OPTIONS: (6 | 12 | 24)[] = [6, 12, 24];
+
+/** Camino de ids desde la raiz hasta `categoryId`, o null si no esta en el arbol. */
+function findPath(nodes: CategoryRollupNode[], categoryId: string): string[] | null {
+  for (const node of nodes) {
+    if (node.categoryId === categoryId) return [categoryId];
+    const sub = findPath(node.children, categoryId);
+    if (sub) return [node.categoryId!, ...sub];
+  }
+  return null;
+}
+
+/**
+ * Ids de la categoria y todas sus descendientes.
+ *
+ * El importe de una fila es el ROLLUP del subarbol, asi que el enlace a
+ * movimientos tiene que llevarse todo el subarbol: filtrar solo por el padre
+ * mostraria una lista que no suma lo que dice la fila.
+ */
+function subtreeIds(node: CategoryRollupNode): string[] {
+  const out: string[] = [];
+  const walk = (n: CategoryRollupNode) => {
+    if (n.categoryId) out.push(n.categoryId);
+    n.children.forEach(walk);
+  };
+  walk(node);
+  return out;
+}
 
 /** Skeleton con la altura final de la tarjeta, para que no salte el layout. */
 function CardSkeleton({ height, label }: { height: number; label: string }) {
@@ -82,6 +109,9 @@ export default function AnalyticsPage() {
 
   const [budgetOpen, setBudgetOpen] = useState(false);
   const [editingBudget, setEditingBudget] = useState<Budget | null>(null);
+
+  /** Categoria en la que se ha entrado, como camino de ids desde la raiz. */
+  const [focusPath, setFocusPath] = useState<string[]>([]);
 
   // El rango se RESUELVE en cada render desde el preset. Lo que se persiste es
   // el preset: guardar las fechas haria que "este mes" siguiera mostrando
@@ -214,9 +244,12 @@ export default function AnalyticsPage() {
     navigate(`/transactions?${new URLSearchParams(params).toString()}`);
   };
 
+  /** Movimientos que hay detras de una fila: la categoria y todo su subarbol. */
   const drillCategory = (node: CategoryRollupNode) => {
     goToTransactions({
-      ...(node.categoryId ? { categoryId: node.categoryId } : { uncategorized: 'true' }),
+      ...(node.categoryId
+        ? { categoryId: subtreeIds(node).join(',') }
+        : { uncategorized: 'true' }),
       from: range.from,
       to: range.to,
       currency,
@@ -233,6 +266,73 @@ export default function AnalyticsPage() {
 
   const summary = summaryQuery.data;
   const budgets = budgetQuery.data;
+
+  // ─── Desglose: entrar en una categoria y ver como se reparte ───────
+  const rootNodes = useMemo(() => summary?.expenseByCategory ?? [], [summary]);
+
+  /** Nodos del camino en el que se ha entrado. Se corta si alguno ya no existe. */
+  const focusTrail = useMemo(() => {
+    const trail: CategoryRollupNode[] = [];
+    let level = rootNodes;
+    for (const id of focusPath) {
+      const found = level.find((n) => n.categoryId === id);
+      if (!found) break;
+      trail.push(found);
+      level = found.children;
+    }
+    return trail;
+  }, [rootNodes, focusPath]);
+
+  // Cambiar de moneda o de rango puede dejar la categoria fuera del ranking
+  // (o vaciarla). Si el camino ya no se sostiene, se vuelve a donde llegue.
+  useEffect(() => {
+    if (focusPath.length > 0 && focusTrail.length !== focusPath.length) {
+      setFocusPath(focusTrail.map((n) => n.categoryId!));
+    }
+  }, [focusPath, focusTrail]);
+
+  const focused = focusTrail.length > 0 ? focusTrail[focusTrail.length - 1] : null;
+
+  /**
+   * Lo que se lista al entrar: las subcategorias, con `share` recalculado sobre
+   * el total del padre — la pregunta aqui es como se reparte ESTA categoria, no
+   * cuanto pesa cada hija en el gasto total.
+   *
+   * Si ademas hay gasto anotado directamente en el padre se añade como una fila
+   * mas; sin ella las partes no sumarian el total de la cabecera.
+   */
+  const rankNodes = useMemo(() => {
+    if (!focused) return rootNodes;
+    const base = focused.amount > 0 ? focused.amount : 1;
+    const kids = focused.children.map((child) => ({ ...child, share: child.amount / base }));
+    if (focused.ownAmount > 0) {
+      kids.push({
+        ...focused,
+        name: t('analytics.directIn', { name: focused.name }),
+        amount: focused.ownAmount,
+        previousAmount: 0,
+        delta: focused.ownAmount,
+        deltaPct: null,
+        share: focused.ownAmount / base,
+        children: [],
+      });
+    }
+    return kids.sort((a, b) => b.amount - a.amount);
+  }, [focused, rootNodes, t]);
+
+  const rankTotal = focused ? focused.amount : (summary?.totals.expense ?? 0);
+
+  /** Tocar una fila: entrar si tiene desglose, ir a los movimientos si es hoja. */
+  const selectCategory = (node: CategoryRollupNode) => {
+    if (node.categoryId && node.children.length > 0) {
+      const path = findPath(rootNodes, node.categoryId);
+      if (path) {
+        setFocusPath(path);
+        return;
+      }
+    }
+    drillCategory(node);
+  };
 
   return (
     <div className={s.page}>
@@ -355,18 +455,66 @@ export default function AnalyticsPage() {
             <article className={c.card}>
               <div className={c.cardLabel}>
                 <span className={c.cardDotNeg} />
-                {t('analytics.byCategory')}
+                {focused ? (
+                  <span className={c.crumbs}>
+                    <button
+                      type="button"
+                      className={c.crumbBack}
+                      onClick={() => setFocusPath(focusPath.slice(0, -1))}
+                      aria-label={t('analytics.back')}
+                    >
+                      <LeftOutlined />
+                    </button>
+                    <button
+                      type="button"
+                      className={c.crumbLink}
+                      onClick={() => setFocusPath([])}
+                    >
+                      {t('analytics.allCategories')}
+                    </button>
+                    {focusTrail.map((node, i) => (
+                      <span key={node.categoryId} className={c.crumbs}>
+                        <span className={c.crumbSep}>›</span>
+                        {i === focusTrail.length - 1 ? (
+                          <span className={c.crumbCurrent}>{node.name}</span>
+                        ) : (
+                          <button
+                            type="button"
+                            className={c.crumbLink}
+                            onClick={() => setFocusPath(focusPath.slice(0, i + 1))}
+                          >
+                            {node.name}
+                          </button>
+                        )}
+                      </span>
+                    ))}
+                  </span>
+                ) : (
+                  t('analytics.byCategory')
+                )}
                 <span className={c.cardLabelSpacer} />
+                {focused && (
+                  /* En movil solo el icono: la cabecera ya lleva migas e importe */
+                  <Button
+                    size="small"
+                    type="text"
+                    icon={isMobile ? <SwapOutlined /> : undefined}
+                    onClick={() => drillCategory(focused)}
+                    aria-label={t('analytics.seeMovements')}
+                  >
+                    {isMobile ? null : t('analytics.seeMovements')}
+                  </Button>
+                )}
                 {summary && (
                   <span className={c.cardHint}>
-                    {formatCurrency(summary.totals.expense, currency)} {currency}
+                    {formatCurrency(rankTotal, currency)} {currency}
                   </span>
                 )}
               </div>
 
               {summaryQuery.isLoading || !summary ? (
                 <RankSkeleton />
-              ) : summary.expenseByCategory.length === 0 ? (
+              ) : rankNodes.length === 0 ? (
                 <div className={c.empty}>
                   <div className={c.emptyTitle}>
                     {t('analytics.noMovements', {
@@ -385,11 +533,11 @@ export default function AnalyticsPage() {
                 </div>
               ) : (
                 <CategoryRankingList
-                  nodes={summary.expenseByCategory}
+                  nodes={rankNodes}
                   currency={currency}
                   tokens={tokens}
                   higherIsBetter={false}
-                  onDrill={drillCategory}
+                  onSelect={selectCategory}
                 />
               )}
             </article>
@@ -397,13 +545,15 @@ export default function AnalyticsPage() {
             <article className={`${c.card} ${s.hideOnMobile}`}>
               <div className={c.cardLabel}>
                 <span className={c.cardDot} />
-                {t('analytics.composition')}
+                {focused
+                  ? t('analytics.breakdownOf', { name: focused.name })
+                  : t('analytics.composition')}
               </div>
-              {summary && summary.totals.expense > 0 ? (
+              {summary && rankTotal > 0 ? (
                 <CategoryDonut
-                  nodes={summary.expenseByCategory}
+                  nodes={rankNodes}
                   currency={currency}
-                  total={summary.totals.expense}
+                  total={rankTotal}
                 />
               ) : (
                 <div className={c.skel} style={{ height: 200, borderRadius: '50%' }} />

@@ -460,3 +460,67 @@
 .budgetNoteOver { composes: budgetNote; color: var(--eco-neg); }
 
 .budgetActions { display: flex; gap: 4px; }
+
+/* ═══════ Migas del desglose por categoria ═══════ */
+.crumbs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.crumbBack {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  border: none;
+  border-radius: 6px;
+  background: var(--eco-surface3);
+  color: var(--eco-fg3);
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.crumbBack:hover {
+  background: var(--eco-surface2);
+  color: var(--eco-fg);
+}
+
+.crumbLink {
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: var(--eco-fg4);
+  background: none;
+  border: none;
+  padding: 0;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.crumbLink:hover {
+  color: var(--eco-accent);
+}
+
+.crumbSep {
+  color: var(--eco-fg4);
+  opacity: 0.6;
+}
+
+.crumbCurrent {
+  color: var(--eco-fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Marca que la fila se puede abrir: el desglose esta a un toque */
+.rankEnter {
+  margin-left: 6px;
+  color: var(--eco-fg4);
+  font-size: 12px;
+  line-height: 1;
+}

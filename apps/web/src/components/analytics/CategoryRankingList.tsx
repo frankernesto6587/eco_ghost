@@ -13,7 +13,11 @@ interface Props {
   tokens: EcoChartTokens;
   /** Subir el gasto es malo; subir el ingreso es bueno. */
   higherIsBetter: boolean;
-  onDrill: (node: CategoryRollupNode) => void;
+  /**
+   * Tocar la fila. La pagina decide: si la categoria tiene subcategorias entra
+   * en ella (desglose); si es hoja, salta a los movimientos.
+   */
+  onSelect: (node: CategoryRollupNode) => void;
 }
 
 /**
@@ -28,7 +32,7 @@ export function CategoryRankingList({
   currency,
   tokens,
   higherIsBetter,
-  onDrill,
+  onSelect,
 }: Props) {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -92,17 +96,30 @@ export function CategoryRankingList({
               border: 'none',
               cursor: 'pointer',
             }}
-            onClick={() => onDrill(node)}
+            onClick={() => onSelect(node)}
             tabIndex={-1}
             aria-hidden
           >
             <CategoryIcon name={node.icon ?? 'ellipsis'} />
           </button>
 
-          <button type="button" className={s.rankBody} onClick={() => onDrill(node)}
+          <button
+            type="button"
+            className={s.rankBody}
+            onClick={() => onSelect(node)}
+            aria-label={
+              hasChildren
+                ? t('analytics.enterCategory', { name: node.name })
+                : t('analytics.seeMovements')
+            }
             style={{ background: 'transparent', border: 'none', padding: 0, textAlign: 'left', cursor: 'pointer', font: 'inherit', color: 'inherit' }}>
             <div className={uncategorized ? s.rankNameMuted : s.rankName}>
               {uncategorized ? t('analytics.uncategorized') : node.name}
+              {hasChildren && (
+                <span className={s.rankEnter} aria-hidden>
+                  ›
+                </span>
+              )}
             </div>
             <div className={s.rankBarTrack}>
               <div

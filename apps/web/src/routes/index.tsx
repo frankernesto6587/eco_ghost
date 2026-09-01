@@ -11,6 +11,7 @@ const RegisterPage = lazy(() => import('@/pages/Register'));
 const AuthCallbackPage = lazy(() => import('@/pages/AuthCallback'));
 const DashboardPage = lazy(() => import('@/pages/Dashboard'));
 const TransactionsPage = lazy(() => import('@/pages/Transactions'));
+const AnalyticsPage = lazy(() => import('@/pages/Analytics'));
 const AccountsPage = lazy(() => import('@/pages/Accounts'));
 const DebtsPage = lazy(() => import('@/pages/Debts'));
 const CategoriesPage = lazy(() => import('@/pages/Categories'));
@@ -62,6 +63,7 @@ export function AppRoutes() {
         <Route element={<AppLayout />}>
           <Route path="/dashboard" element={<LazyPage><DashboardPage /></LazyPage>} />
           <Route path="/transactions" element={<LazyPage><TransactionsPage /></LazyPage>} />
+          <Route path="/analysis" element={<LazyPage><AnalyticsPage /></LazyPage>} />
           <Route path="/accounts" element={<LazyPage><AccountsPage /></LazyPage>} />
           <Route path="/debts" element={<LazyPage><DebtsPage /></LazyPage>} />
           <Route path="/categories" element={<LazyPage><CategoriesPage /></LazyPage>} />

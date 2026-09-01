@@ -1,0 +1,94 @@
+.page { max-width: 1400px; margin: 0 auto; }
+
+.pageHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.pageTitle {
+  font-size: 22px;
+  color: var(--eco-fg);
+  letter-spacing: -0.02em;
+  margin: 0 0 4px;
+  font-weight: 500;
+}
+
+.pageSubtitle {
+  font-family: 'Geist Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--eco-fg3);
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.statGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.splitGrid {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr;
+  gap: 12px;
+  margin-bottom: 12px;
+  align-items: start;
+}
+
+.fullRow { margin-bottom: 12px; }
+
+.twoCol {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 12px;
+  align-items: start;
+}
+
+.sectionAction {
+  font-family: 'Geist Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--eco-accent);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  text-transform: uppercase;
+}
+.sectionAction:hover { text-decoration: underline; }
+
+.overBadge {
+  font-family: 'Geist Mono', monospace;
+  font-size: 10px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--eco-neg-soft);
+  color: var(--eco-neg);
+  text-transform: none;
+  letter-spacing: 0.02em;
+}
+
+/* Alineado con useIsMobile() (breakpoint md = 768px de AntD), no con los
+   900px que arrastra el CSS del Dashboard. */
+@media (max-width: 768px) {
+  .statGrid { grid-template-columns: 1fr; }
+  .splitGrid { grid-template-columns: 1fr; }
+  .twoCol { grid-template-columns: 1fr; }
+  /* El donut es decorativo al lado del ranking: en movil estorba mas que aporta */
+  .hideOnMobile { display: none; }
+  .pageHead { flex-direction: column; align-items: stretch; }
+  .controls { justify-content: flex-start; }
+}

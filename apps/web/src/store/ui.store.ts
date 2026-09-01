@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import type { AnalyticsPreset } from '@/lib/dateRanges';
 
 type ThemeMode = 'light' | 'dark' | 'system';
 
@@ -36,6 +37,8 @@ export interface StoredFilters {
   types: string[];
   accountIds: string[];
   categoryIds: string[];
+  /** Solo transacciones sin categoria. Excluyente con categoryIds. */
+  uncategorized: boolean;
   currency: string | undefined;
   dateFrom: string | null;
   dateTo: string | null;
@@ -49,6 +52,7 @@ const defaultFilters: StoredFilters = {
   types: [],
   accountIds: [],
   categoryIds: [],
+  uncategorized: false,
   currency: undefined,
   dateFrom: null,
   dateTo: null,
@@ -71,6 +75,55 @@ function saveFilters(filters: StoredFilters) {
   localStorage.setItem(FILTERS_KEY, JSON.stringify(filters));
 }
 
+/**
+ * Filtros de la pagina Analisis.
+ *
+ * Se persiste el PRESET, no las fechas resueltas: guardar
+ * "2026-08-01/2026-08-31" haria que "este mes" siguiera mostrando agosto al
+ * volver en septiembre. Solo `custom` guarda fechas.
+ */
+export interface AnalyticsFilters {
+  preset: AnalyticsPreset;
+  dateFrom: string | null;
+  dateTo: string | null;
+  /** null = aun sin resolver; la pagina la fija a la baseCurrency de la org */
+  currency: string | null;
+  accountIds: string[];
+  trendMonths: 6 | 12 | 24;
+}
+
+const ANALYTICS_KEY = 'ecoghost_analytics_filters';
+
+const defaultAnalyticsFilters: AnalyticsFilters = {
+  preset: 'thisMonth',
+  dateFrom: null,
+  dateTo: null,
+  currency: null,
+  accountIds: [],
+  trendMonths: 12,
+};
+
+function loadAnalyticsFilters(): AnalyticsFilters {
+  try {
+    const stored = localStorage.getItem(ANALYTICS_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      return { ...defaultAnalyticsFilters, ...parsed };
+    }
+  } catch {
+    // ignore
+  }
+  return { ...defaultAnalyticsFilters };
+}
+
+function saveAnalyticsFilters(filters: AnalyticsFilters) {
+  try {
+    localStorage.setItem(ANALYTICS_KEY, JSON.stringify(filters));
+  } catch {
+    // ignore
+  }
+}
+
 interface UIState {
   sidebarCollapsed: boolean;
   themeMode: ThemeMode;
@@ -78,12 +131,14 @@ interface UIState {
   isMobile: boolean;
   pageSize: number;
   txFilters: StoredFilters;
+  analyticsFilters: AnalyticsFilters;
   toggleSidebar: () => void;
   setThemeMode: (mode: ThemeMode) => void;
   setIsMobile: (value: boolean) => void;
   setPageSize: (size: number) => void;
   setTxFilters: (filters: Partial<StoredFilters>) => void;
   clearTxFilters: () => void;
+  setAnalyticsFilters: (filters: Partial<AnalyticsFilters>) => void;
 }
 
 const initialMode = loadThemeMode();
@@ -95,6 +150,7 @@ export const useUIStore = create<UIState>((set) => ({
   isMobile: false,
   pageSize: loadPageSize(),
   txFilters: loadFilters(),
+  analyticsFilters: loadAnalyticsFilters(),
 
   toggleSidebar: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
 
@@ -122,6 +178,14 @@ export const useUIStore = create<UIState>((set) => ({
     const cleared = { ...defaultFilters };
     saveFilters(cleared);
     set({ txFilters: cleared });
+  },
+
+  setAnalyticsFilters: (partial) => {
+    set((state) => {
+      const updated = { ...state.analyticsFilters, ...partial };
+      saveAnalyticsFilters(updated);
+      return { analyticsFilters: updated };
+    });
   },
 }));
 

@@ -31,7 +31,9 @@
     "next": "Next",
     "currency": "Currency",
     "total": "Total",
-    "details": "Details"
+    "details": "Details",
+    "retry": "Retry",
+    "errorLoading": "Failed to load"
   },
   "auth": {
     "login": "Login",
@@ -50,7 +52,8 @@
     "categories": "Categories",
     "projects": "Projects",
     "settings": "Settings",
-    "organization": "Organization"
+    "organization": "Organization",
+    "analytics": "Analytics"
   },
   "dashboard": {
     "overview": "Overview",
@@ -71,7 +74,11 @@
     "type": "Type",
     "account": "Account",
     "noData": "No data available",
-    "errorLoading": "Error loading dashboard"
+    "errorLoading": "Error loading dashboard",
+    "topExpenses": "top expenses",
+    "seeAnalysis": "See analysis",
+    "noExpensesInRange": "No expenses in this range",
+    "uncategorizedWarn": "uncategorized"
   },
   "transactions": {
     "title": "Transactions",
@@ -98,7 +105,10 @@
     "deleteConfirm": "Are you sure you want to delete this transaction?",
     "createSuccess": "Transaction created successfully",
     "updateSuccess": "Transaction updated successfully",
-    "deleteSuccess": "Transaction deleted successfully"
+    "deleteSuccess": "Transaction deleted successfully",
+    "uncategorizedFilter": "Uncategorized",
+    "bulkAssignCategory": "Assign category",
+    "bulkAssignSuccess": "{{count}} transactions updated"
   },
   "accounts": {
     "title": "Accounts",
@@ -163,7 +173,8 @@
     "deleteConfirmWithChildren": "This category has subcategories. Deleting it will also delete its subcategories. Do you want to continue?",
     "createSuccess": "Category created successfully",
     "updateSuccess": "Category updated successfully",
-    "deleteSuccess": "Category deleted successfully"
+    "deleteSuccess": "Category deleted successfully",
+    "deleteWithBudgets": "This category has budgets attached; they will be deleted too."
   },
   "organization": {
     "title": "Organization",
@@ -204,5 +215,76 @@
     "lightMode": "Light",
     "darkMode": "Dark",
     "systemMode": "System"
+  },
+  "analytics": {
+    "title": "Analytics",
+    "subtitle": "where your money goes",
+    "range": "Range",
+    "expenses": "Expenses",
+    "income": "Income",
+    "net": "Net",
+    "vsPrevious": "vs",
+    "byCategory": "What you spend on",
+    "uncategorized": "Uncategorized",
+    "composition": "Breakdown",
+    "monthlyTrend": "Monthly trend",
+    "others": "Others",
+    "recurring": "Recurring expenses",
+    "recurringHint": "grouped by similar description",
+    "noRecurring": "No repeated expenses detected in this period.",
+    "topMovements": "Largest transactions",
+    "noData": "No data",
+    "noMovements": "No transactions in {{currency}} between {{range}}",
+    "noAccountsInCurrency": "You have no accounts in {{currency}}",
+    "widenRange": "Widen range",
+    "registerExpense": "Add an expense",
+    "occurrences": "{{count}} times",
+    "average": "avg",
+    "lastSeen": "last seen",
+    "seeAll": "See all",
+    "expandChildren": "Show subcategories",
+    "presetThisMonth": "this month",
+    "presetLastMonth": "last month",
+    "presetLast3Months": "3 months",
+    "presetThisYear": "this year",
+    "presetCustom": "custom",
+    "months6": "6m",
+    "months12": "12m",
+    "months24": "24m",
+    "dataQualityTitle": "Your analysis is incomplete",
+    "dataQualityBody": "{{share}} of your expenses ({{count}} transactions, {{amount}}) have no category. Without that the ranking lies by omission.",
+    "dataQualityCta": "Categorize now"
+  },
+  "budgets": {
+    "title": "Budgets",
+    "new": "New budget",
+    "edit": "Edit budget",
+    "category": "Category",
+    "categoryHint": "A budget on a category also covers its subcategories.",
+    "allExpenses": "All expenses",
+    "limit": "Limit",
+    "limitRequired": "Enter the limit",
+    "startMonth": "From month",
+    "startMonthRequired": "Choose the start month",
+    "endMonth": "Until month",
+    "repeatMonthly": "Repeats every month",
+    "repeatHint": "When on, it applies indefinitely from the start month.",
+    "notes": "Notes",
+    "spent": "spent",
+    "remaining": "{{amount}} left",
+    "over": "over",
+    "overBy": "over by {{amount}}",
+    "projected": "At this pace you will end at {{amount}}",
+    "statusOk": "On track",
+    "statusWarn": "Close to limit",
+    "statusOver": "Over budget",
+    "noBudgets": "No budgets yet in this currency",
+    "createFirst": "Set a cap on your biggest expenses and you will know when you overshoot.",
+    "overCount": "{{count}} over",
+    "createSuccess": "Budget created",
+    "updateSuccess": "Budget updated",
+    "deleteSuccess": "Budget deleted",
+    "deleteConfirm": "Delete this budget?",
+    "overlapError": "A budget already covers that category and those months"
   }
 }

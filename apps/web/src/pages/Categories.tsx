@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import {
   Button,
   Modal,
@@ -19,6 +19,7 @@ import {
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { App } from 'antd';
+import { budgetsService } from '@/services/budgets.service';
 import { categoriesService } from '@/services/categories.service';
 import type { Category, CreateCategoryDto } from '@/services/categories.service';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -98,6 +99,22 @@ export default function CategoriesPage() {
       message.error(t('common.error'));
     },
   });
+
+  // Los presupuestos cuelgan de la categoria con onDelete: Cascade, asi que
+  // borrarla se los lleva por delante. Se avisa antes en vez de sorprender.
+  const { data: budgets = [] } = useQuery({
+    queryKey: ['budgets', 'all'],
+    queryFn: () => budgetsService.getAll({ includeInactive: true }),
+  });
+
+  const budgetCountByCategory = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const b of budgets) {
+      if (!b.categoryId) continue;
+      map.set(b.categoryId, (map.get(b.categoryId) ?? 0) + 1);
+    }
+    return map;
+  }, [budgets]);
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => categoriesService.remove(id),
@@ -270,9 +287,16 @@ export default function CategoriesPage() {
                       <Popconfirm
                         title={t('common.confirm')}
                         description={
-                          childCount > 0
-                            ? t('categories.deleteConfirmWithChildren')
-                            : t('categories.deleteConfirm')
+                          <>
+                            {childCount > 0
+                              ? t('categories.deleteConfirmWithChildren')
+                              : t('categories.deleteConfirm')}
+                            {budgetCountByCategory.has(parent.id) && (
+                              <div style={{ marginTop: 6, color: 'var(--eco-accent)' }}>
+                                {t('categories.deleteWithBudgets')}
+                              </div>
+                            )}
+                          </>
                         }
                         onConfirm={() => handleDelete(parent.id)}
                         okText={t('common.confirm')}
@@ -333,7 +357,16 @@ export default function CategoriesPage() {
                               </button>
                               <Popconfirm
                                 title={t('common.confirm')}
-                                description={t('categories.deleteConfirm')}
+                                description={
+                                  <>
+                                    {t('categories.deleteConfirm')}
+                                    {budgetCountByCategory.has(child.id) && (
+                                      <div style={{ marginTop: 6, color: 'var(--eco-accent)' }}>
+                                        {t('categories.deleteWithBudgets')}
+                                      </div>
+                                    )}
+                                  </>
+                                }
                                 onConfirm={() => handleDelete(child.id)}
                                 okText={t('common.confirm')}
                                 cancelText={t('common.cancel')}

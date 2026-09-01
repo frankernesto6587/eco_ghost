@@ -22,6 +22,7 @@ import {
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
+import { useLocation, useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
 import type { Dayjs } from 'dayjs';
 
@@ -56,6 +57,7 @@ interface Filters {
   types: string[];
   accountIds: string[];
   categoryIds: string[];
+  uncategorized: boolean;
   currency: string | undefined;
 }
 
@@ -79,7 +81,8 @@ function buildParams(filters: Filters, page: number, pageSize: number, sortBy: s
   const params: TransactionFilters = { page, limit: pageSize, sortBy, sortOrder };
   if (filters.types.length > 0) params.type = filters.types.join(',');
   if (filters.accountIds.length > 0) params.accountId = filters.accountIds.join(',');
-  if (filters.categoryIds.length > 0) params.categoryId = filters.categoryIds.join(',');
+  if (filters.uncategorized) params.uncategorized = true;
+  else if (filters.categoryIds.length > 0) params.categoryId = filters.categoryIds.join(',');
   if (filters.currency) params.currency = filters.currency;
   if (filters.dateRange) {
     params.from = filters.dateRange[0].startOf('day').toISOString();
@@ -172,11 +175,57 @@ export default function TransactionsPage() {
     types: txFilters.types,
     accountIds: txFilters.accountIds,
     categoryIds: txFilters.categoryIds,
+    uncategorized: txFilters.uncategorized,
     currency: txFilters.currency,
   }), [txFilters]);
 
   const sortBy = txFilters.sortBy;
   const sortOrder = txFilters.sortOrder;
+
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  // Los enlaces entrantes (p.ej. desde Analisis) traen los filtros en la URL.
+  // Se vuelcan al store, que sigue siendo la unica fuente de verdad, y se limpia
+  // la URL para que un refresh no reaplique un filtro que el usuario ya cambio.
+  useEffect(() => {
+    if (!location.search) return;
+    const q = new URLSearchParams(location.search);
+    const patch: Partial<typeof txFilters> = {};
+
+    const type = q.get('type');
+    if (type) patch.types = type.split(',').filter(Boolean);
+    const accountId = q.get('accountId');
+    if (accountId) patch.accountIds = accountId.split(',').filter(Boolean);
+    const currency = q.get('currency');
+    if (currency) patch.currency = currency;
+
+    if (q.get('uncategorized') === 'true') {
+      patch.uncategorized = true;
+      patch.categoryIds = [];
+    } else {
+      const categoryId = q.get('categoryId');
+      if (categoryId) {
+        patch.categoryIds = categoryId.split(',').filter(Boolean);
+        patch.uncategorized = false;
+      }
+    }
+
+    const from = q.get('from');
+    const to = q.get('to');
+    if (from && to) {
+      patch.dateFrom = dayjs(from).startOf('day').toISOString();
+      patch.dateTo = dayjs(to).endOf('day').toISOString();
+    }
+
+    if (Object.keys(patch).length > 0) {
+      setTxFilters(patch);
+      setPage(1);
+    }
+    navigate('/transactions', { replace: true });
+    // Solo al montar / cuando cambia la query entrante
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search]);
 
   const [viewDeleted, setViewDeleted] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
@@ -329,6 +378,22 @@ export default function TransactionsPage() {
       invalidateAll();
     },
     onError: () => message.error('Error al eliminar'),
+  });
+
+  // Asignacion masiva de categoria: es la accion que convierte el aviso de
+  // "34% sin categorizar" de Analisis en algo que el usuario puede arreglar.
+  const bulkCategoryMutation = useMutation({
+    mutationFn: ({ ids, categoryId }: { ids: string[]; categoryId: string }) =>
+      transactionsService.bulkUpdate(ids, { categoryId }),
+    onSuccess: (_data, variables) => {
+      message.success(t('transactions.bulkAssignSuccess', { count: variables.ids.length }));
+      setSelectedIds(new Set());
+      invalidateAll();
+      // El ranking de Analisis cambia en cuanto se categoriza
+      queryClient.invalidateQueries({ queryKey: ['analytics'] });
+      queryClient.invalidateQueries({ queryKey: ['budgets'] });
+    },
+    onError: () => message.error(t('common.errorLoading')),
   });
 
   // ---- Helpers ----
@@ -544,7 +609,7 @@ export default function TransactionsPage() {
   const currencies = useMemo(() => [...new Set(accounts.map((a) => a.currency))].sort(), [accounts]);
   const isSaving = createMutation.isPending || updateMutation.isPending;
 
-  const activeFilterCount = [filters.dateRange, filters.types.length > 0, filters.accountIds.length > 0, filters.categoryIds.length > 0, filters.currency].filter(Boolean).length;
+  const activeFilterCount = [filters.dateRange, filters.types.length > 0, filters.accountIds.length > 0, filters.categoryIds.length > 0, filters.uncategorized, filters.currency].filter(Boolean).length;
 
   // Local search filtering + sorting
   // Local search only (sorting handled by backend)
@@ -643,7 +708,7 @@ export default function TransactionsPage() {
 
   const handleCategoryTreeChange = useCallback((selectedIds: string[]) => {
     setPage(1);
-    setTxFilters({ categoryIds: selectedIds });
+    setTxFilters({ categoryIds: selectedIds, uncategorized: false });
   }, [setTxFilters]);
 
   // Find category name by id
@@ -894,14 +959,28 @@ export default function TransactionsPage() {
               </div>
             )}
           >
-            <span className={filters.categoryIds.length > 0 ? s.filterChipActive : s.filterChip}>
+            <span className={filters.categoryIds.length > 0 || filters.uncategorized ? s.filterChipActive : s.filterChip}>
               <span className={s.filterKey}>categoria:</span>
               <span className={s.filterVal}>
-                {filters.categoryIds.length === 0 ? 'cualquiera' : filters.categoryIds.length === 1 ? getCategoryName(filters.categoryIds[0]) : `${filters.categoryIds.length} seleccionadas`}
+                {filters.uncategorized
+                  ? t('transactions.uncategorizedFilter')
+                  : filters.categoryIds.length === 0 ? 'cualquiera' : filters.categoryIds.length === 1 ? getCategoryName(filters.categoryIds[0]) : `${filters.categoryIds.length} seleccionadas`}
               </span>
               <span className={s.filterCaret}>▾</span>
             </span>
           </Dropdown>
+
+          {/* Se llega aqui desde el banner de Analisis: el filtro tiene que verse
+              y poder quitarse de un clic, o el usuario cree que perdio datos. */}
+          <button
+            className={filters.uncategorized ? s.filterChipActive : s.filterChip}
+            onClick={() =>
+              setTxFilters({ uncategorized: !filters.uncategorized, categoryIds: [] })
+            }
+            aria-pressed={filters.uncategorized}
+          >
+            <span className={s.filterVal}>{t('transactions.uncategorizedFilter')}</span>
+          </button>
 
           {activeFilterCount > 0 && (
             <button className={s.clearFilters} onClick={clearAllFilters}>
@@ -1016,6 +1095,23 @@ export default function TransactionsPage() {
             ))}
           </div>
           <div className={s.bulkActions}>
+            {canWrite && (
+              <TreeSelect
+                showSearch
+                treeNodeFilterProp="name"
+                placeholder={t('transactions.bulkAssignCategory')}
+                value={undefined}
+                style={{ minWidth: 190 }}
+                size="small"
+                loading={bulkCategoryMutation.isPending}
+                treeData={categoryTree}
+                onChange={(categoryId?: string) => {
+                  if (!categoryId) return;
+                  bulkCategoryMutation.mutate({ ids: Array.from(selectedIds), categoryId });
+                }}
+                styles={{ popup: { root: { maxHeight: 320, overflow: 'auto' } } }}
+              />
+            )}
             <button className={s.bulkBtn} onClick={() => setSelectedIds(new Set())}>
               Deseleccionar
             </button>

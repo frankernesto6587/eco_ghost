@@ -467,8 +467,17 @@
 /* ═══════ BALANCE CARD ═══════ */
 .balanceCard {
   composes: card;
-  margin-bottom: 12px;
   padding: 20px;
+}
+
+/* Fila intermedia: saldos de cuentas + "en que gastas". El widget de gastos
+   entra aqui sin tocar el resto del Dashboard. */
+.midGrid {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr;
+  gap: 12px;
+  margin-bottom: 12px;
+  align-items: start;
 }
 
 .balanceCardLabel {
@@ -930,6 +939,10 @@
 
 /* ═══════ RESPONSIVE ═══════ */
 @media (max-width: 900px) {
+  .midGrid {
+    grid-template-columns: 1fr;
+  }
+
   .pageHead {
     flex-direction: column;
     gap: 12px;

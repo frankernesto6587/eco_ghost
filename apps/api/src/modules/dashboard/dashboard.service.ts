@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { resolveRange, dayKey, dayLabels, toDayLabel } from '../../common/date-range.util';
 
 @Injectable()
 export class DashboardService {
@@ -7,8 +8,10 @@ export class DashboardService {
 
   async getOverview(orgId: string, from?: string, to?: string) {
     const now = new Date();
-    const startOfMonth = from ? new Date(from) : new Date(now.getFullYear(), now.getMonth(), 1);
-    const endOfMonth = to ? new Date(to) : new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+    // Fronteras del rango en APP_TZ. `rangeEnd` es EXCLUSIVO: se compara con `lt`.
+    const range = resolveRange(toDayLabel(from), toDayLabel(to));
+    const startOfMonth = range.from;
+    const rangeEnd = range.to;
 
     // Get all active accounts
     const accounts = await this.prisma.account.findMany({
@@ -26,7 +29,7 @@ export class DashboardService {
       where: {
         orgId,
         type: { in: ['INCOME', 'EXPENSE'] },
-        date: { gte: startOfMonth, lte: endOfMonth },
+        date: { gte: startOfMonth, lt: rangeEnd },
         deletedAt: null,
       },
       include: { account: { select: { currency: true } } },
@@ -184,7 +187,7 @@ export class DashboardService {
         orgId,
         accountId: { in: accountIds },
         deletedAt: null,
-        date: { gte: startOfMonth, lte: endOfMonth },
+        date: { gte: startOfMonth, lt: rangeEnd },
       },
       select: { date: true, amount: true, type: true, accountId: true, linkedTransactionId: true },
       orderBy: { date: 'asc' },
@@ -193,10 +196,10 @@ export class DashboardService {
     // Build daily deltas per currency
     const dailyDeltas = new Map<string, Map<string, number>>(); // date -> currency -> delta
     for (const tx of rangeTxs) {
-      const dayKey = tx.date.toISOString().slice(0, 10);
+      const key = dayKey(tx.date);
       const cur = currencyMap.get(tx.accountId) ?? 'USD';
-      if (!dailyDeltas.has(dayKey)) dailyDeltas.set(dayKey, new Map());
-      const dayMap = dailyDeltas.get(dayKey)!;
+      if (!dailyDeltas.has(key)) dailyDeltas.set(key, new Map());
+      const dayMap = dailyDeltas.get(key)!;
 
       let sign: number;
       if (tx.type === 'INCOME') sign = 1;
@@ -219,19 +222,17 @@ export class DashboardService {
       running[cur] = startBalanceByCur[cur] ?? 0;
     }
 
-    // Iterate each day in the range
-    const cursor = new Date(startOfMonth);
-    const end = new Date(endOfMonth);
-    while (cursor <= end) {
-      const dayKey = cursor.toISOString().slice(0, 10);
-      const dayMap = dailyDeltas.get(dayKey);
+    // Un item por dia del rango, recorriendo etiquetas de calendario en APP_TZ.
+    // Avanzar el cursor en UTC repetiria el dia del cambio de horario y dejaria
+    // fuera el ultimo del rango.
+    for (const key of dayLabels(range.from, range.days)) {
+      const dayMap = dailyDeltas.get(key);
       if (dayMap) {
         for (const [cur, delta] of dayMap) {
           running[cur] = (running[cur] ?? 0) + delta;
         }
       }
-      dailyBalance.push({ date: dayKey, balances: { ...running } });
-      cursor.setDate(cursor.getDate() + 1);
+      dailyBalance.push({ date: key, balances: { ...running } });
     }
 
     return {

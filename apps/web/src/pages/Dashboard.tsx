@@ -13,6 +13,7 @@ import dayjs from 'dayjs';
 import type { Dayjs } from 'dayjs';
 
 const { RangePicker } = DatePicker;
+import { TopExpensesCard } from '@/components/dashboard/TopExpensesCard';
 import s from './Dashboard.module.css';
 
 /** Shape of a transaction coming from the API overview endpoint. */
@@ -581,8 +582,9 @@ export default function DashboardPage() {
 
       </section>
 
-      {/* ═══════ ACCOUNT BALANCES ═══════ */}
-      {balanceByCurrency.length > 0 && (
+      {/* ═══════ ACCOUNT BALANCES + TOP EXPENSES ═══════ */}
+      <section className={s.midGrid}>
+        {balanceByCurrency.length > 0 && (
         <article className={s.balanceCard}>
           <div className={s.balanceCardLabel}>saldo total de cuentas</div>
           <div className={s.balanceList}>
@@ -628,7 +630,14 @@ export default function DashboardPage() {
             })}
           </div>
         </article>
-      )}
+        )}
+
+        <TopExpensesCard
+          from={dateRange ? dateRange[0].format('YYYY-MM-DD') : undefined}
+          to={dateRange ? dateRange[1].format('YYYY-MM-DD') : undefined}
+          expenseByCurrency={monthExpense}
+        />
+      </section>
 
       {/* ═══════ LEDGER ═══════ */}
       <section className={s.ledgerCard}>

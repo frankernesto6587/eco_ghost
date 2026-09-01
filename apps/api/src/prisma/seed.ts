@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import { DEFAULT_CATEGORIES } from '@ecoghost/shared';
 
 const prisma = new PrismaClient();
 
@@ -81,73 +82,8 @@ async function main() {
 
   console.log(`  Accounts: ${usdCash.name}, ${mnCash.name}`);
 
-  // Seed default categories
-  const defaultCategories = [
-    {
-      name: 'Ingresos',
-      icon: 'dollar',
-      color: '#52c41a',
-      children: [
-        { name: 'Salario', icon: 'wallet', color: '#52c41a' },
-        { name: 'Ventas', icon: 'shop', color: '#52c41a' },
-        { name: 'Freelance', icon: 'laptop', color: '#52c41a' },
-        { name: 'Otros ingresos', icon: 'plus-circle', color: '#52c41a' },
-      ],
-    },
-    {
-      name: 'Vivienda',
-      icon: 'home',
-      color: '#1890ff',
-      children: [
-        { name: 'Alquiler', icon: 'home', color: '#1890ff' },
-        { name: 'Servicios', icon: 'thunderbolt', color: '#1890ff' },
-        { name: 'Construccion', icon: 'build', color: '#1890ff' },
-      ],
-    },
-    {
-      name: 'Alimentacion',
-      icon: 'coffee',
-      color: '#fa8c16',
-      children: [
-        { name: 'Mercado', icon: 'shopping-cart', color: '#fa8c16' },
-        { name: 'Restaurantes', icon: 'coffee', color: '#fa8c16' },
-      ],
-    },
-    {
-      name: 'Transporte',
-      icon: 'car',
-      color: '#722ed1',
-      children: [
-        { name: 'Combustible', icon: 'fire', color: '#722ed1' },
-        { name: 'Transporte publico', icon: 'swap', color: '#722ed1' },
-      ],
-    },
-    {
-      name: 'Familia',
-      icon: 'team',
-      color: '#eb2f96',
-      children: [
-        { name: 'Educacion', icon: 'read', color: '#eb2f96' },
-        { name: 'Salud', icon: 'heart', color: '#eb2f96' },
-        { name: 'Entretenimiento', icon: 'smile', color: '#eb2f96' },
-      ],
-    },
-    {
-      name: 'Tecnologia',
-      icon: 'laptop',
-      color: '#13c2c2',
-      children: [
-        { name: 'Internet', icon: 'wifi', color: '#13c2c2' },
-        { name: 'Equipos', icon: 'desktop', color: '#13c2c2' },
-      ],
-    },
-    {
-      name: 'Otros gastos',
-      icon: 'ellipsis',
-      color: '#8c8c8c',
-      children: [],
-    },
-  ];
+  // Seed default categories (fuente unica: @ecoghost/shared)
+  const defaultCategories = DEFAULT_CATEGORIES;
 
   let categoryCount = 0;
   for (const cat of defaultCategories) {

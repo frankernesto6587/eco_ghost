@@ -10,6 +10,8 @@ import { TransactionsModule } from './modules/transactions/transactions.module';
 import { CategoriesModule } from './modules/categories/categories.module';
 import { DebtsModule } from './modules/debts/debts.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
+import { AnalyticsModule } from './modules/analytics/analytics.module';
+import { BudgetsModule } from './modules/budgets/budgets.module';
 import { TelegramModule } from './modules/telegram/telegram.module';
 import { TagsModule } from './modules/tags/tags.module';
 import { AuditModule } from './modules/audit/audit.module';
@@ -32,6 +34,8 @@ import { GlobalExceptionFilter } from './common/filters';
     CategoriesModule,
     DebtsModule,
     DashboardModule,
+    AnalyticsModule,
+    BudgetsModule,
     TelegramModule,
     TagsModule,
     AuditModule,

@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, TransactionType } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TelegramService } from '../telegram/telegram.service';
 import { AuditService } from '../audit/audit.service';
@@ -19,7 +19,7 @@ const TRANSACTION_INCLUDE = {
   tags: { include: { tag: true } },
 };
 
-const ALLOWED_SORT_FIELDS = ['date', 'description', 'createdAt'];
+const ALLOWED_SORT_FIELDS = ['date', 'description', 'createdAt', 'amount'];
 
 @Injectable()
 export class TransactionsService {
@@ -250,8 +250,15 @@ export class TransactionsService {
     return tx;
   }
 
-  async findAll(orgId: string, query: TransactionQueryDto) {
-    const { from, to, type, categoryId, accountId, projectId, currency, page = 1, limit = 15, deleted, sortBy, sortOrder } = query;
+  /**
+   * Traduce el query a un `where` de Prisma.
+   *
+   * Lo usan `findAll` y `getSummary`: antes `getSummary` solo miraba from/to e
+   * ignoraba en silencio el resto de filtros, asi que el resumen no cuadraba con
+   * la lista que el usuario tenia delante.
+   */
+  private buildWhere(orgId: string, query: TransactionQueryDto): Prisma.TransactionWhereInput {
+    const { from, to, type, categoryId, accountId, projectId, currency, deleted, uncategorized } = query;
 
     const where: Prisma.TransactionWhereInput = {
       orgId,
@@ -267,7 +274,10 @@ export class TransactionsService {
     if (type?.length) {
       where.type = type.length === 1 ? (type[0] as any) : { in: type as any };
     }
-    if (categoryId?.length) {
+    // `uncategorized` gana sobre `categoryId`: pedir ambos es contradictorio.
+    if (uncategorized) {
+      where.categoryId = null;
+    } else if (categoryId?.length) {
       where.categoryId = categoryId.length === 1 ? categoryId[0] : { in: categoryId };
     }
     if (accountId?.length) {
@@ -275,6 +285,14 @@ export class TransactionsService {
     }
     if (projectId) where.projectId = projectId;
     if (currency) where.account = { currency };
+
+    return where;
+  }
+
+  async findAll(orgId: string, query: TransactionQueryDto) {
+    const { page = 1, limit = 15, sortBy, sortOrder } = query;
+
+    const where = this.buildWhere(orgId, query);
 
     // Build orderBy from sortBy/sortOrder, default to createdAt desc
     const dir = sortOrder ?? 'desc';
@@ -575,18 +593,22 @@ export class TransactionsService {
   }
 
   async getSummary(orgId: string, query: TransactionQueryDto) {
-    const where: Prisma.TransactionWhereInput = { orgId, deletedAt: null };
+    const where = this.buildWhere(orgId, query);
 
-    if (query.from || query.to) {
-      where.date = {};
-      if (query.from) where.date.gte = new Date(query.from);
-      if (query.to) where.date.lte = new Date(query.to);
-    }
+    // Solo INCOME/EXPENSE son flujo, pero hay que INTERSECAR con el filtro de tipo
+    // del usuario en vez de pisarlo: si filtro a INCOME, el resumen no debe
+    // devolverle tambien los gastos.
+    const flowTypes: TransactionType[] = [TransactionType.INCOME, TransactionType.EXPENSE];
+    const selected = query.type?.length
+      ? flowTypes.filter((t) => query.type!.includes(t))
+      : flowTypes;
 
-    const transactions = await this.prisma.transaction.findMany({
-      where: { ...where, type: { in: ['INCOME', 'EXPENSE'] } },
-      include: { account: { select: { currency: true } } },
-    });
+    const transactions = selected.length
+      ? await this.prisma.transaction.findMany({
+          where: { ...where, type: { in: selected } },
+          include: { account: { select: { currency: true } } },
+        })
+      : [];
 
     const income: Record<string, number> = {};
     const expense: Record<string, number> = {};

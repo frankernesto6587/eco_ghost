@@ -131,6 +131,7 @@ model Organization {
   projects      Project[]
   cashCounts    CashCount[]
   exchangeRates ExchangeRate[]
+  budgets       Budget[]
   integrations  Integration[]
   notifications Notification[]
   tags          Tag[]
@@ -215,6 +216,8 @@ model Transaction {
   @@index([orgId, projectId])
   @@index([orgId, debtId])
   @@index([orgId, deletedAt])
+  // Consulta caliente de analitica: orgId + deletedAt IS NULL + type IN (...) + date BETWEEN
+  @@index([orgId, deletedAt, type, date])
   @@map("transactions")
 }
 
@@ -230,6 +233,7 @@ model Category {
   orgId        String
   org          Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
   transactions Transaction[]
+  budgets      Budget[]
 
   @@index([orgId])
   @@index([orgId, parentId])
@@ -294,6 +298,36 @@ model CashCount {
   @@index([orgId])
   @@index([orgId, accountId])
   @@map("cash_counts")
+}
+
+// ─── Budgets ────────────────────────────────────────────────────────
+
+/// Un presupuesto es una REGLA con ventana de meses, no una fila por mes.
+/// `endMonth: null` = abierto, aplica todos los meses desde `startMonth`.
+/// Cambiar el tope = cerrar la regla vigente (endMonth) y abrir otra.
+model Budget {
+  id         String    @id @default(cuid())
+  categoryId String?
+  category   Category? @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  currency   String
+  amount     Int
+  period     String    @default("MONTHLY")
+  startMonth String
+  endMonth   String?
+  rollover   Boolean   @default(false)
+  notes      String?
+  isActive   Boolean   @default(true)
+
+  orgId     String
+  org       Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  createdBy String
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  @@index([orgId])
+  @@index([orgId, currency, isActive])
+  @@index([categoryId])
+  @@map("budgets")
 }
 
 model ExchangeRate {
@@ -368,6 +402,8 @@ model TransactionTag {
   tag           Tag @relation(fields: [tagId], references: [id], onDelete: Cascade)
 
   @@id([transactionId, tagId])
+  // La PK compuesta no sirve para buscar por tag
+  @@index([tagId])
   @@map("transaction_tags")
 }
 

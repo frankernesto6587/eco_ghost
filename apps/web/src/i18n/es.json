@@ -31,7 +31,9 @@
     "next": "Siguiente",
     "currency": "Moneda",
     "total": "Total",
-    "details": "Detalles"
+    "details": "Detalles",
+    "retry": "Reintentar",
+    "errorLoading": "Error al cargar"
   },
   "auth": {
     "login": "Iniciar sesion",
@@ -50,7 +52,8 @@
     "categories": "Categorias",
     "projects": "Proyectos",
     "settings": "Configuracion",
-    "organization": "Organizacion"
+    "organization": "Organizacion",
+    "analytics": "Analisis"
   },
   "dashboard": {
     "overview": "Resumen",
@@ -71,7 +74,11 @@
     "type": "Tipo",
     "account": "Cuenta",
     "noData": "No hay datos disponibles",
-    "errorLoading": "Error al cargar el panel"
+    "errorLoading": "Error al cargar el panel",
+    "topExpenses": "mayores gastos",
+    "seeAnalysis": "Ver analisis",
+    "noExpensesInRange": "Sin gastos en este rango",
+    "uncategorizedWarn": "sin categorizar"
   },
   "transactions": {
     "title": "Transacciones",
@@ -98,7 +105,10 @@
     "deleteConfirm": "Esta seguro de eliminar esta transaccion?",
     "createSuccess": "Transaccion creada exitosamente",
     "updateSuccess": "Transaccion actualizada exitosamente",
-    "deleteSuccess": "Transaccion eliminada exitosamente"
+    "deleteSuccess": "Transaccion eliminada exitosamente",
+    "uncategorizedFilter": "Sin categoria",
+    "bulkAssignCategory": "Asignar categoria",
+    "bulkAssignSuccess": "{{count}} transacciones actualizadas"
   },
   "accounts": {
     "title": "Cuentas",
@@ -163,7 +173,8 @@
     "deleteConfirmWithChildren": "Esta categoria tiene subcategorias. Al eliminarla, tambien se eliminaran sus subcategorias. Desea continuar?",
     "createSuccess": "Categoria creada exitosamente",
     "updateSuccess": "Categoria actualizada exitosamente",
-    "deleteSuccess": "Categoria eliminada exitosamente"
+    "deleteSuccess": "Categoria eliminada exitosamente",
+    "deleteWithBudgets": "Esta categoria tiene presupuestos asociados; se eliminaran tambien."
   },
   "organization": {
     "title": "Organizacion",
@@ -204,5 +215,76 @@
     "lightMode": "Claro",
     "darkMode": "Oscuro",
     "systemMode": "Sistema"
+  },
+  "analytics": {
+    "title": "Analisis",
+    "subtitle": "en que se va tu dinero",
+    "range": "Rango",
+    "expenses": "Gastos",
+    "income": "Ingresos",
+    "net": "Neto",
+    "vsPrevious": "vs",
+    "byCategory": "En que gastas",
+    "uncategorized": "Sin categorizar",
+    "composition": "Composicion",
+    "monthlyTrend": "Evolucion mensual",
+    "others": "Otros",
+    "recurring": "Gastos que se repiten",
+    "recurringHint": "agrupado por descripcion similar",
+    "noRecurring": "No se detectaron gastos repetidos en este periodo.",
+    "topMovements": "Movimientos mas grandes",
+    "noData": "Sin datos",
+    "noMovements": "Sin movimientos en {{currency}} entre el {{range}}",
+    "noAccountsInCurrency": "No tienes cuentas en {{currency}}",
+    "widenRange": "Ampliar rango",
+    "registerExpense": "Registrar un gasto",
+    "occurrences": "{{count}} veces",
+    "average": "media",
+    "lastSeen": "ultima vez",
+    "seeAll": "Ver todo",
+    "expandChildren": "Ver subcategorias",
+    "presetThisMonth": "este mes",
+    "presetLastMonth": "mes pasado",
+    "presetLast3Months": "3 meses",
+    "presetThisYear": "este ano",
+    "presetCustom": "personalizado",
+    "months6": "6m",
+    "months12": "12m",
+    "months24": "24m",
+    "dataQualityTitle": "Tu analisis esta incompleto",
+    "dataQualityBody": "El {{share}} de tus gastos ({{count}} movimientos, {{amount}}) no tiene categoria. Sin eso el ranking miente por omision.",
+    "dataQualityCta": "Categorizar ahora"
+  },
+  "budgets": {
+    "title": "Presupuestos",
+    "new": "Nuevo presupuesto",
+    "edit": "Editar presupuesto",
+    "category": "Categoria",
+    "categoryHint": "Un presupuesto en una categoria cubre tambien sus subcategorias.",
+    "allExpenses": "Todos los gastos",
+    "limit": "Tope",
+    "limitRequired": "Indica el tope",
+    "startMonth": "Desde el mes",
+    "startMonthRequired": "Indica el mes de inicio",
+    "endMonth": "Hasta el mes",
+    "repeatMonthly": "Se repite cada mes",
+    "repeatHint": "Si lo activas, aplica indefinidamente desde el mes de inicio.",
+    "notes": "Notas",
+    "spent": "gastado",
+    "remaining": "quedan {{amount}}",
+    "over": "excedido",
+    "overBy": "excedido en {{amount}}",
+    "projected": "A este ritmo terminaras en {{amount}}",
+    "statusOk": "En rango",
+    "statusWarn": "Cerca del tope",
+    "statusOver": "Excedido",
+    "noBudgets": "Aun no tienes presupuestos en esta moneda",
+    "createFirst": "Ponle tope a tus mayores gastos y sabras cuando te estas pasando.",
+    "overCount": "{{count}} excedidos",
+    "createSuccess": "Presupuesto creado",
+    "updateSuccess": "Presupuesto actualizado",
+    "deleteSuccess": "Presupuesto eliminado",
+    "deleteConfirm": "Eliminar este presupuesto?",
+    "overlapError": "Ya existe un presupuesto que cubre esa categoria y esos meses"
   }
 }

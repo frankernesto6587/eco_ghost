@@ -22,6 +22,14 @@ export class TransactionQueryDto {
   @IsDateString()
   to?: string;
 
+  @ApiPropertyOptional({
+    description: 'Solo transacciones SIN categoria. Tiene prioridad sobre categoryId.',
+  })
+  @IsOptional()
+  @Transform(({ value }) => value === true || value === 'true')
+  @IsBoolean()
+  uncategorized?: boolean;
+
   @ApiPropertyOptional({ description: 'Comma-separated types: INCOME,EXPENSE,TRANSFER,EXCHANGE' })
   @IsOptional()
   @Transform(({ value }) => typeof value === 'string' ? value.split(',').filter(Boolean) : value)

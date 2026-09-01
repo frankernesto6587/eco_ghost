@@ -5,6 +5,7 @@ import type { MenuProps } from 'antd';
 import {
   DashboardOutlined,
   SwapOutlined,
+  PieChartOutlined,
   WalletOutlined,
   TeamOutlined,
   AppstoreOutlined,
@@ -120,6 +121,11 @@ export function AppLayout() {
         label: t('nav.transactions'),
       },
       {
+        key: '/analysis',
+        icon: <PieChartOutlined />,
+        label: t('nav.analytics'),
+      },
+      {
         key: '/accounts',
         icon: <WalletOutlined />,
         label: t('nav.accounts'),
@@ -219,6 +225,7 @@ export function AppLayout() {
     () => [
       { key: '/dashboard', icon: <HomeOutlined />, label: t('nav.dashboard') },
       { key: '/transactions', icon: <SwapOutlined />, label: t('nav.transactions') },
+      { key: '/analysis', icon: <PieChartOutlined />, label: t('nav.analytics') },
       { key: '/accounts', icon: <WalletOutlined />, label: t('nav.accounts') },
       { key: '/debts', icon: <TeamOutlined />, label: t('nav.debts') },
       { key: '/categories', icon: <AppstoreOutlined />, label: t('nav.categories') },

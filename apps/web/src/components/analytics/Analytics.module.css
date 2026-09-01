@@ -1,0 +1,462 @@
+/* ═══════ Base compartida de tarjetas (mismo idioma que Dashboard) ═══════ */
+.card {
+  background: var(--eco-surface);
+  border: 1px solid var(--eco-line);
+  border-radius: 14px;
+  padding: 18px 20px;
+  position: relative;
+  overflow: hidden;
+}
+
+.card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg,
+    transparent,
+    color-mix(in oklab, var(--eco-accent) 55%, transparent) 40%,
+    color-mix(in oklab, var(--eco-accent) 55%, transparent) 60%,
+    transparent);
+}
+
+.cardLabel {
+  font-family: 'Geist Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  color: var(--eco-fg3);
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.cardDot {
+  display: inline-block;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--eco-accent);
+  box-shadow: 0 0 0 3px var(--eco-accent-weak);
+  flex-shrink: 0;
+}
+.cardDotPos { composes: cardDot; background: var(--eco-pos); box-shadow: 0 0 0 3px var(--eco-pos-soft); }
+.cardDotNeg { composes: cardDot; background: var(--eco-neg); box-shadow: 0 0 0 3px var(--eco-neg-soft); }
+
+.cardLabelSpacer { flex: 1; }
+
+.cardHint {
+  font-family: 'Geist Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--eco-fg4);
+  text-transform: none;
+}
+
+/* ═══════ Chips (moneda, presets, meses) ═══════ */
+.chipRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.chip {
+  font-family: 'Geist Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  padding: 5px 11px;
+  border-radius: 999px;
+  border: 1px solid var(--eco-line);
+  background: var(--eco-surface);
+  color: var(--eco-fg3);
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+  white-space: nowrap;
+}
+
+.chip:hover {
+  color: var(--eco-fg);
+  border-color: color-mix(in oklab, var(--eco-accent) 40%, var(--eco-line));
+}
+
+.chipOn {
+  composes: chip;
+  background: var(--eco-accent-soft);
+  border-color: color-mix(in oklab, var(--eco-accent) 55%, transparent);
+  color: var(--eco-accent);
+}
+
+.chipIcon { width: 14px; height: 14px; border-radius: 3px; object-fit: contain; vertical-align: -2px; margin-right: 5px; }
+
+/* ═══════ Tarjeta de metrica con delta ═══════ */
+.statNum {
+  font-family: 'Geist Mono', monospace;
+  font-feature-settings: 'tnum';
+  font-size: 28px;
+  letter-spacing: -0.02em;
+  color: var(--eco-fg);
+  line-height: 1.1;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.statCur { font-size: 13px; color: var(--eco-fg3); }
+
+.statFoot {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.delta {
+  font-family: 'Geist Mono', monospace;
+  font-feature-settings: 'tnum';
+  font-size: 11px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--eco-surface2);
+  color: var(--eco-fg3);
+  white-space: nowrap;
+}
+.deltaUp { composes: delta; background: var(--eco-neg-soft); color: var(--eco-neg); }
+.deltaDown { composes: delta; background: var(--eco-pos-soft); color: var(--eco-pos); }
+.deltaGoodUp { composes: delta; background: var(--eco-pos-soft); color: var(--eco-pos); }
+.deltaBadDown { composes: delta; background: var(--eco-neg-soft); color: var(--eco-neg); }
+
+.statPrev {
+  font-family: 'Geist Mono', monospace;
+  font-size: 10px;
+  color: var(--eco-fg4);
+  letter-spacing: 0.03em;
+}
+
+/* ═══════ Ranking de categorias ═══════ */
+.rankList { display: flex; flex-direction: column; }
+
+.rankRow {
+  display: grid;
+  grid-template-columns: 18px 26px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 6px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.12s ease;
+  border: none;
+  background: transparent;
+  text-align: left;
+  width: 100%;
+  font: inherit;
+  color: inherit;
+}
+
+.rankRow:hover { background: var(--eco-surface2); }
+
+.rankChild {
+  composes: rankRow;
+  padding-left: 22px;
+  grid-template-columns: 18px 22px 1fr auto;
+}
+
+.rankChevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px; height: 18px;
+  border-radius: 5px;
+  color: var(--eco-fg4);
+  font-size: 11px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  transition: transform 0.15s ease, color 0.12s ease;
+}
+.rankChevron:hover { color: var(--eco-fg2); }
+.rankChevronOpen { composes: rankChevron; transform: rotate(90deg); }
+.rankChevronSpacer { width: 18px; }
+
+.rankIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px; height: 26px;
+  border-radius: 8px;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.rankBody { min-width: 0; }
+
+.rankName {
+  font-size: 13px;
+  color: var(--eco-fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 5px;
+}
+
+.rankNameMuted { composes: rankName; color: var(--eco-fg3); font-style: italic; }
+
+.rankBarTrack {
+  height: 5px;
+  border-radius: 999px;
+  background: var(--eco-surface3);
+  overflow: hidden;
+}
+
+.rankBarFill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.3s ease;
+  min-width: 2px;
+}
+
+.rankRight {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+  flex-shrink: 0;
+}
+
+.rankAmount {
+  font-family: 'Geist Mono', monospace;
+  font-feature-settings: 'tnum';
+  font-size: 13px;
+  color: var(--eco-fg);
+  letter-spacing: -0.01em;
+}
+
+.rankMeta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rankShare {
+  font-family: 'Geist Mono', monospace;
+  font-feature-settings: 'tnum';
+  font-size: 10px;
+  color: var(--eco-fg4);
+}
+
+/* ═══════ Banner de calidad de datos ═══════ */
+.qualityBanner {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 14px 18px;
+  border-radius: 12px;
+  background: var(--eco-accent-weak);
+  border: 1px solid color-mix(in oklab, var(--eco-accent) 30%, transparent);
+  border-left: 2px solid var(--eco-accent);
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.qualityIcon { color: var(--eco-accent); font-size: 18px; line-height: 1.4; flex-shrink: 0; }
+.qualityBody { flex: 1; min-width: 220px; }
+
+.qualityTitle {
+  font-size: 13px;
+  color: var(--eco-fg);
+  margin-bottom: 3px;
+  font-weight: 500;
+}
+
+.qualityText {
+  font-size: 12px;
+  color: var(--eco-fg2);
+  line-height: 1.5;
+}
+
+/* ═══════ Estados ═══════ */
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 40px 20px;
+  text-align: center;
+}
+
+.emptyTitle { font-size: 13px; color: var(--eco-fg2); }
+.emptyHint { font-family: 'Geist Mono', monospace; font-size: 11px; color: var(--eco-fg4); }
+.emptyActions { display: flex; gap: 8px; margin-top: 4px; flex-wrap: wrap; justify-content: center; }
+
+.skel {
+  border-radius: 8px;
+  background: linear-gradient(90deg,
+    var(--eco-surface2) 0%,
+    var(--eco-surface3) 50%,
+    var(--eco-surface2) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skel { animation: none; }
+}
+
+.skelRow { display: flex; align-items: center; gap: 10px; padding: 9px 6px; }
+.skelIcon { composes: skel; width: 26px; height: 26px; border-radius: 8px; flex-shrink: 0; }
+.skelBody { flex: 1; display: flex; flex-direction: column; gap: 6px; }
+.skelLine { composes: skel; height: 9px; }
+
+/* ═══════ Lista de recurrentes / top movimientos ═══════ */
+.itemRow {
+  display: grid;
+  grid-template-columns: 26px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 6px;
+  border-radius: 10px;
+  transition: background 0.12s ease;
+}
+.itemRow:hover { background: var(--eco-surface2); }
+
+.itemRowLink {
+  composes: itemRow;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+}
+.itemRowLink:hover { background: var(--eco-surface2); }
+
+.itemMain { min-width: 0; }
+
+.itemName {
+  font-size: 13px;
+  color: var(--eco-fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.itemSub {
+  font-family: 'Geist Mono', monospace;
+  font-size: 10px;
+  color: var(--eco-fg4);
+  letter-spacing: 0.03em;
+  margin-top: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.itemAmount {
+  font-family: 'Geist Mono', monospace;
+  font-feature-settings: 'tnum';
+  font-size: 13px;
+  color: var(--eco-fg);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.itemCount {
+  font-family: 'Geist Mono', monospace;
+  font-size: 10px;
+  color: var(--eco-fg4);
+  text-align: right;
+  margin-top: 3px;
+}
+
+/* ═══════ Presupuestos ═══════ */
+.budgetRow { padding: 11px 6px; border-radius: 10px; }
+.budgetRow:hover { background: var(--eco-surface2); }
+
+.budgetHead {
+  display: grid;
+  grid-template-columns: 26px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.budgetName {
+  font-size: 13px;
+  color: var(--eco-fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.budgetFigures {
+  font-family: 'Geist Mono', monospace;
+  font-feature-settings: 'tnum';
+  font-size: 12px;
+  color: var(--eco-fg2);
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.budgetLimit { color: var(--eco-fg4); }
+
+/* Pista con la barra, la marca de proyeccion y el rayado de exceso */
+.budgetTrack {
+  position: relative;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--eco-surface3);
+  overflow: hidden;
+}
+
+.budgetFill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+
+/* El exceso se raya para que se lea distinto de "lleno" incluso sin color */
+.budgetOverflow {
+  position: absolute;
+  top: 0; bottom: 0;
+  background-image: repeating-linear-gradient(
+    45deg,
+    var(--eco-neg) 0 4px,
+    color-mix(in oklab, var(--eco-neg) 55%, transparent) 4px 8px);
+}
+
+.budgetProjection {
+  position: absolute;
+  top: -2px; bottom: -2px;
+  width: 1px;
+  background: var(--eco-fg2);
+  opacity: 0.7;
+}
+
+.budgetFoot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+
+.budgetNote {
+  font-family: 'Geist Mono', monospace;
+  font-size: 10px;
+  color: var(--eco-fg4);
+}
+.budgetNoteWarn { composes: budgetNote; color: var(--eco-accent); }
+.budgetNoteOver { composes: budgetNote; color: var(--eco-neg); }
+
+.budgetActions { display: flex; gap: 4px; }

@@ -34,6 +34,18 @@
   --eco-shadow1: 0 1px 0 oklch(0.22 0.010 80 / 0.6), 0 2px 4px oklch(0 0 0 / 0.3);
   --eco-shadow2: 0 2px 0 oklch(0.22 0.010 80 / 0.6), 0 8px 20px oklch(0 0 0 / 0.35);
 
+
+  /* Rampa categorica para graficos. Ordenada por separacion de tono, no por
+     bonito: cat-1..cat-7 deben distinguirse entre si de un vistazo; cat-8 es
+     el neutro reservado para el bucket "Otros". */
+  --eco-cat-1: oklch(0.72 0.18 50);
+  --eco-cat-2: oklch(0.72 0.14 200);
+  --eco-cat-3: oklch(0.74 0.15 150);
+  --eco-cat-4: oklch(0.70 0.16 320);
+  --eco-cat-5: oklch(0.78 0.14 90);
+  --eco-cat-6: oklch(0.68 0.14 265);
+  --eco-cat-7: oklch(0.74 0.12 20);
+  --eco-cat-8: oklch(0.66 0.06 80);
   /* Radii */
   --eco-radius: 14px;
   --eco-radius-sm: 10px;
@@ -72,6 +84,17 @@
   /* Elevation — softer shadows for light mode */
   --eco-shadow1: 0 1px 2px oklch(0 0 0 / 0.06), 0 1px 3px oklch(0 0 0 / 0.08);
   --eco-shadow2: 0 2px 4px oklch(0 0 0 / 0.06), 0 8px 16px oklch(0 0 0 / 0.08);
+
+  /* Rampa categorica: mismo tono, algo mas oscura para contrastar sobre claro */
+  --eco-cat-1: oklch(0.62 0.18 50);
+  --eco-cat-2: oklch(0.60 0.14 200);
+  --eco-cat-3: oklch(0.62 0.15 150);
+  --eco-cat-4: oklch(0.58 0.16 320);
+  --eco-cat-5: oklch(0.66 0.14 90);
+  --eco-cat-6: oklch(0.56 0.14 265);
+  --eco-cat-7: oklch(0.62 0.12 20);
+  --eco-cat-8: oklch(0.56 0.06 80);
+
 }
 
 /* ═══════ Ant Design — Ember Overrides ═══════ */

@@ -4,6 +4,7 @@ export interface TransactionFilters {
   type?: string;         // comma-separated for multi
   accountId?: string;    // comma-separated for multi
   categoryId?: string;   // comma-separated for multi
+  uncategorized?: boolean;  // solo sin categoria; tiene prioridad sobre categoryId
   currency?: string;
   from?: string;
   to?: string;

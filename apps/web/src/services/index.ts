@@ -5,4 +5,6 @@ export { accountsService } from './accounts.service';
 export { debtsService } from './debts.service';
 export { categoriesService } from './categories.service';
 export { dashboardService } from './dashboard.service';
+export { analyticsService } from './analytics.service';
+export { budgetsService } from './budgets.service';
 export { organizationsService } from './organizations.service';

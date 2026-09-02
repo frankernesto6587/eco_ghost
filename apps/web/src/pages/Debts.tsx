@@ -7,6 +7,7 @@ import { accountsService } from '@/services/accounts.service';
 import type { Account } from '@/services/accounts.service';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useUIStore, type DebtStatusFilter } from '@/store/ui.store';
+import { invalidateMoneyQueries } from '@/lib/invalidateMoney';
 import { formatCurrency, formatDate, formatRelativeDate } from '@/lib/formatters';
 import { DebtType, DebtStatus } from '@ecoghost/shared';
 import css from './Debts.module.css';
@@ -176,7 +177,7 @@ export default function DebtsPage() {
     mutationFn: (payload: CreateDebtDto) => debtsService.create(payload),
     onSuccess: () => {
       message.success('Deuda creada correctamente');
-      queryClient.invalidateQueries({ queryKey: ['debts'] });
+      invalidateMoneyQueries(queryClient);
       closeDebtModal();
     },
     onError: () => message.error('Error al crear la deuda'),
@@ -187,7 +188,7 @@ export default function DebtsPage() {
       debtsService.update(id, payload),
     onSuccess: () => {
       message.success('Deuda actualizada correctamente');
-      queryClient.invalidateQueries({ queryKey: ['debts'] });
+      invalidateMoneyQueries(queryClient);
       closeDebtModal();
     },
     onError: () => message.error('Error al actualizar la deuda'),
@@ -197,7 +198,7 @@ export default function DebtsPage() {
     mutationFn: (id: string) => debtsService.remove(id),
     onSuccess: (_data, deletedId) => {
       message.success('Deuda eliminada correctamente');
-      queryClient.invalidateQueries({ queryKey: ['debts'] });
+      invalidateMoneyQueries(queryClient);
       if (expandedId === deletedId) setExpandedId(null);
     },
     onError: () => message.error('Error al eliminar la deuda'),
@@ -208,7 +209,7 @@ export default function DebtsPage() {
       debtsService.addPayment(id, payload),
     onSuccess: () => {
       message.success('Pago registrado correctamente');
-      queryClient.invalidateQueries({ queryKey: ['debts'] });
+      invalidateMoneyQueries(queryClient);
       paymentForm.resetFields();
       setPaymentModalOpen(false);
       setPaymentDebtId(null);

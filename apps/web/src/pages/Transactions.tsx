@@ -36,6 +36,7 @@ import {
 import { accountsService, type Account } from '@/services/accounts.service';
 import { categoriesService, type Category } from '@/services/categories.service';
 import { formatCurrency, formatDate } from '@/lib/formatters';
+import { invalidateMoneyQueries } from '@/lib/invalidateMoney';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useUIStore } from '@/store';
 import { useIsMobile } from '@/hooks/useIsMobile';
@@ -398,10 +399,7 @@ export default function TransactionsPage() {
 
   // ---- Helpers ----
   const invalidateAll = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: ['transactions'] });
-    queryClient.invalidateQueries({ queryKey: ['transactions-summary'] });
-    queryClient.invalidateQueries({ queryKey: ['accounts'] });
-    queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+    invalidateMoneyQueries(queryClient);
   }, [queryClient]);
 
   const closeFormModal = useCallback(() => {

@@ -12,8 +12,10 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       retry: 1,
-      refetchOnWindowFocus: false,
-      staleTime: 5 * 60 * 1000,
+      // Los movimientos tambien entran por Telegram y desde otro dispositivo:
+      // al volver a la pestaña hay que releer, no seguir con lo cacheado.
+      refetchOnWindowFocus: true,
+      staleTime: 60 * 1000,
     },
   },
 });

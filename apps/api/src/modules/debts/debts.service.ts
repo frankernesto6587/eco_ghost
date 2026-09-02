@@ -4,12 +4,39 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { TelegramService } from '../telegram/telegram.service';
 import { CreateDebtDto, UpdateDebtDto, AddPaymentDto, DebtQueryDto } from './dto';
 
+/** Nombre de la categoria de los movimientos de deudas. */
+const LOAN_CATEGORY = 'Prestamos';
+
 @Injectable()
 export class DebtsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly telegram: TelegramService,
   ) {}
+
+  /**
+   * Categoria a la que se cuelgan los movimientos que genera este modulo.
+   *
+   * Sin ella, cada deuda y cada pago nacian con `categoryId` null y el aviso de
+   * "% sin categorizar" de Analisis los contaba como descuido del usuario,
+   * cuando no hay forma de categorizarlos desde la UI: los crea el backend.
+   *
+   * Se resuelve dentro de la transaccion en curso para no dejar la categoria
+   * creada si el resto falla.
+   */
+  private async loanCategoryId(tx: Prisma.TransactionClient, orgId: string): Promise<string> {
+    const existing = await tx.category.findFirst({
+      where: { orgId, name: LOAN_CATEGORY },
+      select: { id: true },
+    });
+    if (existing) return existing.id;
+
+    const created = await tx.category.create({
+      data: { name: LOAN_CATEGORY, icon: 'transaction', orgId },
+      select: { id: true },
+    });
+    return created.id;
+  }
 
   async create(orgId: string, userId: string, dto: CreateDebtDto) {
     return this.prisma.$transaction(async (tx) => {
@@ -36,6 +63,7 @@ export class DebtsService {
           amount: dto.totalAmount,
           type: transactionType,
           accountId: dto.accountId,
+          categoryId: await this.loanCategoryId(tx, orgId),
           debtId: debt.id,
           orgId,
           createdBy: userId,
@@ -172,6 +200,7 @@ export class DebtsService {
           amount: dto.amount,
           type: transactionType,
           accountId: dto.accountId,
+          categoryId: await this.loanCategoryId(tx, orgId),
           debtId,
           orgId,
           createdBy: userId,

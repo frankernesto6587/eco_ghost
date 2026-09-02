@@ -24,11 +24,15 @@ export class DashboardService {
     // Build currency map for accounts
     const currencyMap = new Map(accounts.map((a) => [a.id, a.currency]));
 
-    // Month income grouped by currency
+    // Month income grouped by currency.
+    // `debtId: null`: prestar no es gastar ni cobrar una deuda es ingresar. Los
+    // movimientos de deuda SI cuentan para los saldos y la curva diaria de mas
+    // abajo, que es donde el dinero se mueve de verdad.
     const monthTransactions = await this.prisma.transaction.findMany({
       where: {
         orgId,
         type: { in: ['INCOME', 'EXPENSE'] },
+        debtId: null,
         date: { gte: startOfMonth, lt: rangeEnd },
         deletedAt: null,
       },

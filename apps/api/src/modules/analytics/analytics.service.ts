@@ -78,6 +78,12 @@ export class AnalyticsService {
     return accounts.map((a) => a.id);
   }
 
+  /**
+   * Prestar no es gastar y que te devuelvan no es ingresar: el dinero cambia de
+   * forma (efectivo <-> "alguien me debe"), no se consume. Los movimientos con
+   * `debtId` quedan fuera del flujo; siguen contando en los saldos y en la
+   * lista, y la pestaña de Deudas lleva su cuenta aparte.
+   */
   private flowWhere(
     orgId: string,
     accountIds: string[],
@@ -87,6 +93,7 @@ export class AnalyticsService {
     return {
       orgId,
       deletedAt: null,
+      debtId: null,
       accountId: { in: accountIds },
       type: { in: FLOW_TYPES },
       date: { gte: from, lt: to },
@@ -429,6 +436,7 @@ export class AnalyticsService {
       FROM "transactions" t
       WHERE t."orgId" = ${orgId}
         AND t."deletedAt" IS NULL
+        AND t."debtId" IS NULL
         AND t."type" IN ('INCOME', 'EXPENSE')
         AND t."accountId" IN (${Prisma.join(accountIds)})
         AND t."date" >= ${from}
@@ -517,6 +525,7 @@ export class AnalyticsService {
         FROM "transactions" t
         WHERE t."orgId" = ${orgId}
           AND t."deletedAt" IS NULL
+          AND t."debtId" IS NULL
           AND t."type" = 'EXPENSE'
           AND t."accountId" IN (${Prisma.join(accountIds)})
           AND t."date" >= ${r.from}

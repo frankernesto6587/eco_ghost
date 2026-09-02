@@ -318,6 +318,8 @@ export class BudgetsService {
         where: {
           orgId,
           deletedAt: null,
+          // Un prestamo no consume presupuesto: no es gasto
+          debtId: null,
           accountId: { in: accountIds },
           type: TransactionType.EXPENSE,
           date: { gte: range.from, lt: range.to },

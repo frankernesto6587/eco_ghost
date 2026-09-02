@@ -318,8 +318,9 @@ export class BudgetsService {
         where: {
           orgId,
           deletedAt: null,
-          // Un prestamo no consume presupuesto: no es gasto
+          // Ni un prestamo ni un ajuste consumen presupuesto: no son gasto
           debtId: null,
+          OR: [{ categoryId: null }, { category: { isAdjustment: false } }],
           accountId: { in: accountIds },
           type: TransactionType.EXPENSE,
           date: { gte: range.from, lt: range.to },

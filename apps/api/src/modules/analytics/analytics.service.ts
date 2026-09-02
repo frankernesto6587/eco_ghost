@@ -97,6 +97,11 @@ export class AnalyticsService {
       accountId: { in: accountIds },
       type: { in: FLOW_TYPES },
       date: { gte: from, lt: to },
+      // Las categorias de ajuste (saldos iniciales, correcciones) mueven saldo
+      // pero no son consumo ni renta. Se filtra por OR explicito y no con
+      // `notIn`: en SQL, `categoryId NOT IN (...)` descarta tambien las filas
+      // sin categoria, que si deben contar.
+      OR: [{ categoryId: null }, { category: { isAdjustment: false } }],
     };
   }
 
@@ -437,6 +442,10 @@ export class AnalyticsService {
       WHERE t."orgId" = ${orgId}
         AND t."deletedAt" IS NULL
         AND t."debtId" IS NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM "categories" cc
+          WHERE cc."id" = t."categoryId" AND cc."isAdjustment"
+        )
         AND t."type" IN ('INCOME', 'EXPENSE')
         AND t."accountId" IN (${Prisma.join(accountIds)})
         AND t."date" >= ${from}
@@ -526,6 +535,10 @@ export class AnalyticsService {
         WHERE t."orgId" = ${orgId}
           AND t."deletedAt" IS NULL
           AND t."debtId" IS NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM "categories" cc
+            WHERE cc."id" = t."categoryId" AND cc."isAdjustment"
+          )
           AND t."type" = 'EXPENSE'
           AND t."accountId" IN (${Prisma.join(accountIds)})
           AND t."date" >= ${r.from}

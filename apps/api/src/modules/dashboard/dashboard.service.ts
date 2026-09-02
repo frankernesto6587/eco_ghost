@@ -35,6 +35,7 @@ export class DashboardService {
         debtId: null,
         date: { gte: startOfMonth, lt: rangeEnd },
         deletedAt: null,
+        OR: [{ categoryId: null }, { category: { isAdjustment: false } }],
       },
       include: { account: { select: { currency: true } } },
     });

@@ -7,6 +7,7 @@ export interface CategoryWithChildren {
   name: string;
   icon: string | null;
   color: string | null;
+  isAdjustment: boolean;
   parentId: string | null;
   orgId: string;
   children: CategoryWithChildren[];
@@ -31,6 +32,7 @@ export class CategoriesService {
         name: dto.name,
         icon: dto.icon,
         color: dto.color,
+        isAdjustment: dto.isAdjustment ?? false,
         parentId: dto.parentId,
         orgId,
       },
@@ -53,6 +55,7 @@ export class CategoriesService {
         name: cat.name,
         icon: cat.icon,
         color: cat.color,
+        isAdjustment: cat.isAdjustment,
         parentId: cat.parentId,
         orgId: cat.orgId,
         children: [],

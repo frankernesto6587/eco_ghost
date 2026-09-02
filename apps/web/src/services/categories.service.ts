@@ -5,6 +5,8 @@ export interface Category {
   name: string;
   icon?: string;
   color?: string;
+  /** Ajuste (saldo inicial, correccion): no cuenta como ingreso ni gasto */
+  isAdjustment?: boolean;
   parentId: string | null;
   orgId: string;
   children: Category[];
@@ -14,6 +16,7 @@ export interface CreateCategoryDto {
   name: string;
   icon?: string;
   color?: string;
+  isAdjustment?: boolean;
   parentId?: string;
 }
 

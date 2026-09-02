@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsString, MinLength } from 'class-validator';
+import { IsBoolean, IsOptional, IsString, MinLength } from 'class-validator';
 
 export class CreateCategoryDto {
   @ApiProperty({ example: 'Food & Drink' })
@@ -16,6 +16,14 @@ export class CreateCategoryDto {
   @IsOptional()
   @IsString()
   color?: string;
+
+  @ApiPropertyOptional({
+    default: false,
+    description: 'Ajuste (saldo inicial, correccion): no cuenta como ingreso ni gasto',
+  })
+  @IsOptional()
+  @IsBoolean()
+  isAdjustment?: boolean;
 
   @ApiPropertyOptional({ example: 'clxyz123', description: 'Parent category ID' })
   @IsOptional()

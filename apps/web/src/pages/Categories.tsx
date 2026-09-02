@@ -8,6 +8,7 @@ import {
   ColorPicker,
   Popconfirm,
   Space,
+  Switch,
 } from 'antd';
 import {
   PlusOutlined,
@@ -143,6 +144,7 @@ export default function CategoriesPage() {
         icon: category.icon ?? '',
         color: category.color ?? '#d07a1c',
         parentId: category.parentId ?? undefined,
+        isAdjustment: category.isAdjustment ?? false,
       });
       setModalOpen(true);
     },
@@ -170,6 +172,7 @@ export default function CategoriesPage() {
         name: values.name,
         icon: values.icon || undefined,
         color,
+        isAdjustment: values.isAdjustment ?? false,
         parentId: values.parentId || undefined,
       };
 
@@ -438,6 +441,16 @@ export default function CategoriesPage() {
 
           <Form.Item name="icon" label={t('categories.icon')}>
             <IconPicker />
+          </Form.Item>
+
+          <Form.Item
+            name="isAdjustment"
+            label="Categoria de ajuste"
+            valuePropName="checked"
+            initialValue={false}
+            extra="Para saldos iniciales y correcciones: mueve el saldo pero no cuenta como ingreso ni como gasto en Analisis."
+          >
+            <Switch />
           </Form.Item>
         </Form>
       </Modal>

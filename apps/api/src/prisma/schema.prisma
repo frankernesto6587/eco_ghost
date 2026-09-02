@@ -226,6 +226,9 @@ model Category {
   name     String
   icon     String?
   color    String?
+  /// Categoria de ajuste (saldos iniciales, correcciones): mueve saldo pero no
+  /// es ingreso ni gasto, asi que queda fuera del flujo en Analisis.
+  isAdjustment Boolean @default(false)
   parentId String?
   parent   Category?  @relation("CategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
   children Category[] @relation("CategoryTree")

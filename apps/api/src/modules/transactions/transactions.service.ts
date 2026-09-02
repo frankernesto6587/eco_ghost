@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, TransactionType } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { computeAccountBalance } from '../../common/account-balance.util';
 import { TelegramService } from '../telegram/telegram.service';
 import { AuditService } from '../audit/audit.service';
 import {
@@ -99,8 +100,8 @@ export class TransactionsService {
 
       // Compute balances of both accounts for notification
       const [srcBalance, dstBalance] = await Promise.all([
-        this.computeBalance(dto.accountId, orgId),
-        this.computeBalance(dto.toAccountId!, orgId),
+        computeAccountBalance(this.prisma, dto.accountId, orgId),
+        computeAccountBalance(this.prisma, dto.toAccountId!, orgId),
       ]);
       const dstAccount = result.linkedTransaction?.account;
       const fmt = (n: number) => (n / 100).toFixed(2);
@@ -187,8 +188,8 @@ export class TransactionsService {
       });
 
       const [srcBalance, dstBalance] = await Promise.all([
-        this.computeBalance(dto.accountId, orgId),
-        this.computeBalance(dto.toAccountId!, orgId),
+        computeAccountBalance(this.prisma, dto.accountId, orgId),
+        computeAccountBalance(this.prisma, dto.toAccountId!, orgId),
       ]);
       const dstAccount = result.linkedTransaction?.account;
       const fmt = (n: number) => (n / 100).toFixed(2);
@@ -232,7 +233,7 @@ export class TransactionsService {
 
     const icon = dto.type === 'INCOME' ? '💵' : '💸';
     const label = dto.type === 'INCOME' ? 'Ingreso' : 'Gasto';
-    const balance = await this.computeBalance(dto.accountId, orgId);
+    const balance = await computeAccountBalance(this.prisma, dto.accountId, orgId);
     const fmt = (n: number) => (n / 100).toFixed(2);
     const catLine = tx.category ? `\n📂 Categoria   : ${tx.category.name}` : '';
     const noteLine = dto.notes ? `\n📝 Nota          : ${dto.notes}` : '';
@@ -431,7 +432,7 @@ export class TransactionsService {
       data: { deletedAt: now, deleteReason: reason },
     });
 
-    const balance = await this.computeBalance(transaction.accountId, orgId);
+    const balance = await computeAccountBalance(this.prisma, transaction.accountId, orgId);
     const fmt = (n: number) => (n / 100).toFixed(2);
     const catLine = transaction.category ? `\n📂 Categoria   : ${transaction.category.name}` : '';
     this.telegram.notify(orgId, `🗑 *Transaccion eliminada*\n━━━━━━━━━━━━━━━━━━\n📋 Descripcion : ${transaction.description}\n💰 Monto          : ${fmt(transaction.amount)} ${transaction.account.currency}${catLine}\n🏦 Cuenta        : ${transaction.account.name}\n💵 Saldo           : ${fmt(balance)} ${transaction.account.currency}\n⚠️ Motivo        : ${reason}\n━━━━━━━━━━━━━━━━━━`);
@@ -631,33 +632,4 @@ export class TransactionsService {
     return { income, expense, balance };
   }
 
-  private async computeBalance(accountId: string, orgId: string): Promise<number> {
-    const baseWhere = { accountId, orgId, deletedAt: null };
-
-    const rows = await this.prisma.transaction.groupBy({
-      by: ['type'],
-      where: { ...baseWhere, type: { in: ['INCOME', 'EXPENSE'] } },
-      _sum: { amount: true },
-    });
-    let balance = 0;
-    for (const row of rows) {
-      const amount = row._sum.amount ?? 0;
-      balance += row.type === 'INCOME' ? amount : -amount;
-    }
-
-    // TRANSFER/EXCHANGE: incoming (no linkedTransactionId) adds, outgoing (has linkedTransactionId) subtracts
-    const [incoming, outgoing] = await Promise.all([
-      this.prisma.transaction.aggregate({
-        where: { ...baseWhere, type: { in: ['TRANSFER', 'EXCHANGE'] }, linkedTransactionId: null },
-        _sum: { amount: true },
-      }),
-      this.prisma.transaction.aggregate({
-        where: { ...baseWhere, type: { in: ['TRANSFER', 'EXCHANGE'] }, linkedTransactionId: { not: null } },
-        _sum: { amount: true },
-      }),
-    ]);
-    balance += (incoming._sum.amount ?? 0) - (outgoing._sum.amount ?? 0);
-
-    return balance;
-  }
 }

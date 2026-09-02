@@ -3,6 +3,7 @@ import { DebtStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TelegramService } from '../telegram/telegram.service';
 import { CreateDebtDto, UpdateDebtDto, AddPaymentDto, DebtQueryDto } from './dto';
+import { computeAccountBalance } from '../../common/account-balance.util';
 
 /** Nombre de la categoria de los movimientos de deudas. */
 const LOAN_CATEGORY = 'Prestamos';
@@ -71,7 +72,7 @@ export class DebtsService {
       });
 
       const account = await tx.account.findUnique({ where: { id: dto.accountId }, select: { name: true, currency: true } });
-      const balance = await this.computeBalance(dto.accountId, orgId);
+      const balance = await computeAccountBalance(tx, dto.accountId, orgId);
       const fmt = (n: number) => (n / 100).toFixed(2);
       const cur = account?.currency ?? '';
       this.telegram.notify(orgId, `📋 *Nueva deuda*\n━━━━━━━━━━━━━━━━━━\n👤 Persona       : ${debt.personName}\n📋 Descripcion : ${dto.description}\n💰 Monto          : ${fmt(dto.totalAmount)} ${cur}\n🔖 Tipo              : ${dto.type === 'RECEIVABLE' ? 'Por cobrar' : 'Por pagar'}\n🏦 Cuenta        : ${account?.name ?? '?'}\n💵 Saldo           : ${fmt(balance)} ${cur}\n━━━━━━━━━━━━━━━━━━`);
@@ -219,7 +220,7 @@ export class DebtsService {
       });
 
       const account = await tx.account.findUnique({ where: { id: dto.accountId }, select: { name: true, currency: true } });
-      const balance = await this.computeBalance(dto.accountId, orgId);
+      const balance = await computeAccountBalance(tx, dto.accountId, orgId);
       const fmt = (n: number) => (n / 100).toFixed(2);
       const cur = account?.currency ?? '';
       const statusLabel = newStatus === 'PAID' ? '\n✅ Estado         : Pagada completa' : '';
@@ -229,17 +230,4 @@ export class DebtsService {
     });
   }
 
-  private async computeBalance(accountId: string, orgId: string): Promise<number> {
-    const rows = await this.prisma.transaction.groupBy({
-      by: ['type'],
-      where: { accountId, orgId, type: { in: ['INCOME', 'EXPENSE'] }, deletedAt: null },
-      _sum: { amount: true },
-    });
-    let balance = 0;
-    for (const row of rows) {
-      const amount = row._sum.amount ?? 0;
-      balance += row.type === 'INCOME' ? amount : -amount;
-    }
-    return balance;
-  }
 }

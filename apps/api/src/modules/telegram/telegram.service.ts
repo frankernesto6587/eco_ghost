@@ -824,38 +824,6 @@ export class TelegramService {
     this.logger.log(`Telegram group disconnected from org "${org.name}"`);
   }
 
-  // ─── Webhook management ──────────────────────────────────────────
-
-  async getWebhookInfo() {
-    if (!this.botToken) return { url: '' };
-    const res = await fetch(`https://api.telegram.org/bot${this.botToken}/getWebhookInfo`);
-    const data = await res.json();
-    return { url: (data as any).result?.url ?? '' };
-  }
-
-  async setWebhook(baseUrl: string) {
-    if (!this.botToken) {
-      return { ok: false, error: 'TELEGRAM_BOT_TOKEN not configured' };
-    }
-
-    const parsed = new URL(baseUrl);
-    const webhookUrl = `${parsed.origin}/api/v1/telegram/webhook`;
-    const secret = this.config.get<string>('TELEGRAM_WEBHOOK_SECRET', '');
-
-    const res = await fetch(`https://api.telegram.org/bot${this.botToken}/setWebhook`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        url: webhookUrl,
-        secret_token: secret || undefined,
-      }),
-    });
-
-    const data = await res.json();
-    this.logger.log(`Webhook set to ${webhookUrl}: ${JSON.stringify(data)}`);
-    return { ok: (data as any).ok, url: webhookUrl };
-  }
-
   // ─── Public: send notification to an org's Telegram group ─────────
 
   async notify(orgId: string, message: string) {

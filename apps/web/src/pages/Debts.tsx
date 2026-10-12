@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { Modal, Form, Input, InputNumber, Select, DatePicker, App } from 'antd';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import dayjs from 'dayjs';
-import { debtsService, type CreateDebtDto, type AddPaymentDto } from '@/services/debts.service';
+import { debtsService, type CreateDebtDto, type UpdateDebtDto, type AddPaymentDto } from '@/services/debts.service';
 import { accountsService } from '@/services/accounts.service';
 import type { Account } from '@/services/accounts.service';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -184,7 +184,7 @@ export default function DebtsPage() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, payload }: { id: string; payload: Partial<CreateDebtDto> }) =>
+    mutationFn: ({ id, payload }: { id: string; payload: UpdateDebtDto }) =>
       debtsService.update(id, payload),
     onSuccess: () => {
       message.success('Deuda actualizada correctamente');
@@ -252,26 +252,34 @@ export default function DebtsPage() {
 
   function handleDebtSubmit(values: {
     personName: string;
-    description?: string;
+    description: string;
     totalAmount: number;
     type: string;
     accountId: string;
     dueDate?: dayjs.Dayjs;
   }) {
-    const payload: CreateDebtDto = {
-      personName: values.personName.trim(),
-      description: values.description?.trim(),
+    const personName = values.personName.trim();
+    const description = values.description?.trim() ?? '';
+    const dueDate = values.dueDate ? values.dueDate.toISOString() : undefined;
+
+    if (editingDebt) {
+      // The API only lets you edit these three fields: amount, type and
+      // account were recorded as a transaction when the debt was created.
+      updateMutation.mutate({
+        id: editingDebt.id,
+        payload: { personName, description, dueDate },
+      });
+      return;
+    }
+
+    createMutation.mutate({
+      personName,
+      description,
       totalAmount: Math.round(values.totalAmount * 100),
       type: values.type,
       accountId: values.accountId,
-      dueDate: values.dueDate ? values.dueDate.toISOString() : undefined,
-    };
-
-    if (editingDebt) {
-      updateMutation.mutate({ id: editingDebt.id, payload });
-    } else {
-      createMutation.mutate(payload);
-    }
+      dueDate,
+    });
   }
 
   function handlePaymentSubmit(values: {
@@ -726,7 +734,11 @@ export default function DebtsPage() {
             <Input placeholder="Ej: Juan Perez" maxLength={100} />
           </Form.Item>
 
-          <Form.Item name="description" label="Descripcion">
+          <Form.Item
+            name="description"
+            label="Descripcion"
+            rules={[{ required: true, whitespace: true, message: 'La descripcion es obligatoria' }]}
+          >
             <TextArea placeholder="Descripcion o motivo de la deuda" rows={3} maxLength={500} />
           </Form.Item>
 
@@ -745,6 +757,7 @@ export default function DebtsPage() {
               step={0.01}
               precision={2}
               prefix="$"
+              disabled={!!editingDebt}
             />
           </Form.Item>
 
@@ -753,7 +766,7 @@ export default function DebtsPage() {
             label="Tipo"
             rules={[{ required: true, message: 'Seleccione un tipo' }]}
           >
-            <Select>
+            <Select disabled={!!editingDebt}>
               <Select.Option value={DebtType.RECEIVABLE}>Me deben (a cobrar)</Select.Option>
               <Select.Option value={DebtType.PAYABLE}>Debo (a pagar)</Select.Option>
             </Select>
@@ -764,7 +777,7 @@ export default function DebtsPage() {
             label="Cuenta"
             rules={[{ required: true, message: 'Seleccione una cuenta' }]}
           >
-            <Select placeholder="Seleccione una cuenta">
+            <Select placeholder="Seleccione una cuenta" disabled={!!editingDebt}>
               {accounts.map((acc) => (
                 <Select.Option key={acc.id} value={acc.id}>
                   {acc.name} ({acc.currency})

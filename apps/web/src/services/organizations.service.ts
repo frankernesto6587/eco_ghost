@@ -55,15 +55,3 @@ export const organizationsService = {
     return data;
   },
 };
-
-export const telegramService = {
-  async getWebhookInfo() {
-    const { data } = await api.get('/telegram/webhook-info');
-    return data as { url: string };
-  },
-
-  async setWebhook(url: string) {
-    const { data } = await api.post('/telegram/set-webhook', { url });
-    return data as { ok: boolean; url: string };
-  },
-};

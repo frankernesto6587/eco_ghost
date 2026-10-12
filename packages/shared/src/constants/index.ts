@@ -54,6 +54,12 @@ export const ROLE_HIERARCHY: Record<Role, number> = {
 /** Roles that can create/edit/delete financial data */
 export const WRITE_ROLES: Role[] = [Role.OWNER, Role.ADMIN, Role.ACCOUNTANT];
 
+/** Roles that can edit, delete or restore saved transactions */
+export const TX_EDIT_ROLES: Role[] = [Role.OWNER, Role.ADMIN];
+
+/** Roles that can delete budgets */
+export const BUDGET_DELETE_ROLES: Role[] = [Role.OWNER, Role.ADMIN];
+
 /** Roles that can manage organization members */
 export const MEMBER_MANAGEMENT_ROLES: Role[] = [Role.OWNER, Role.ADMIN];
 

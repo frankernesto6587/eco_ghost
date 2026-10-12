@@ -10,6 +10,7 @@ interface Props {
   progress: BudgetProgress;
   currency: string;
   canEdit: boolean;
+  canDelete: boolean;
   onEdit: (item: BudgetProgressItem) => void;
   onDelete: (budgetId: string) => void;
 }
@@ -20,7 +21,7 @@ function fillColor(status: BudgetProgressItem['status']): string {
   return 'var(--eco-pos)';
 }
 
-export function BudgetProgressList({ progress, currency, canEdit, onEdit, onDelete }: Props) {
+export function BudgetProgressList({ progress, currency, canEdit, canDelete, onEdit, onDelete }: Props) {
   const { t } = useTranslation();
 
   return (
@@ -64,6 +65,7 @@ export function BudgetProgressList({ progress, currency, canEdit, onEdit, onDele
                       onClick={() => onEdit(item)}
                       aria-label={t('budgets.edit')}
                     />
+                    {canDelete && (
                     <Popconfirm
                       title={t('budgets.deleteConfirm')}
                       onConfirm={() => onDelete(item.budgetId)}
@@ -72,6 +74,7 @@ export function BudgetProgressList({ progress, currency, canEdit, onEdit, onDele
                     >
                       <Button type="text" size="small" danger icon={<DeleteOutlined />} aria-label={t('common.delete')} />
                     </Popconfirm>
+                    )}
                   </span>
                 )}
               </div>

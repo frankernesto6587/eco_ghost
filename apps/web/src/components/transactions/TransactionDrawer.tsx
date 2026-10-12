@@ -28,7 +28,8 @@ interface TransactionDrawerProps {
   onClose: () => void;
   onEdit?: (tx: DrawerTransaction) => void;
   onDelete?: (tx: DrawerTransaction) => void;
-  canWrite: boolean;
+  /** Edit/delete saved transactions (OWNER, ADMIN) */
+  canEdit: boolean;
   isMobile?: boolean;
 }
 
@@ -39,7 +40,7 @@ const TYPE_LABELS: Record<string, string> = {
   EXCHANGE: 'Cambio',
 };
 
-export default function TransactionDrawer({ transaction: tx, open, onClose, onEdit, onDelete, canWrite, isMobile }: TransactionDrawerProps) {
+export default function TransactionDrawer({ transaction: tx, open, onClose, onEdit, onDelete, canEdit, isMobile }: TransactionDrawerProps) {
   if (!tx) return null;
 
   const currency = tx.account?.currency ?? 'USD';
@@ -148,7 +149,7 @@ export default function TransactionDrawer({ transaction: tx, open, onClose, onEd
       </div>
 
       {/* Footer actions */}
-      {canWrite && (
+      {canEdit && (
         <div className={css.footer}>
           {onEdit && (
             <Button icon={<EditOutlined />} onClick={() => onEdit(tx)}>

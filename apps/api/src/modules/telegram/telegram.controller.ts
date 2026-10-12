@@ -1,7 +1,6 @@
 import {
   Controller,
   Post,
-  Get,
   Body,
   Headers,
   HttpCode,
@@ -9,7 +8,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { ApiTags, ApiOperation, ApiExcludeEndpoint, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiExcludeEndpoint } from '@nestjs/swagger';
 import { Public } from '../../common/decorators';
 import { TelegramService } from './telegram.service';
 
@@ -33,26 +32,12 @@ export class TelegramController {
     @Body() update: Record<string, unknown>,
     @Headers('x-telegram-bot-api-secret-token') secretToken?: string,
   ) {
-    // Validate webhook secret if configured
-    if (this.webhookSecret && secretToken !== this.webhookSecret) {
+    // Fail closed: without a configured secret anyone could post fake updates
+    if (!this.webhookSecret || secretToken !== this.webhookSecret) {
       throw new ForbiddenException();
     }
 
     await this.telegramService.handleUpdate(update as any);
     return { ok: true };
-  }
-
-  @Get('webhook-info')
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Get current webhook info' })
-  async getWebhookInfo() {
-    return this.telegramService.getWebhookInfo();
-  }
-
-  @Post('set-webhook')
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Set Telegram webhook URL' })
-  async setWebhook(@Body() body: { url: string }) {
-    return this.telegramService.setWebhook(body.url);
   }
 }

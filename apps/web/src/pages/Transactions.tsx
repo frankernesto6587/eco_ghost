@@ -160,7 +160,7 @@ export default function TransactionsPage() {
   const { t } = useTranslation();
   const { message, modal } = App.useApp();
   const queryClient = useQueryClient();
-  const { canWrite, canManageOrg } = usePermissions();
+  const { canWrite, canEditTx } = usePermissions();
   const isMobile = useIsMobile();
   const [form] = Form.useForm<TransactionFormValues>();
   const watchedType = Form.useWatch('type', form);
@@ -816,7 +816,7 @@ export default function TransactionsPage() {
           <kbd className={s.searchKbd}>/</kbd>
         </div>
         <div className={s.toolbarDivider} />
-        {canManageOrg && (
+        {canEditTx && (
           <div className={s.stateSeg}>
             <button
               className={`${s.stateBtn} ${!viewDeleted ? s.stateBtn + ' ' + 'on' : ''}`}
@@ -1113,7 +1113,7 @@ export default function TransactionsPage() {
             <button className={s.bulkBtn} onClick={() => setSelectedIds(new Set())}>
               Deseleccionar
             </button>
-            {canManageOrg && (
+            {canEditTx && (
               <button className={s.bulkBtnDanger} onClick={handleBulkDelete}>
                 <DeleteOutlined style={{ fontSize: 12 }} />
                 Eliminar
@@ -1174,7 +1174,7 @@ export default function TransactionsPage() {
                 <div className={`${s.mobileCardAmt} ${colorClass}`}>
                   {prefix}{formatCurrency(Math.abs(tx.amount), currency)}
                 </div>
-                {viewDeleted && canManageOrg && (
+                {viewDeleted && canEditTx && (
                   <Button
                     type="text"
                     size="small"
@@ -1182,7 +1182,7 @@ export default function TransactionsPage() {
                     onClick={(e) => { e.stopPropagation(); handleRestore(tx); }}
                   />
                 )}
-                {!viewDeleted && canManageOrg && (
+                {!viewDeleted && canEditTx && (
                   <Button
                     type="text"
                     size="small"
@@ -1242,7 +1242,7 @@ export default function TransactionsPage() {
                 >
                   {/* Checkbox column */}
                   <div className={s.cChk} onClick={(e) => e.stopPropagation()}>
-                    {viewDeleted && canManageOrg ? (
+                    {viewDeleted && canEditTx ? (
                       <Button
                         type="text"
                         size="small"
@@ -1616,7 +1616,7 @@ export default function TransactionsPage() {
           closeDrawer();
           handleDelete(tx as unknown as Transaction);
         }}
-        canWrite={canWrite}
+        canEdit={canEditTx}
       />
     </div>
   );

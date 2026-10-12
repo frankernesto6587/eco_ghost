@@ -1,6 +1,6 @@
 # App Android de EcoGhost — Diseño y UX (S2)
 
-> Estado: **EN CURSO**.
+> Estado: **ACEPTADA** (2026-10-12). Prototipo completo con visto bueno de Frank.
 > - Direcciones visuales (4 pantallas): https://maquetas.merxbit.com/ecoghost-android/ (pública) · https://claude.ai/artifact/4uaAEp7ue7rz2DxdypTuc4 (privada)
 > - **Prototipo navegable completo:** https://maquetas.merxbit.com/ecoghost-android-prototipo/ (pública). Fuente en `/home/frank/maquetas-public/ecoghost-android-prototipo/index.html`.
 > Depende de `2026-10-12-android-arquitectura.md` (S1, aceptada).

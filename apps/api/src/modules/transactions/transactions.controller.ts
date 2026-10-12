@@ -61,7 +61,7 @@ export class TransactionsController {
   }
 
   @Post('bulk/delete')
-  @Roles(Role.OWNER)
+  @Roles(Role.OWNER, Role.ADMIN)
   bulkDelete(
     @OrgId() orgId: string,
     @CurrentUser('id') userId: string,
@@ -76,7 +76,7 @@ export class TransactionsController {
   }
 
   @Patch(':id')
-  @Roles(Role.OWNER)
+  @Roles(Role.OWNER, Role.ADMIN)
   update(
     @OrgId() orgId: string,
     @CurrentUser('id') userId: string,
@@ -87,7 +87,7 @@ export class TransactionsController {
   }
 
   @Delete(':id')
-  @Roles(Role.OWNER)
+  @Roles(Role.OWNER, Role.ADMIN)
   remove(
     @OrgId() orgId: string,
     @CurrentUser('id') userId: string,
@@ -98,7 +98,7 @@ export class TransactionsController {
   }
 
   @Patch(':id/restore')
-  @Roles(Role.OWNER)
+  @Roles(Role.OWNER, Role.ADMIN)
   restore(
     @OrgId() orgId: string,
     @CurrentUser('id') userId: string,

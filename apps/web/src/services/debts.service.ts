@@ -2,12 +2,15 @@ import { api } from './api';
 
 export interface CreateDebtDto {
   personName: string;
-  description?: string;
+  description: string;
   totalAmount: number;
   type: string;
   accountId: string;
   dueDate?: string;
 }
+
+/** Only these fields are editable once a debt exists (see UpdateDebtDto in the API). */
+export type UpdateDebtDto = Partial<Pick<CreateDebtDto, 'personName' | 'description' | 'dueDate'>>;
 
 export interface AddPaymentDto {
   amount: number;
@@ -32,7 +35,7 @@ export const debtsService = {
     return data;
   },
 
-  async update(id: string, payload: Partial<CreateDebtDto>) {
+  async update(id: string, payload: UpdateDebtDto) {
     const { data } = await api.patch(`/debts/${id}`, payload);
     return data;
   },

@@ -13,7 +13,7 @@ import {
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 import { CurrentUser, Roles } from '../../common/decorators';
-import { RolesGuard } from '../../common/guards';
+import { RolesGuard, OrgParamGuard } from '../../common/guards';
 import { OrganizationsService } from './organizations.service';
 import {
   CreateOrgDto,
@@ -54,7 +54,7 @@ export class OrganizationsController {
   }
 
   @Get(':id')
-  @UseGuards(RolesGuard)
+  @UseGuards(RolesGuard, OrgParamGuard)
   @ApiOperation({ summary: 'Get organization details' })
   async findOne(
     @Param('id') id: string,
@@ -64,7 +64,7 @@ export class OrganizationsController {
   }
 
   @Patch(':id')
-  @UseGuards(RolesGuard)
+  @UseGuards(RolesGuard, OrgParamGuard)
   @Roles(Role.OWNER)
   @ApiOperation({ summary: 'Update organization (OWNER only)' })
   async update(
@@ -75,7 +75,7 @@ export class OrganizationsController {
   }
 
   @Delete(':id')
-  @UseGuards(RolesGuard)
+  @UseGuards(RolesGuard, OrgParamGuard)
   @Roles(Role.OWNER)
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete organization (OWNER only)' })
@@ -84,7 +84,7 @@ export class OrganizationsController {
   }
 
   @Post(':id/regenerate-token')
-  @UseGuards(RolesGuard)
+  @UseGuards(RolesGuard, OrgParamGuard)
   @Roles(Role.OWNER)
   @ApiOperation({ summary: 'Regenerate invite token, optionally expel members (OWNER only)' })
   async regenerateToken(
@@ -95,7 +95,7 @@ export class OrganizationsController {
   }
 
   @Post(':id/disconnect-telegram')
-  @UseGuards(RolesGuard)
+  @UseGuards(RolesGuard, OrgParamGuard)
   @Roles(Role.OWNER)
   @ApiOperation({ summary: 'Disconnect Telegram from organization (OWNER only)' })
   async disconnectTelegram(@Param('id') id: string) {
@@ -103,14 +103,14 @@ export class OrganizationsController {
   }
 
   @Get(':id/members')
-  @UseGuards(RolesGuard)
+  @UseGuards(RolesGuard, OrgParamGuard)
   @ApiOperation({ summary: 'List all members of the organization' })
   async getMembers(@Param('id') id: string) {
     return this.organizationsService.getMembers(id);
   }
 
   @Patch(':id/members/:memberId')
-  @UseGuards(RolesGuard)
+  @UseGuards(RolesGuard, OrgParamGuard)
   @Roles(Role.OWNER, Role.ADMIN)
   @ApiOperation({ summary: 'Update a member role' })
   async updateMemberRole(
@@ -122,7 +122,7 @@ export class OrganizationsController {
   }
 
   @Delete(':id/members/:memberId')
-  @UseGuards(RolesGuard)
+  @UseGuards(RolesGuard, OrgParamGuard)
   @Roles(Role.OWNER, Role.ADMIN)
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Remove a member from the organization' })

@@ -4,13 +4,27 @@ import {
   ConflictException,
   ForbiddenException,
 } from '@nestjs/common';
-import { Role } from '@prisma/client';
+import { Organization, Role } from '@prisma/client';
 import slugify from 'slugify';
 import { v4 as uuidv4 } from 'uuid';
 import { DEFAULT_CATEGORIES } from '@ecoghost/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TelegramService } from '../telegram/telegram.service';
 import { CreateOrgDto, UpdateOrgDto, UpdateRoleDto } from './dto';
+
+/**
+ * Shape an organization for API responses:
+ * - `telegramChatId` is a BigInt (JSON.stringify throws on it) and internal,
+ *   so it becomes `telegramConnected`.
+ * - `inviteToken` lets anyone join, so only the OWNER gets it.
+ */
+export function toPublicOrg(org: Organization, role?: Role | null) {
+  const { telegramChatId, inviteToken, ...rest } = org;
+  const telegramConnected = telegramChatId !== null;
+  return role === Role.OWNER
+    ? { ...rest, inviteToken, telegramConnected }
+    : { ...rest, telegramConnected };
+}
 
 @Injectable()
 export class OrganizationsService {
@@ -53,7 +67,7 @@ export class OrganizationsService {
     // Seed default categories
     await this.seedDefaultCategories(org.id);
 
-    return org;
+    return toPublicOrg(org, Role.OWNER);
   }
 
   /**
@@ -68,7 +82,7 @@ export class OrganizationsService {
     });
 
     return memberships.map((m) => ({
-      ...m.org,
+      ...toPublicOrg(m.org, m.role),
       role: m.role,
     }));
   }
@@ -86,21 +100,15 @@ export class OrganizationsService {
       throw new NotFoundException(`Organization with ID "${orgId}" not found`);
     }
 
-    const telegramConnected = org.telegramChatId !== null;
-    // Strip BigInt field to avoid serialization issues
-    const { telegramChatId: _, inviteToken, ...rest } = org;
-
-    // Check if user is OWNER to decide whether to expose inviteToken
+    let role: Role | null = null;
     if (userId) {
       const membership = await this.prisma.orgMember.findUnique({
         where: { userId_orgId: { userId, orgId } },
       });
-      if (membership?.role === Role.OWNER) {
-        return { ...rest, inviteToken, telegramConnected };
-      }
+      role = membership?.role ?? null;
     }
 
-    return { ...rest, telegramConnected };
+    return toPublicOrg(org, role);
   }
 
   /**
@@ -127,10 +135,12 @@ export class OrganizationsService {
       data.baseCurrency = dto.baseCurrency;
     }
 
-    return this.prisma.organization.update({
+    const updated = await this.prisma.organization.update({
       where: { id: orgId },
       data,
     });
+    // Only the OWNER can reach this endpoint
+    return toPublicOrg(updated, Role.OWNER);
   }
 
   /**

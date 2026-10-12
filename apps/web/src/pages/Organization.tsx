@@ -23,7 +23,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { App } from 'antd';
 import { Role, CURRENCIES } from '@ecoghost/shared';
-import { organizationsService, telegramService } from '@/services/organizations.service';
+import { organizationsService } from '@/services/organizations.service';
 import type { CreateOrganizationDto } from '@/services/organizations.service';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useAuthStore } from '@/store/auth.store';
@@ -178,25 +178,6 @@ export default function OrganizationPage() {
       message.success('Token regenerado');
       setRegenerateModalOpen(false);
       setSelectedExpelIds([]);
-    },
-    onError: () => {
-      message.error(t('common.error'));
-    },
-  });
-
-  const { data: webhookInfo } = useQuery({
-    queryKey: ['telegram-webhook'],
-    queryFn: () => telegramService.getWebhookInfo(),
-    enabled: !!orgId && canManageOrg,
-  });
-
-  const [webhookUrl, setWebhookUrl] = useState('');
-
-  const setWebhookMutation = useMutation({
-    mutationFn: (url: string) => telegramService.setWebhook(url),
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['telegram-webhook'] });
-      message.success(`Webhook configurado: ${data.url}`);
     },
     onError: () => {
       message.error(t('common.error'));
@@ -518,32 +499,6 @@ export default function OrganizationPage() {
               </div>
             )}
 
-            {/* Webhook config */}
-            <div className={css.webhookDivider}>
-              <div className={css.webhookLabel}>Webhook</div>
-              {webhookInfo?.url ? (
-                <div className={css.webhookCurrent}>
-                  Actual: <span className={css.webhookUrl}>{webhookInfo.url}</span>
-                </div>
-              ) : (
-                <div className={css.webhookCurrent}>No hay webhook configurado.</div>
-              )}
-              <div className={css.webhookRow}>
-                <Input
-                  placeholder="https://tu-url.ngrok-free.app"
-                  value={webhookUrl}
-                  onChange={(e) => setWebhookUrl(e.target.value)}
-                />
-                <Button
-                  type="primary"
-                  onClick={() => setWebhookMutation.mutate(webhookUrl)}
-                  loading={setWebhookMutation.isPending}
-                  disabled={!webhookUrl}
-                >
-                  Configurar
-                </Button>
-              </div>
-            </div>
           </div>
         </div>
       )}

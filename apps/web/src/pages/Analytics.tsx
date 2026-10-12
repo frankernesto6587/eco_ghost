@@ -100,7 +100,7 @@ export default function AnalyticsPage() {
   const isMobile = useIsMobile();
   const { message } = App.useApp();
   const queryClient = useQueryClient();
-  const { canWrite } = usePermissions();
+  const { canWrite, canDeleteBudget } = usePermissions();
   const { tokens } = useEcoChartTheme();
 
   const currentOrg = useAuthStore((st) => st.currentOrg);
@@ -599,6 +599,7 @@ export default function AnalyticsPage() {
                   progress={budgets}
                   currency={currency}
                   canEdit={canWrite}
+                  canDelete={canDeleteBudget}
                   onEdit={openEditBudget}
                   onDelete={(id) => deleteBudget.mutate(id)}
                 />

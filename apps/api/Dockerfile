@@ -61,6 +61,7 @@ COPY apps/api/package.json ./apps/api/
 COPY package.json pnpm-workspace.yaml ./
 
 # Entrypoint script
+COPY apps/api/scripts ./apps/api/scripts
 COPY apps/api/entrypoint.sh ./apps/api/entrypoint.sh
 RUN chmod +x ./apps/api/entrypoint.sh
 

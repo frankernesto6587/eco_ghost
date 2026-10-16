@@ -45,6 +45,19 @@ Verificación: restaurar la copia en una base local, aplicar `migrate resolve` +
 
 Verificación: `curl https://apieco-prueba.merxbit.com/api/v1/...` con un usuario sembrado; login en `eco-prueba.merxbit.com`.
 
+**Hecho (2026-10-16).** En Dokploy, proyecto EcoGhost, entorno `prueba`: Postgres `db-prueba` (`ecoghost-prueba-db-ouctla`), apps `API prueba` y `front prueba`, las dos en la rama `prueba` con autodeploy. DNS `apieco-prueba` y `eco-prueba` → 157.173.210.111, certificados de Let's Encrypt.
+- Usuarios sembrados (misma contraseña, en el VPS en `~/.config/ecoghost-prueba/seed-password`): `frankernesto6587@gmail.com` (OWNER de *Casa (prueba)* y *Negocio (prueba)*), `admin@prueba.ecoghost` (ADMIN), `contable@prueba.ecoghost` (ACCOUNTANT), `lector@prueba.ecoghost` (VIEWER).
+- *Casa (prueba)*: 5 cuentas (MN, USD, MLC), 6 meses de movimientos, transferencias y cambios enlazados, 3 deudas (pendiente, parcial, pagada), presupuestos con ventana de meses, etiquetas y un movimiento en la papelera. *Negocio (prueba)*: una caja USD con ventas, para probar el cambio de organización.
+- Volver a sembrar (borra y recrea solo las organizaciones "(prueba)"; se niega si `DATABASE_URL` no es de pruebas):
+  ```sh
+  docker run --rm --network dokploy-network -v $PWD:$PWD -w $PWD/apps/api \
+    -e DATABASE_URL="postgresql://ecoghost:$(cat ~/.config/ecoghost-prueba/db-password)@ecoghost-prueba-db-ouctla:5432/ecoghost" \
+    -e SEED_PASSWORD="$(cat ~/.config/ecoghost-prueba/seed-password)" \
+    node:22-bookworm node_modules/.bin/ts-node --compiler-options '{"module":"CommonJS"}' src/prisma/seed-prueba.ts
+  ```
+  (Debian y no Alpine: el motor de Prisma de `node_modules` es de glibc.)
+- Login con Google en la web de pruebas: falta añadir `https://apieco-prueba.merxbit.com/api/v1/auth/google/callback` como URI de redirección del cliente web en la consola de Google. Con usuario y contraseña ya funciona.
+
 ## Fase 4 — Login de Google para móvil (rama `s3/google-mobile`)
 - `POST /auth/google/mobile` `{ idToken }`, público. Verifica con `google-auth-library` (`verifyIdToken`), exige `email_verified`, y reutiliza `authService.validateOAuthUser` + `authService.login` (misma respuesta que `/auth/login`).
 - `audience` = el **cliente web** actual (`GOOGLE_CLIENT_ID`): con Credential Manager la app pide el token con ese `serverClientId`, así que no hace falta otra variable. Opcional: `GOOGLE_MOBILE_AUDIENCES` si más adelante se añade iOS.
@@ -52,7 +65,7 @@ Verificación: `curl https://apieco-prueba.merxbit.com/api/v1/...` con un usuari
 - Tests: token válido, audiencia equivocada, email sin verificar, usuario nuevo (crea org) y usuario existente (enlaza por email).
 
 ## Decisiones pendientes
-- [ ] **Telegram `set-webhook`/`webhook-info`:** (a) eliminarlos de la API y configurar el webhook con un script, (b) restringirlos a una lista de correos administradores del sistema (`SYSTEM_ADMIN_EMAILS`). Recomendación: (a).
-- [ ] **Entorno de pruebas sigue la rama `prueba`** (recomendado) o se despliega a mano.
-- [ ] **Web de pruebas** (`eco-prueba.merxbit.com`): sí o solo la API.
-- [ ] Aprobar este plan.
+- [x] **Telegram `set-webhook`/`webhook-info`:** (a) eliminarlos de la API y configurar el webhook con un script, (b) restringirlos a una lista de correos administradores del sistema (`SYSTEM_ADMIN_EMAILS`). Recomendación: (a).
+- [x] **Entorno de pruebas sigue la rama `prueba`** (recomendado) o se despliega a mano.
+- [x] **Web de pruebas** (`eco-prueba.merxbit.com`): sí o solo la API.
+- [x] Aprobar este plan.

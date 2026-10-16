@@ -16,7 +16,8 @@ import { User } from '@prisma/client';
 import { FastifyReply, FastifyRequest } from 'fastify';
 import { CurrentUser, Public } from '../../common/decorators';
 import { AuthService } from './auth.service';
-import { LoginDto, RefreshTokenDto, RegisterDto } from './dto';
+import { GoogleMobileDto, LoginDto, RefreshTokenDto, RegisterDto } from './dto';
+import { GoogleIdTokenVerifier } from './google-id-token.verifier';
 import { LocalAuthGuard } from './guards/local-auth.guard';
 
 @ApiTags('Auth')
@@ -26,6 +27,7 @@ export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly configService: ConfigService,
+    private readonly googleVerifier: GoogleIdTokenVerifier,
   ) {}
 
   // ─── POST /auth/register ──────────────────────────────────────────
@@ -66,6 +68,18 @@ export class AuthController {
   async logout(@Body() dto: RefreshTokenDto) {
     await this.authService.logout(dto.refreshToken);
     return { message: 'Logged out successfully' };
+  }
+
+  // ─── POST /auth/google/mobile ─────────────────────────────────────
+
+  @Public()
+  @Post('google/mobile')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Log in with a Google ID token (Android app)' })
+  async googleMobile(@Body() dto: GoogleMobileDto) {
+    const profile = await this.googleVerifier.verify(dto.idToken);
+    const user = await this.authService.validateOAuthUser({ provider: 'GOOGLE', ...profile });
+    return this.authService.login(user);
   }
 
   // ─── GET /auth/google ─────────────────────────────────────────────

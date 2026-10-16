@@ -6,6 +6,7 @@ import { PassportModule } from '@nestjs/passport';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
+import { GoogleIdTokenVerifier } from './google-id-token.verifier';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { LocalStrategy } from './strategies/local.strategy';
@@ -26,6 +27,7 @@ import { LocalStrategy } from './strategies/local.strategy';
   providers: [
     PrismaService,
     AuthService,
+    GoogleIdTokenVerifier,
     JwtStrategy,
     LocalStrategy,
     // Register JwtAuthGuard as a global guard so every route

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- La variante de prueba lleva el icono en dorado para no confundirla con la real -->
+    <color name="icon_bg">#D8B46A</color>
+    <color name="icon_fg">#17130A</color>
+</resources>

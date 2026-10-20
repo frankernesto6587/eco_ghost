@@ -15,17 +15,16 @@ const ACCOUNT_TYPE_LABELS: Record<string, string> = {
   [AccountType.OTHER]: 'Otro',
 };
 
+// Rampa categorica del tema: legible con --eco-accent-ink en claro y oscuro
 const ACCOUNT_COLORS = [
-  'oklch(0.6 0.1 220)',    // blue
-  'oklch(0.75 0.13 160)',  // green
-  'oklch(0.5 0.2 25)',     // red
-  'oklch(0.65 0.15 110)',  // yellow-green
-  'oklch(0.55 0.04 80)',   // warm gray
-  'oklch(0.58 0.2 300)',   // purple
-  'oklch(0.7 0.12 30)',    // warm orange
-  'oklch(0.68 0.18 350)',  // pink
-  'oklch(0.7 0.14 180)',   // teal
-  'oklch(0.72 0.16 60)',   // amber
+  'var(--eco-cat-2)',
+  'var(--eco-cat-5)',
+  'var(--eco-cat-7)',
+  'var(--eco-cat-6)',
+  'var(--eco-cat-8)',
+  'var(--eco-cat-1)',
+  'var(--eco-cat-3)',
+  'var(--eco-cat-4)',
 ];
 
 function getAccountColor(id: string): string {

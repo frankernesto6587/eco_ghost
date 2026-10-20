@@ -14,7 +14,7 @@ export interface EcoChartTheme {
 }
 
 /**
- * Tema Ember para los graficos, reactivo al cambio de light/dark.
+ * Tema Dracula/Alucard para los graficos, reactivo al cambio de light/dark.
  *
  * Usa useSyncExternalStore en lugar de useEffect a proposito: ver la nota de
  * orden de efectos en lib/chartTheme.ts.

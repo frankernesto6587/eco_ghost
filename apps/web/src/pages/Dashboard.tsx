@@ -71,12 +71,13 @@ function computeDayTotal(txs: RecentTransaction[]): Record<string, number> {
   return totals;
 }
 
+// Tokens de la rampa categorica: cambian solos entre Dracula y Alucard
 const CURRENCY_COLORS: Record<string, string> = {
-  USD: '#3b82f6',
-  EUR: '#a855f7',
-  MN: '#f59e0b',
-  MLC: '#06b6d4',
-  USDT: '#22c55e',
+  USD: 'var(--eco-cat-2)',
+  EUR: 'var(--eco-cat-1)',
+  MN: 'var(--eco-cat-3)',
+  MLC: 'var(--eco-cat-4)',
+  USDT: 'var(--eco-cat-5)',
 };
 
 function getCurrencyColor(currency: string): string {

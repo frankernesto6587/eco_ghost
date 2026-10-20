@@ -1,5 +1,5 @@
 /**
- * Puente entre los tokens Ember (oklch, en CSS) y G2/@ant-design/charts.
+ * Puente entre los tokens del tema (CSS) y G2/@ant-design/charts.
  *
  * Dos problemas que resuelve este modulo:
  *
@@ -64,21 +64,21 @@ export function resolveCssColor(varName: string, fallback: string): string {
 // Fallbacks: equivalentes sRGB de los tokens oklch del tema oscuro. Solo se usan
 // si getComputedStyle falla (SSR, captura de miniatura, canvas bloqueado).
 const FALLBACK = {
-  bg: '#211d1a',
-  surface: '#2a2522',
-  surface2: '#332d29',
-  surface3: '#3f3833',
-  line: '#48403a',
-  lineSoft: '#382f2b',
-  fg: '#f7f3ee',
-  fg2: '#c3bcb4',
-  fg3: '#8b847c',
-  fg4: '#655f59',
-  accent: '#fa7c20',
-  pos: '#5ac576',
-  neg: '#f0705c',
-  fx: '#4cb6e0',
-  cat: ['#fa7c20', '#00bec7', '#5ac576', '#c97adb', '#dab33a', '#6d95ee', '#ed8b8b', '#a68f68'],
+  bg: '#21222c',
+  surface: '#282a36',
+  surface2: '#343746',
+  surface3: '#424450',
+  line: '#44475a',
+  lineSoft: '#353747',
+  fg: '#f8f8f2',
+  fg2: '#cfcfde',
+  fg3: '#9aa3cc',
+  fg4: '#6272a4',
+  accent: '#bd93f9',
+  pos: '#50fa7b',
+  neg: '#ff5555',
+  fx: '#8be9fd',
+  cat: ['#bd93f9', '#8be9fd', '#ffb86c', '#ff79c6', '#50fa7b', '#f1fa8c', '#ff5555', '#6272a4'],
 };
 
 function readTokens(): EcoChartTokens {
@@ -149,7 +149,7 @@ export function subscribeEcoChartTokens(fn: () => void): () => void {
 
 /**
  * Color de una categoria: el suyo propio si lo tiene (el usuario lo edita en
- * Categorias y la coherencia con esa pantalla importa), si no la rampa Ember.
+ * Categorias y la coherencia con esa pantalla importa), si no la rampa del tema.
  */
 export function categoryColor(
   own: string | null | undefined,

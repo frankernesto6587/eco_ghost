@@ -6,6 +6,9 @@ export interface Account {
   type: string;
   currency: string;
   balance: number;
+  /** Lo que moveria lo pendiente de aprobar que el usuario puede ver (no esta en `balance`) */
+  pendingDelta?: number;
+  pendingCount?: number;
   isActive: boolean;
   icon?: string;
   orgId: string;

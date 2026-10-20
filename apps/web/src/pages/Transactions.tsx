@@ -1172,7 +1172,7 @@ export default function TransactionsPage() {
                     {day}
                     {tx.account && <> · {tx.account.name}</>}
                   </div>
-                  <div className={s.mobileCardDesc}>{tx.description}</div>
+                  <div className={s.mobileCardDesc}>{tx.description} <StatusTag tx={tx} /></div>
                   {tx.notes && <div className={s.mobileCardSub}>{tx.notes}</div>}
                   {viewDeleted && tx.deleteReason && (
                     <div className={s.deleteReason}>Motivo: {tx.deleteReason}</div>
@@ -1282,6 +1282,7 @@ export default function TransactionsPage() {
                   <div className={s.cDesc}>
                     <div className={s.descTitle}>{tx.description}</div>
                     <div className={s.descSub}>
+                      <StatusTag tx={tx} />
                       {tx.notes && <span>{tx.notes}</span>}
                       {viewDeleted && tx.deleteReason && (
                         <span className={s.descTag} style={{ color: 'var(--eco-neg)', borderColor: 'var(--eco-neg)' }}>
@@ -1628,4 +1629,26 @@ export default function TransactionsPage() {
       />
     </div>
   );
+}
+
+/**
+ * Etiqueta de lo que aun no cuenta: pendiente de aprobar o rechazado (lo ve
+ * quien lo anoto y quien aprueba; se gestiona en Aprobaciones).
+ */
+function StatusTag({ tx }: { tx: Transaction }) {
+  if (tx.status === 'PENDING') {
+    return (
+      <span className={s.descTag} style={{ color: 'var(--eco-cat-6)', borderColor: 'var(--eco-cat-6)' }} title="No cuenta en saldos hasta que lo apruebe un admin">
+        por aprobar
+      </span>
+    );
+  }
+  if (tx.status === 'REJECTED') {
+    return (
+      <span className={s.descTag} style={{ color: 'var(--eco-neg)', borderColor: 'var(--eco-neg)' }} title={tx.rejectionReason ?? undefined}>
+        rechazado
+      </span>
+    );
+  }
+  return null;
 }

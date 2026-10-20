@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
-import { Button, DatePicker, Dropdown, Spin } from 'antd';
+import { Alert, Button, DatePicker, Dropdown, Spin } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import { TransactionType } from '@ecoghost/shared';
 import type { DashboardOverview } from '@ecoghost/shared';
@@ -26,9 +26,18 @@ interface RecentTransaction {
   categoryId: string | null;
   accountId: string;
   notes: string | null;
+  /** Lo pendiente de aprobar sale en la lista pero no en los saldos */
+  status?: 'PENDING' | 'APPROVED' | 'REJECTED';
   category: { id: string; name: string; icon: string | null; color: string | null } | null;
   account: { id: string; name: string; type: string; currency: string; icon: string | null };
 }
+
+const PendingMark = ({ tx }: { tx: RecentTransaction }) =>
+  tx.status === 'PENDING' ? (
+    <span style={{ color: 'var(--eco-cat-6)', fontSize: 11, marginLeft: 6 }} title="No cuenta hasta que lo apruebe un admin">
+      · por aprobar
+    </span>
+  ) : null;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -385,6 +394,21 @@ export default function DashboardPage() {
         </div>
       </header>
 
+      {/* Aprobaciones: lo que espera revision no cuenta en ningun numero de aqui */}
+      {overview?.pending && (overview.pending.toReview > 0 || overview.pending.mine.rejected > 0) && (
+        <Alert
+          type={overview.pending.toReview > 0 ? 'warning' : 'error'}
+          showIcon
+          style={{ marginBottom: 16 }}
+          message={
+            overview.pending.toReview > 0
+              ? `${overview.pending.toReview} ${overview.pending.toReview === 1 ? 'movimiento espera' : 'movimientos esperan'} tu aprobación. No cuentan en estos números hasta que los apruebes.`
+              : `Te rechazaron ${overview.pending.mine.rejected} ${overview.pending.mine.rejected === 1 ? 'envío' : 'envíos'}. Corrígelos o retíralos.`
+          }
+          action={<Button size="small" onClick={() => navigate('/approvals')}>Revisar</Button>}
+        />
+      )}
+
       {/* ═══════ HERO + STAT CARDS ═══════ */}
       <section className={s.heroGrid}>
         {/* Hero: Total Balance */}
@@ -678,7 +702,7 @@ export default function DashboardPage() {
               <div key={tx.id} className={s.mobileCard}>
                 <span className={`${s.typeDot} ${getTypeDotClass(tx.type)}`} />
                 <div className={s.mobileCardLeft}>
-                  <div className={s.mobileCardDesc}>{tx.description}</div>
+                  <div className={s.mobileCardDesc}>{tx.description}<PendingMark tx={tx} /></div>
                   <div className={s.mobileCardSub}>
                     {formatDate(tx.date)}
                     {tx.account && ` · ${tx.account.name}`}
@@ -732,7 +756,7 @@ export default function DashboardPage() {
                         <span className={`${s.typeDot} ${getTypeDotClass(tx.type)}`} />
                       </div>
                       <div className={s.cDesc}>
-                        <div className={s.descTitle}>{tx.description}</div>
+                        <div className={s.descTitle}>{tx.description}<PendingMark tx={tx} /></div>
                         {tx.notes && <div className={s.descSub}>{tx.notes}</div>}
                       </div>
                       <div className={s.cCat}>

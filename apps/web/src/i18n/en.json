@@ -53,7 +53,8 @@
     "projects": "Projects",
     "settings": "Settings",
     "organization": "Organization",
-    "analytics": "Analytics"
+    "analytics": "Analytics",
+    "approvals": "Approvals"
   },
   "dashboard": {
     "overview": "Overview",

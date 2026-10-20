@@ -147,8 +147,8 @@ class EntryViewModel @Inject constructor(private val repo: EntryRepository) : Vi
         saving = true; error = null
         viewModelScope.launch {
             runCatching { repo.save(orgId, draft, d) }
-                .onSuccess {
-                    val msg = savedMessage(draft, d)
+                .onSuccess { status ->
+                    val msg = savedMessage(draft, d, pending = status == "PENDING")
                     if (again) { form = form.next(); saved = msg } else onDone(msg)
                 }
                 .onFailure { error = errorMessage(it) }
@@ -156,11 +156,13 @@ class EntryViewModel @Inject constructor(private val repo: EntryRepository) : Vi
         }
     }
 
-    private fun savedMessage(d: Draft, data: EntryData): String {
+    private fun savedMessage(d: Draft, data: EntryData, pending: Boolean): String {
         val req = EntryRepository.request(d, data)
         val cur = data.accounts.first { it.id == d.accountId }.currency
         val what = when (req.type) { "EXCHANGE" -> "Cambio"; "TRANSFER" -> "Transferencia"; else -> d.type.label }
-        return "$what guardado · ${req.description} · ${Money.format(d.amount)} $cur"
+        // Lo de quien no aprueba espera a un admin y aun no cuenta en los saldos
+        val how = if (pending) "enviado · pendiente de aprobación" else "guardado"
+        return "$what $how · ${req.description} · ${Money.format(d.amount)} $cur"
     }
 }
 

@@ -60,11 +60,15 @@ class EntryRepository @Inject constructor(
         EntryData(active, groups(categories.await()), usage(recent.await()), preferred)
     }
 
-    /** Guarda y avisa a Inicio y Movimientos para que se refresquen. */
-    suspend fun save(orgId: String, draft: Draft, data: EntryData) {
-        api.createTransaction(request(draft, data))
+    /**
+     * Guarda y avisa a Inicio y Movimientos para que se refresquen. Devuelve el
+     * estado con que quedo: PENDING si espera a que lo apruebe un admin.
+     */
+    suspend fun save(orgId: String, draft: Draft, data: EntryData): String {
+        val saved = api.createTransaction(request(draft, data))
         draft.accountId?.let { store.setLastAccount(orgId, it) }
         finance.notifyChanged()
+        return saved.status
     }
 
     companion object {

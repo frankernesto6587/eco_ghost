@@ -15,7 +15,15 @@ import com.merxbit.ecoghost.data.EntryRepository
 import com.merxbit.ecoghost.data.EntryType
 import com.merxbit.ecoghost.data.Home
 import com.merxbit.ecoghost.data.Movement
+import com.merxbit.ecoghost.data.net.ApprovalCountsDto
+import com.merxbit.ecoghost.data.net.ApprovalDebtDto
+import com.merxbit.ecoghost.data.net.ApprovalItemDto
+import com.merxbit.ecoghost.data.net.ApprovalLegDto
+import com.merxbit.ecoghost.data.net.CategoryDto
 import com.merxbit.ecoghost.data.net.CategoryNodeDto
+import com.merxbit.ecoghost.data.net.MineCountsDto
+import com.merxbit.ecoghost.data.net.NamedDto
+import com.merxbit.ecoghost.ui.approvals.ApprovalsContent
 import com.merxbit.ecoghost.data.net.OrgDto
 import com.merxbit.ecoghost.ui.entry.EntryContent
 import com.merxbit.ecoghost.ui.entry.EntryForm
@@ -84,6 +92,24 @@ class ScreensTest {
     private fun entry(form: EntryForm, error: String? = null) =
         EntryContent(form, entryData, false, error, null, {}, {}, {}, {})
 
+    private val now = "${today}T16:00:00.000Z"
+    private val bandeja = listOf(
+        ApprovalItemDto("p1", "EXPENSE", "PENDING", now, "Cemento", author = NamedDto("u", "Pedro Pendiente"), submittedAt = now, source = "telegram",
+            from = ApprovalLegDto("2", "Efectivo MN", "MN", 640_000), category = CategoryDto("c", "Construccion")),
+        ApprovalItemDto("p2", "EXCHANGE", "PENDING", now, "Cambio USD a MN", author = NamedDto("u", "Pedro Pendiente"), submittedAt = now,
+            from = ApprovalLegDto("4", "Efectivo USD", "USD", 5_000), to = ApprovalLegDto("2", "Efectivo MN", "MN", 1_950_000)),
+        ApprovalItemDto("p3", "DEBT_PAYMENT", "PENDING", now, "Pago: Materiales del bano", author = NamedDto("u", "Pedro Pendiente"), submittedAt = now,
+            from = ApprovalLegDto("1", "BANDEC", "MN", 500_000), debt = ApprovalDebtDto("d", "Tio Ramon", "PAYABLE", "MN")),
+    )
+    private val rechazado = bandeja[0].copy(id = "r1", status = "REJECTED", description = "Almuerzo", reviewer = NamedDto("a", "Ana Admin"),
+        rejectionReason = "Fue con la tarjeta, no en efectivo", source = null)
+
+    @Composable
+    private fun approvals(scope: String, items: List<ApprovalItemDto>, canApprove: Boolean) = ApprovalsContent(
+        scope, canApprove, items, ApprovalCountsDto(toReview = 3, mine = MineCountsDto(3, 1)), false, false, null,
+        {}, {}, {}, {}, {}, {}, {}, {},
+    )
+
     private fun shot(name: String, mode: ThemeMode, content: @Composable () -> Unit) {
         compose.setContent {
             EcoTheme(mode) { Box(Modifier.fillMaxSize().background(Eco.colors.bg)) { content() } }
@@ -104,5 +130,7 @@ class ScreensTest {
     @Test fun anotarVacioOscuro() = shot("anotar-vacio-oscuro", ThemeMode.DARK) {
         entry(EntryForm(accountId = "2"), error = "Escribe el importe")
     }
+    @Test fun aprobacionesRevisarOscuro() = shot("aprobaciones-revisar-oscuro", ThemeMode.DARK) { approvals("review", bandeja, true) }
+    @Test fun aprobacionesMiasClaro() = shot("aprobaciones-mias-claro", ThemeMode.LIGHT) { approvals("mine", listOf(rechazado) + bandeja.take(1), false) }
     @Test fun inicioSinConexion() = shot("inicio-sin-conexion", ThemeMode.LIGHT) { HomeContent(org, "Frank", null, "Sin conexión con el servidor", false, {}) }
 }

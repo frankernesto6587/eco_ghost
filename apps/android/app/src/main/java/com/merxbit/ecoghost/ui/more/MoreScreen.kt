@@ -15,6 +15,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.FactCheck
 import androidx.compose.material.icons.outlined.Storefront
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -50,6 +51,8 @@ fun MoreScreen(
     onTheme: (ThemeMode) -> Unit,
     onSwitchOrg: () -> Unit,
     onLogout: () -> Unit,
+    /** null para el visualizador (no anota ni aprueba). */
+    onApprovals: (() -> Unit)? = null,
 ) {
     val c = Eco.colors
     val ctx = LocalContext.current
@@ -76,6 +79,21 @@ fun MoreScreen(
                     Text("${roleLabel(org.role)} · moneda ${org.baseCurrency}", style = MaterialTheme.typography.bodySmall, color = c.muted)
                 }
                 Text("Cambiar", color = c.accent, style = MaterialTheme.typography.labelMedium)
+            }
+        }
+        onApprovals?.let { open ->
+            EcoCard(Modifier.fillMaxWidth().padding(top = 8.dp).clickable(onClick = open)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Outlined.FactCheck, null, tint = c.accent)
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("Aprobaciones", style = MaterialTheme.typography.titleSmall)
+                        Text(
+                            if (org.role == "OWNER" || org.role == "ADMIN") "Revisar lo que anotan los demás y tus envíos" else "Tus envíos pendientes y rechazados",
+                            style = MaterialTheme.typography.bodySmall, color = c.muted,
+                        )
+                    }
+                }
             }
         }
 

@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import com.merxbit.ecoghost.data.AuthRepository
 import com.merxbit.ecoghost.data.Session
 import com.merxbit.ecoghost.data.session.SessionStore
+import com.merxbit.ecoghost.ui.approvals.ApprovalsScreen
 import com.merxbit.ecoghost.ui.entry.EntrySheet
 import com.merxbit.ecoghost.ui.home.HomeScreen
 import com.merxbit.ecoghost.ui.login.LoginScreen
@@ -114,11 +115,13 @@ private fun Main(s: Session.LoggedIn, auth: AuthRepository, store: SessionStore,
     var tab by rememberSaveable { mutableStateOf(Tab.HOME) }
     var orgSheet by remember { mutableStateOf(false) }
     var entry by remember { mutableStateOf(false) }
+    var approvals by rememberSaveable { mutableStateOf(false) }
     val snack = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val c = Eco.colors
     // El visualizador solo mira: no ve el botón de anotar
     val canWrite = org.role != "VIEWER"
+    val canApprove = org.role == "OWNER" || org.role == "ADMIN"
 
     BackHandler(tab != Tab.HOME) { tab = Tab.HOME }
 
@@ -126,12 +129,17 @@ private fun Main(s: Session.LoggedIn, auth: AuthRepository, store: SessionStore,
         containerColor = c.bg,
         snackbarHost = { SnackbarHost(snack) },
         bottomBar = {
-            BottomBar(tab, canWrite, onTab = { tab = it }, onAdd = { entry = true })
+            BottomBar(tab, canWrite, onTab = { tab = it; approvals = false }, onAdd = { entry = true })
         },
     ) { pad ->
         Box(Modifier.padding(pad).statusBarsPadding()) {
-            when (tab) {
-                Tab.HOME -> HomeScreen(org, s.user.name, onOrgClick = { orgSheet = true }, onAvatarClick = { tab = Tab.MORE }, onSeeAll = { tab = Tab.TXS })
+            if (approvals) {
+                ApprovalsScreen(org.id, canApprove, onBack = { approvals = false }, onMessage = { msg -> scope.launch { snack.showSnackbar(msg) } })
+            } else when (tab) {
+                Tab.HOME -> HomeScreen(
+                    org, s.user.name, onOrgClick = { orgSheet = true }, onAvatarClick = { tab = Tab.MORE },
+                    onSeeAll = { tab = Tab.TXS }, onApprovals = { approvals = true },
+                )
                 Tab.TXS -> MovementsScreen(org.id)
                 Tab.DEBTS -> Soon("Deudas", "Lo que te deben y lo que debes, con sus pagos.")
                 Tab.ANALYSIS -> Soon("Análisis", "Gastos por categoría, meses y presupuestos.")
@@ -140,6 +148,7 @@ private fun Main(s: Session.LoggedIn, auth: AuthRepository, store: SessionStore,
                     onTheme = { scope.launch { store.setTheme(it) } },
                     onSwitchOrg = { orgSheet = true },
                     onLogout = { scope.launch { auth.logout() } },
+                    onApprovals = if (canWrite) ({ approvals = true }) else null,
                 )
             }
         }

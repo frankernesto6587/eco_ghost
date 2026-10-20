@@ -158,6 +158,10 @@ fun MovementRow(m: Movement, modifier: Modifier = Modifier) {
             else -> append(m.categoryName ?: "Sin categoría")
         }
         if (m.viaTelegram) append(" · Telegram")
+        when (m.status) {
+            "PENDING" -> append(" · por aprobar")
+            "REJECTED" -> append(" · rechazado")
+        }
     }
     Row(modifier.padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
         CategoryBadge(icon, color)

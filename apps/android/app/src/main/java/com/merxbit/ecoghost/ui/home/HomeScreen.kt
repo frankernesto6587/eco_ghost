@@ -96,10 +96,11 @@ fun HomeScreen(
     onOrgClick: () -> Unit,
     onAvatarClick: () -> Unit,
     onSeeAll: () -> Unit,
+    onApprovals: () -> Unit,
     vm: HomeViewModel = hiltViewModel(),
 ) {
     LaunchedEffect(org.id) { vm.load(org) }
-    HomeContent(org, userName, vm.home, vm.error, vm.refreshing, { vm.load(org, force = true) }, onOrgClick, onAvatarClick, onSeeAll)
+    HomeContent(org, userName, vm.home, vm.error, vm.refreshing, { vm.load(org, force = true) }, onOrgClick, onAvatarClick, onSeeAll, onApprovals)
 }
 
 /** Solo pinta el estado (sin ViewModel): se usa también en las capturas de los tests. */
@@ -115,6 +116,7 @@ fun HomeContent(
     onOrgClick: () -> Unit = {},
     onAvatarClick: () -> Unit = {},
     onSeeAll: () -> Unit = {},
+    onApprovals: () -> Unit = {},
 ) {
     val c = Eco.colors
     PullToRefreshBox(refreshing && home != null, onRefresh, Modifier.fillMaxSize()) {
@@ -153,6 +155,7 @@ fun HomeContent(
                 return@Column
             }
 
+            PendingBanner(home, onApprovals)
             Hero(home)
             Accounts(home)
             Month(home)
@@ -170,6 +173,28 @@ fun HomeContent(
             }
             Spacer(Modifier.height(24.dp))
         }
+    }
+}
+
+/** Quien aprueba: lo que espera. Quien anota: lo que le rechazaron. */
+@Composable
+private fun PendingBanner(home: Home, onClick: () -> Unit) {
+    val c = Eco.colors
+    val p = home.pending
+    val text = when {
+        p.toReview > 0 -> "${p.toReview} ${if (p.toReview == 1) "movimiento espera" else "movimientos esperan"} tu aprobación"
+        p.mine.rejected > 0 -> "Te rechazaron ${p.mine.rejected} ${if (p.mine.rejected == 1) "envío" else "envíos"}"
+        p.mine.pending > 0 -> "${p.mine.pending} ${if (p.mine.pending == 1) "envío espera" else "envíos esperan"} aprobación"
+        else -> return
+    }
+    val color = if (p.toReview == 0 && p.mine.rejected > 0) c.danger else c.warning
+    Row(
+        Modifier.fillMaxWidth().padding(top = 10.dp).clip(EcoShape.card).clickable(onClick = onClick)
+            .background(color.copy(alpha = 0.12f)).border(1.dp, color.copy(alpha = 0.5f), EcoShape.card).padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(text, style = MaterialTheme.typography.bodyMedium, color = c.text, modifier = Modifier.weight(1f))
+        Text("Revisar", style = MaterialTheme.typography.labelLarge, color = c.accent)
     }
 }
 
@@ -214,6 +239,13 @@ private fun Accounts(home: Home) {
                     Text(a.name, style = MaterialTheme.typography.bodySmall, color = c.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 AmountText(a.balance, a.currency, color = if (a.balance < 0) c.danger else c.text)
+                // Lo pendiente de aprobar no esta en el saldo: se ve aparte
+                if (a.pendingCount > 0) {
+                    AmountText(
+                        a.pendingDelta, a.currency, prefix = if (a.pendingDelta > 0) "⏳ +" else "⏳ ",
+                        color = c.warning, style = MaterialTheme.typography.bodySmall,
+                    )
+                }
             }
         }
     }

@@ -1,6 +1,7 @@
 package com.merxbit.ecoghost.data
 
 import com.merxbit.ecoghost.data.net.AccountDto
+import com.merxbit.ecoghost.data.net.ApprovalCountsDto
 import com.merxbit.ecoghost.data.net.EcoApi
 import com.merxbit.ecoghost.data.net.OverviewDto
 import com.merxbit.ecoghost.data.net.TransactionDto
@@ -12,7 +13,16 @@ import java.time.LocalDate
 import javax.inject.Inject
 import javax.inject.Singleton
 
-data class Account(val id: String, val name: String, val type: String, val currency: String, val balance: Long)
+/** `pendingDelta`: lo que moveria lo pendiente de aprobar (no esta en `balance`). */
+data class Account(
+    val id: String,
+    val name: String,
+    val type: String,
+    val currency: String,
+    val balance: Long,
+    val pendingDelta: Long = 0,
+    val pendingCount: Int = 0,
+)
 
 /** Un movimiento tal como se muestra: las transferencias y cambios van en una sola fila. */
 data class Movement(
@@ -30,6 +40,8 @@ data class Movement(
     val toAmount: Long? = null,
     val toCurrency: String? = null,
     val viaTelegram: Boolean = false,
+    /** PENDING o REJECTED: se ve, pero no cuenta en los saldos. */
+    val status: String = "APPROVED",
 )
 
 data class Home(
@@ -41,6 +53,7 @@ data class Home(
     val receivable: Map<String, Long>,
     val payable: Map<String, Long>,
     val recent: List<Movement>,
+    val pending: ApprovalCountsDto = ApprovalCountsDto(),
 )
 
 @Singleton
@@ -65,7 +78,7 @@ class FinanceRepository @Inject constructor(private val api: EcoApi) {
         fun toHome(base: String, o: OverviewDto, accounts: List<AccountDto>, txs: List<TransactionDto>): Home {
             val balances = o.accountBalances.associateBy { it.id }
             val list = accounts.filter { it.isActive }.map {
-                Account(it.id, it.name, it.type, it.currency, balances[it.id]?.balance ?: 0)
+                Account(it.id, it.name, it.type, it.currency, balances[it.id]?.balance ?: 0, it.pendingDelta, it.pendingCount)
             }
             // La moneda grande es la principal de la organización si tiene saldo; si no, la primera
             val main = if (o.totalBalance.containsKey(base) || o.totalBalance.isEmpty()) base else o.totalBalance.keys.first()
@@ -78,6 +91,7 @@ class FinanceRepository @Inject constructor(private val api: EcoApi) {
                 receivable = o.pendingDebtsReceivable,
                 payable = o.pendingDebtsPayable,
                 recent = movements(txs).take(5),
+                pending = o.pending,
             )
         }
 
@@ -109,6 +123,7 @@ class FinanceRepository @Inject constructor(private val api: EcoApi) {
                         toAmount = to?.amount,
                         toCurrency = to?.account?.currency,
                         viaTelegram = t.source == "telegram",
+                        status = t.status,
                     )
                 }
         }

@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { resolveRange, dayKey, dayLabels, toDayLabel } from '../../common/date-range.util';
+import { computeAccountBalances } from '../../common/account-balance.util';
+import { COUNTED, flowWhere } from '../../common/tx-filters';
 
 @Injectable()
 export class DashboardService {
@@ -29,14 +31,7 @@ export class DashboardService {
     // movimientos de deuda SI cuentan para los saldos y la curva diaria de mas
     // abajo, que es donde el dinero se mueve de verdad.
     const monthTransactions = await this.prisma.transaction.findMany({
-      where: {
-        orgId,
-        type: { in: ['INCOME', 'EXPENSE'] },
-        debtId: null,
-        date: { gte: startOfMonth, lt: rangeEnd },
-        deletedAt: null,
-        OR: [{ categoryId: null }, { category: { isAdjustment: false } }],
-      },
+      where: flowWhere({ orgId, date: { gte: startOfMonth, lt: rangeEnd } }),
       include: { account: { select: { currency: true } } },
     });
 
@@ -52,18 +47,12 @@ export class DashboardService {
       }
     }
 
-    // Pending debts grouped by currency (derived from first transaction's account)
+    // Pending debts grouped by currency
     const pendingDebts = await this.prisma.debt.findMany({
       where: {
         orgId,
+        deletedAt: null,
         status: { in: ['PENDING', 'PARTIAL'] },
-      },
-      include: {
-        transactions: {
-          take: 1,
-          orderBy: { createdAt: 'asc' },
-          include: { account: { select: { currency: true } } },
-        },
       },
     });
 
@@ -71,7 +60,7 @@ export class DashboardService {
     const pendingDebtsPayable: Record<string, number> = {};
 
     for (const debt of pendingDebts) {
-      const currency = debt.transactions[0]?.account?.currency ?? 'USD';
+      const currency = debt.currency;
       const remaining = debt.totalAmount - debt.paidAmount;
       if (debt.type === 'RECEIVABLE') {
         pendingDebtsReceivable[currency] = (pendingDebtsReceivable[currency] ?? 0) + remaining;
@@ -80,48 +69,15 @@ export class DashboardService {
       }
     }
 
-    // Helper: compute balance map from a base where clause
-    const computeBalanceMap = async (baseWhere: any) => {
-      const [ieRows, transferInRows, transferOutRows] = await Promise.all([
-        this.prisma.transaction.groupBy({
-          by: ['accountId', 'type'],
-          where: { ...baseWhere, type: { in: ['INCOME', 'EXPENSE'] } },
-          _sum: { amount: true },
-        }),
-        this.prisma.transaction.groupBy({
-          by: ['accountId'],
-          where: { ...baseWhere, type: { in: ['TRANSFER', 'EXCHANGE'] }, linkedTransactionId: null },
-          _sum: { amount: true },
-        }),
-        this.prisma.transaction.groupBy({
-          by: ['accountId'],
-          where: { ...baseWhere, type: { in: ['TRANSFER', 'EXCHANGE'] }, linkedTransactionId: { not: null } },
-          _sum: { amount: true },
-        }),
-      ]);
-
-      const map = new Map<string, number>();
-      for (const row of ieRows) {
-        const sign = row.type === 'INCOME' ? 1 : -1;
-        map.set(row.accountId, (map.get(row.accountId) ?? 0) + sign * (row._sum.amount ?? 0));
-      }
-      for (const row of transferInRows) {
-        map.set(row.accountId, (map.get(row.accountId) ?? 0) + (row._sum.amount ?? 0));
-      }
-      for (const row of transferOutRows) {
-        map.set(row.accountId, (map.get(row.accountId) ?? 0) - (row._sum.amount ?? 0));
-      }
-      return map;
-    };
-
-    const baseWhere = { orgId, accountId: { in: accountIds }, deletedAt: null };
+    const computeBalanceMap = (extraWhere = {}) =>
+      computeAccountBalances(this.prisma, orgId, { accountIds, extraWhere });
 
     // Current account balances
-    const accountBalanceMap = await computeBalanceMap(baseWhere);
+    const accountBalanceMap = await computeBalanceMap();
 
     // Balance 30 days ago
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-    const balanceMap30d = await computeBalanceMap({ ...baseWhere, date: { lte: thirtyDaysAgo } });
+    const balanceMap30d = await computeBalanceMap({ date: { lte: thirtyDaysAgo } });
 
     const balance30dAgo: Record<string, number> = {};
     for (const [accId, bal] of balanceMap30d) {
@@ -164,7 +120,7 @@ export class DashboardService {
 
     // Recent transactions (last 10)
     const recentTransactions = await this.prisma.transaction.findMany({
-      where: { orgId, deletedAt: null },
+      where: { orgId, ...COUNTED },
       orderBy: { createdAt: 'desc' },
       take: 10,
       include: {
@@ -175,10 +131,7 @@ export class DashboardService {
 
     // Daily balance trend per currency for the selected range
     // 1. Starting balance per currency (all tx before range start)
-    const startBalanceMap = await computeBalanceMap({
-      ...baseWhere,
-      date: { lt: startOfMonth },
-    });
+    const startBalanceMap = await computeBalanceMap({ date: { lt: startOfMonth } });
 
     const startBalanceByCur: Record<string, number> = {};
     for (const [accId, bal] of startBalanceMap) {
@@ -191,7 +144,7 @@ export class DashboardService {
       where: {
         orgId,
         accountId: { in: accountIds },
-        deletedAt: null,
+        ...COUNTED,
         date: { gte: startOfMonth, lt: rangeEnd },
       },
       select: { date: true, amount: true, type: true, accountId: true, linkedTransactionId: true },

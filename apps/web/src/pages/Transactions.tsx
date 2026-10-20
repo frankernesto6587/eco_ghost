@@ -481,15 +481,22 @@ export default function TransactionsPage() {
 
   const openEditModal = useCallback(
     (transaction: Transaction) => {
-      setEditingTransaction(transaction);
+      // Un traspaso o cambio se edita siempre desde la pierna que sale, con la
+      // que entra como destino, se haya pulsado la que sea: la API edita el par
+      // completo con ese significado.
+      const isPair = ['TRANSFER', 'EXCHANGE'].includes(transaction.type);
+      const out = isPair && !transaction.linkedTransactionId ? transaction.linkedBy : transaction;
+      const inc = isPair ? (transaction.linkedTransactionId ? transaction.linkedTransaction : transaction) : null;
+      setEditingTransaction(out ? { ...transaction, id: out.id } : transaction);
       form.setFieldsValue({
         date: dayjs(transaction.date),
         description: transaction.description,
-        amount: transaction.amount / 100,
+        amount: (out ?? transaction).amount / 100,
         type: transaction.type,
-        accountId: transaction.accountId,
+        accountId: (out ?? transaction).accountId,
         categoryId: transaction.categoryId ?? undefined,
         notes: transaction.notes ?? undefined,
+        ...(inc && { toAccountId: inc.accountId, toAmount: inc.amount / 100 }),
       });
       setModalOpen(true);
     },
@@ -1534,11 +1541,12 @@ export default function TransactionsPage() {
                       options={accounts
                         .filter((acc) => {
                           if (acc.id === watchedAccountId) return false;
-                          if (watchedType === 'TRANSFER') {
-                            const srcAccount = accounts.find((a) => a.id === watchedAccountId);
-                            return srcAccount ? acc.currency === srcAccount.currency : true;
-                          }
-                          return true;
+                          // Traspaso: misma moneda. Cambio: otra moneda (la API rechaza lo demas).
+                          const srcAccount = accounts.find((a) => a.id === watchedAccountId);
+                          if (!srcAccount) return true;
+                          return watchedType === 'TRANSFER'
+                            ? acc.currency === srcAccount.currency
+                            : acc.currency !== srcAccount.currency;
                         })
                         .map((acc) => ({
                           label: `${acc.name} (${acc.currency})`,

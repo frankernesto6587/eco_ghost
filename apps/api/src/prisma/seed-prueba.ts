@@ -178,13 +178,13 @@ async function seedCasa(users: { id: string }[]) {
 
   // Deudas
   const debtElvis = await prisma.debt.create({
-    data: { personName: 'Elvis', description: 'Prestamo para la moto', totalAmount: 50000, type: 'RECEIVABLE', orgId },
+    data: { personName: 'Elvis', description: 'Prestamo para la moto', totalAmount: 50000, type: 'RECEIVABLE', currency: 'USD', orgId },
   });
   const debtTio = await prisma.debt.create({
-    data: { personName: 'Tio Ramon', description: 'Materiales del bano', totalAmount: 6000000, type: 'PAYABLE', orgId, dueDate: new Date(now.getFullYear(), now.getMonth() + 1, 15) },
+    data: { personName: 'Tio Ramon', description: 'Materiales del bano', totalAmount: 6000000, type: 'PAYABLE', currency: 'MN', orgId, dueDate: new Date(now.getFullYear(), now.getMonth() + 1, 15) },
   });
   const debtMaria = await prisma.debt.create({
-    data: { personName: 'Maria', description: 'Adelanto de cumpleanos', totalAmount: 1000000, type: 'RECEIVABLE', orgId },
+    data: { personName: 'Maria', description: 'Adelanto de cumpleanos', totalAmount: 1000000, type: 'RECEIVABLE', currency: 'MN', orgId },
   });
   // Pagos (los mismos movimientos que crearia debts.service.addPayment)
   const payments = [

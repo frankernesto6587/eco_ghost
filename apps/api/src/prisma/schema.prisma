@@ -251,9 +251,14 @@ model Debt {
   paidAmount  Int        @default(0)
   type        DebtType
   status      DebtStatus @default(PENDING)
+  /// Moneda de la deuda: el movimiento inicial y todos los pagos van en ella.
+  currency    String
   dueDate     DateTime?
+  createdBy   String?
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
+  /// Borrado suave: la deuda y sus movimientos se apartan juntos.
+  deletedAt   DateTime?
 
   orgId        String
   org          Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)

@@ -181,6 +181,7 @@ async function main() {
       description: 'Prestamo para negocio',
       totalAmount: 200000, // $2,000.00
       type: 'RECEIVABLE',
+      currency: 'USD',
       orgId: demoOrg.id,
     },
   });

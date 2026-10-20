@@ -1,5 +1,6 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { computeAccountBalance, computeAccountBalances } from '../../common/account-balance.util';
 import { TelegramService } from '../telegram/telegram.service';
 import { CreateAccountDto, UpdateAccountDto } from './dto';
 
@@ -32,49 +33,9 @@ export class AccountsService {
       orderBy: { name: 'asc' },
     });
 
-    const accountIds = accounts.map((a) => a.id);
-
-    const baseWhere = { orgId, accountId: { in: accountIds }, deletedAt: null };
-
-    // Income/Expense grouped by account + type
-    const balances = await this.prisma.transaction.groupBy({
-      by: ['accountId', 'type'],
-      where: baseWhere,
-      _sum: { amount: true },
+    const balanceMap = await computeAccountBalances(this.prisma, orgId, {
+      accountIds: accounts.map((a) => a.id),
     });
-
-    // Build a balance map: accountId → balance
-    const balanceMap = new Map<string, number>();
-    for (const row of balances) {
-      const current = balanceMap.get(row.accountId) ?? 0;
-      const amount = row._sum.amount ?? 0;
-      if (row.type === 'INCOME') {
-        balanceMap.set(row.accountId, current + amount);
-      } else if (row.type === 'EXPENSE') {
-        balanceMap.set(row.accountId, current - amount);
-      }
-      // TRANSFER/EXCHANGE handled below with linkedTransactionId distinction
-    }
-
-    // TRANSFER/EXCHANGE: incoming (no linkedTransactionId) grouped by account
-    const transferInRows = await this.prisma.transaction.groupBy({
-      by: ['accountId'],
-      where: { ...baseWhere, type: { in: ['TRANSFER', 'EXCHANGE'] }, linkedTransactionId: null },
-      _sum: { amount: true },
-    });
-    for (const row of transferInRows) {
-      balanceMap.set(row.accountId, (balanceMap.get(row.accountId) ?? 0) + (row._sum.amount ?? 0));
-    }
-
-    // TRANSFER/EXCHANGE: outgoing (has linkedTransactionId) grouped by account
-    const transferOutRows = await this.prisma.transaction.groupBy({
-      by: ['accountId'],
-      where: { ...baseWhere, type: { in: ['TRANSFER', 'EXCHANGE'] }, linkedTransactionId: { not: null } },
-      _sum: { amount: true },
-    });
-    for (const row of transferOutRows) {
-      balanceMap.set(row.accountId, (balanceMap.get(row.accountId) ?? 0) - (row._sum.amount ?? 0));
-    }
 
     return accounts.map((account) => ({
       ...account,
@@ -91,7 +52,7 @@ export class AccountsService {
       throw new NotFoundException(`Account with id ${id} not found`);
     }
 
-    const balance = await this.computeBalance(account.id, orgId);
+    const balance = await computeAccountBalance(this.prisma, account.id, orgId);
     return { ...account, balance };
   }
 
@@ -102,6 +63,15 @@ export class AccountsService {
 
     if (!account) {
       throw new NotFoundException(`Account with id ${id} not found`);
+    }
+
+    // Cambiar la moneda de una cuenta con historia reetiquetaria todos sus
+    // importes: 6 400 MN pasarian a ser 6 400 USD.
+    if (dto.currency !== undefined && dto.currency !== account.currency) {
+      const used = await this.prisma.transaction.count({ where: { accountId: id } });
+      if (used > 0) {
+        throw new ConflictException('This account already has movements; its currency cannot be changed');
+      }
     }
 
     return this.prisma.account.update({
@@ -119,7 +89,7 @@ export class AccountsService {
       throw new NotFoundException(`Account with id ${id} not found`);
     }
 
-    const balance = await this.computeBalance(id, orgId);
+    const balance = await computeAccountBalance(this.prisma, id, orgId);
     const fmt = (n: number) => (n / 100).toFixed(2);
 
     const result = await this.prisma.account.update({
@@ -130,33 +100,5 @@ export class AccountsService {
     this.telegram.notify(orgId, `🗑 *Cuenta desactivada*\n${account.name} (${account.currency})\nSaldo final: ${fmt(balance)} ${account.currency}`);
 
     return result;
-  }
-
-  private async computeBalance(accountId: string, orgId: string): Promise<number> {
-    const baseWhere = { accountId, orgId, deletedAt: null };
-
-    const [income, expense, transferIn, transferOut] = await Promise.all([
-      this.prisma.transaction.aggregate({
-        where: { ...baseWhere, type: 'INCOME' },
-        _sum: { amount: true },
-      }),
-      this.prisma.transaction.aggregate({
-        where: { ...baseWhere, type: 'EXPENSE' },
-        _sum: { amount: true },
-      }),
-      this.prisma.transaction.aggregate({
-        where: { ...baseWhere, type: { in: ['TRANSFER', 'EXCHANGE'] }, linkedTransactionId: null },
-        _sum: { amount: true },
-      }),
-      this.prisma.transaction.aggregate({
-        where: { ...baseWhere, type: { in: ['TRANSFER', 'EXCHANGE'] }, linkedTransactionId: { not: null } },
-        _sum: { amount: true },
-      }),
-    ]);
-
-    return (income._sum.amount ?? 0)
-      - (expense._sum.amount ?? 0)
-      + (transferIn._sum.amount ?? 0)
-      - (transferOut._sum.amount ?? 0);
   }
 }

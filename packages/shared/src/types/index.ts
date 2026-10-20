@@ -178,18 +178,33 @@ export interface DashboardOverview {
   report: DashboardReport | null;
 }
 
-/** Resumen del rango en la moneda de estadisticas (centavos). */
+/**
+ * Resumen del rango en la moneda de estadisticas (centavos), como la NIC 21:
+ * ingresos y gastos a la tasa de mercado de su dia, y aparte la diferencia de
+ * cambio contra su coste FIFO. `net` = ingresos - gastos + diferencia.
+ */
 export interface DashboardReport {
   currency: string;
   monthIncome: number;
   monthExpense: number;
   net: number;
-  /** Resultado cambiario de vender MN (u otra moneda) en el rango */
+  /** Diferencias de cambio del rango (a favor > 0) = fxExchange + fxHolding */
   fxResult: number;
+  /** Por cambiar a una tasa distinta del mercado de ese dia */
+  fxExchange: number;
+  /** Por retener la moneda mientras el mercado se movia */
+  fxHolding: number;
   /** Movimientos del rango sin valorar (falta una tasa): no estan en los totales */
   incomplete: number;
   estimates: number;
-  patrimony: { atCost: number | null; atToday: number | null; unrealized: number | null };
+  /** `unrealized` (a tasa de hoy - a costo) = por cambio + por retener, de lo que aun se tiene */
+  patrimony: {
+    atCost: number | null;
+    atToday: number | null;
+    unrealized: number | null;
+    unrealizedExchange: number | null;
+    unrealizedHolding: number | null;
+  };
 }
 
 // ─── Aprobaciones ────────────────────────────────────────────────────
@@ -285,6 +300,20 @@ export interface AnalyticsTotals {
   incomeDelta: number;
   incomeDeltaPct: number | null;
   transactionCount: number;
+  /** Solo en la moneda de estadisticas: diferencias de cambio del rango (ya sumadas en `net`). */
+  fx?: AnalyticsFx;
+}
+
+/**
+ * Diferencia de cambio (a favor > 0) entre lo que costaron los gastos por FIFO
+ * y su valor a mercado del dia: por cambiar a otra tasa que el mercado y por
+ * retener la moneda mientras se movia.
+ */
+export interface AnalyticsFx {
+  total: number;
+  exchange: number;
+  holding: number;
+  previousTotal: number;
 }
 
 export interface AnalyticsDataQuality {
@@ -333,7 +362,8 @@ export interface TopCategoriesWidget {
 export interface AnalyticsTrend {
   currency: string;
   /** month = 'YYYY-MM'; incluye los meses sin movimiento, en cero */
-  points: { month: string; income: number; expense: number; net: number }[];
+  /** En la moneda de estadisticas, `fx` es la diferencia de cambio del mes (ya sumada en `net`). */
+  points: { month: string; income: number; expense: number; net: number; fx?: number }[];
   averages: { income: number; expense: number; net: number };
 }
 

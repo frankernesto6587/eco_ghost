@@ -4,8 +4,9 @@
 //   BASE_URL=https://apieco-prueba.merxbit.com/api/v1 SEED_PASSWORD=... node scripts/check-valuacion.mjs
 //
 // Crea una organizacion "FIFO (check)" con el ejemplo que se le mostro a Frank
-// (fechas fijas, solo cambios y gastos: no depende de las tasas de elTOQUE),
-// comprueba cada cifra y la borra al final. No usar contra produccion.
+// (fechas fijas, solo cambios y gastos, con sus propias tasas de mercado puestas
+// a mano: no depende de elTOQUE), comprueba cada cifra y la borra al final.
+// No usar contra produccion.
 
 const BASE = process.env.BASE_URL ?? 'http://127.0.0.1:3999/api/v1';
 const PASS = process.env.SEED_PASSWORD;
@@ -55,6 +56,11 @@ const exchange = (date, from, a, to, b) => tx({ date, description: 'cambio', amo
 const expense = (date, amount, accountId = mn) => tx({ date, description: 'gasto', amount, type: 'EXPENSE', accountId });
 const value = async (id) => (await api('GET', `/transactions/${id}`)).body;
 
+// Tasas de mercado del laboratorio (a mano: ganan a las de elTOQUE)
+for (const [day, USD] of Object.entries({ '09-01': 600, '09-05': 650, '09-10': 610, '09-11': 620, '09-15': 650, '09-20': 650, '09-22': 650, '09-25': 650, '09-30': 650 })) {
+  await api('PUT', `/rates/2026-${day}`, { rates: { USD } });
+}
+
 // Fondos en USD para cambiar (entrada en la moneda de estadisticas: vale lo mismo)
 await tx({ date: '2026-09-01', description: 'fondos', amount: 500000, type: 'INCOME', accountId: usd });
 const lot1 = await exchange('2026-09-10', usd, 100000, mn, 60000000); // 1 000 USD → 600 000 MN
@@ -68,12 +74,22 @@ let v1 = await value(g1.id);
 let v2 = await value(g2.id);
 ok(v1.reportAmount === 33333 && v1.valuationStatus === 'EXACT', 'gasto de 200 000 MN = 333,33 USD', v1.reportAmount);
 ok(v2.reportAmount === 81818 && v2.valuationStatus === 'EXACT', 'gasto de 500 000 MN = 818,18 USD', v2.reportAmount);
+// A mercado (NIC 21): 200 000 a 620 = 322,58; la diferencia de 10,75 en contra se
+// parte en 5,46 por cambiar a 600 con el mercado a 610 y 5,29 por retener (610 → 620).
+ok(v1.marketAmount === 32258 && v1.fxResult === -1075 && v1.fxExchange === -546 && v1.fxHolding === -529, 'a mercado 322,58: −5,46 por cambio y −5,29 por retener', v1);
+ok(v2.marketAmount === 76923 && v2.fxResult === -4895 && v2.fxExchange === -860 && v2.fxHolding === -4035, '500 000 a 650 = 769,23: −8,60 por cambio y −40,35 por retener', v2);
 const pat = (await api('GET', '/valuation/patrimony')).body;
 const mnRow = pat.currencies.find((c) => c.currency === 'MN');
 ok(mnRow?.qty === 23000000 && mnRow?.atCost === 34848, 'quedan 230 000 MN que costaron 348,48 USD', mnRow);
 ok(pat.totals.atCost === 500000 - 150000 + 34848, 'patrimonio a costo = USD que quedan + MN a costo', pat.totals);
+ok(
+  pat.totals.unrealizedExchange !== null && pat.totals.unrealizedExchange + pat.totals.unrealizedHolding === pat.totals.unrealized,
+  'lo no realizado del patrimonio se parte en cambio y retener',
+  pat.totals,
+);
 const bd = (await api('GET', `/valuation/transactions/${g2.id}`)).body;
 ok(bd.parts?.length === 2 && bd.parts[0].lot?.rate === 600 && bd.parts[1].lot?.rate === 660, 'el gasto de 500 000 sale de los cambios a 600 y 660', bd.parts);
+ok(bd.parts?.[0]?.lot?.marketRate === 610 && bd.parts?.[1]?.lot?.marketRate === 650 && bd.marketAmount === 76923, 'y el mercado esos dias estaba a 610 y 650', bd);
 
 // ── Un cambio con fecha atrasada recalcula lo que vino despues ───────────
 const early = await exchange('2026-09-05', usd, 10000, mn, 6500000); // 100 USD → 65 000 MN
@@ -87,6 +103,8 @@ ok((await value(g1.id)).reportAmount === 33333, 'al borrarlo, vuelve a 333,33');
 const sale = await exchange('2026-09-25', mn, 23000000, usd, 33000);
 const vs = await value(sale.id);
 ok(vs.reportAmount === 34848 && vs.fxResult === -1848, 'vender 230 000 MN por 330 USD: −18,48 de resultado', vs);
+// Esos MN entraron a 650 y se venden con el mercado a 650: nada por retener, todo por cambio
+ok(vs.fxExchange === -1848 && vs.fxHolding === 0, 'la venta: −18,48 por cambio, 0 por retener', vs);
 await api('DELETE', `/transactions/${sale.id}`, { reason: 'check' });
 
 // ── Gasto sin bolsa: estimado a la tasa del dia, luego lo valora el siguiente cambio ──
@@ -99,22 +117,31 @@ vd = await value(deficit.id);
 ok(vd.valuationStatus === 'EXACT' && vd.reportAmount === 34848 + 15152, 'al llegar el cambio queda exacto: 348,48 + 151,52', vd);
 const st = (await api('GET', '/valuation/status')).body;
 ok(Object.keys(st.mismatch ?? {}).length === 0, 'la bolsa cuadra con los saldos', st.mismatch);
+// Gasto antes de cambiar con el mercado a 620 (532,26) y cubierto por un cambio a 660
+ok(vd.marketAmount === 53226 && vd.fxResult === 53226 - 50000, 'el gasto que vació la bolsa: 532,26 a mercado, +32,26 de diferencia', vd);
 await api('DELETE', `/transactions/${lot3.id}`, { reason: 'check' });
 await api('DELETE', `/transactions/${deficit.id}`, { reason: 'check' });
 await api('DELETE', '/rates/2026-09-21/USD');
 
 // ── Analisis y presupuestos "todo en USD" ────────────────────────────────
 const sum = (await api('GET', '/analytics/summary?from=2026-09-01&to=2026-09-30&currency=USD&basis=REPORT')).body;
-ok(sum.currency === 'USD' && sum.totals?.expense === 33333 + 81818, 'Análisis en USD: gasto de septiembre = 333,33 + 818,18', sum.totals);
+ok(sum.currency === 'USD' && sum.totals?.expense === 32258 + 76923, 'Análisis en USD: gasto de septiembre a mercado = 322,58 + 769,23', sum.totals);
+ok(sum.totals?.fx?.total === -1075 - 4895 && sum.totals.fx.exchange === -546 - 860 && sum.totals.fx.holding === -529 - 4035, 'diferencias de cambio de septiembre: −59,70', sum.totals?.fx);
+// Ingresos − gastos a mercado + diferencias = ingresos − gastos a costo FIFO
+ok(sum.totals?.net === 500000 - (33333 + 81818), 'el neto con las diferencias cuadra con el costo real: 3 848,49', sum.totals?.net);
 const native = (await api('GET', '/analytics/summary?from=2026-09-01&to=2026-09-30&currency=MN')).body;
 ok(native.totals?.expense === 70000000, 'Análisis en MN sigue igual: 700 000 MN', native.totals);
 const trend = (await api('GET', '/analytics/trend?currency=USD&basis=REPORT&months=3')).body;
-ok(trend.points?.some((p) => p.month === '2026-09' && p.expense === 115151), 'tendencia en USD: septiembre 1 151,51', trend.points);
+ok(
+  trend.points?.some((p) => p.month === '2026-09' && p.expense === 109181 && p.fx === -5970 && p.net === 500000 - 115151),
+  'tendencia en USD: septiembre 1 091,81 a mercado, −59,70 de diferencias',
+  trend.points,
+);
 const bud = await api('POST', '/budgets', { basis: 'REPORT', currency: 'USD', amount: 100000, startMonth: '2026-09', endMonth: '2026-09' });
 ok(bud.status === 201, 'presupuesto "todo en USD" de 1 000 USD', bud.body);
 ok((await api('POST', '/budgets', { basis: 'REPORT', currency: 'MN', amount: 1, startMonth: '2026-09' })).status === 400, 'un presupuesto en USD tiene que ir en USD');
 const prog = (await api('GET', '/budgets/progress?currency=USD&month=2026-09&basis=REPORT')).body;
-ok(prog.items?.[0]?.spent === 115151 && prog.items?.[0]?.status === 'OVER', 'el presupuesto suma el gasto en MN valorado: 1 151,51 de 1 000 → pasado', prog.items?.[0]);
+ok(prog.items?.[0]?.spent === 109181 && prog.items?.[0]?.status === 'OVER', 'el presupuesto suma el gasto en MN a mercado: 1 091,81 de 1 000 → pasado', prog.items?.[0]);
 
 // ── Cierre de mes ────────────────────────────────────────────────────────
 const close = await api('POST', '/valuation/months/2026-09/close');

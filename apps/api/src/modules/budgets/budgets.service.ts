@@ -314,12 +314,12 @@ export class BudgetsService {
     };
     if (budgets.length === 0) return empty;
 
-    // REPORT: todas las cuentas, con su gasto valorado en la moneda de estadisticas.
+    // REPORT: todas las cuentas, con su gasto a mercado del dia en la moneda de estadisticas.
     const accounts = await this.prisma.account.findMany({
       where: { orgId, ...(basis === 'NATIVE' && { currency: q.currency }) },
       select: { id: true },
     });
-    const field = basis === 'REPORT' ? 'reportAmount' : 'amount';
+    const field = basis === 'REPORT' ? 'marketAmount' : 'amount';
     const accountIds = accounts.map((a) => a.id);
     if (accountIds.length === 0) {
       // Hay presupuestos pero ninguna cuenta en esa moneda: gasto 0, no error.
@@ -342,7 +342,7 @@ export class BudgetsService {
           type: TransactionType.EXPENSE,
           date: { gte: range.from, lt: range.to },
         }),
-        _sum: { amount: true, reportAmount: true },
+        _sum: { amount: true, marketAmount: true },
       }),
     ]);
 

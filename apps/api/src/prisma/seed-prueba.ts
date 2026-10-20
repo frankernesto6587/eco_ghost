@@ -40,8 +40,10 @@ const money = (min: number, max: number, cents = false) =>
 const USERS = [
   { email: 'frankernesto6587@gmail.com', name: 'Frank', role: Role.OWNER },
   { email: 'admin@prueba.ecoghost', name: 'Ana Admin', role: Role.ADMIN },
+  // Carlos tiene autoconfirmar con topes; Pedro no: todo lo suyo espera aprobacion.
   { email: 'contable@prueba.ecoghost', name: 'Carlos Contable', role: Role.ACCOUNTANT },
   { email: 'lector@prueba.ecoghost', name: 'Lucia Lectora', role: Role.VIEWER },
+  { email: 'pedro@prueba.ecoghost', name: 'Pedro Pendiente', role: Role.ACCOUNTANT },
 ];
 
 async function main() {
@@ -106,13 +108,18 @@ type Tx = {
 };
 
 async function seedCasa(users: { id: string }[]) {
-  const [owner] = users;
+  const [owner, admin, carlos, , pedro] = users;
   const org = await prisma.organization.create({
     data: { name: 'Casa (prueba)', slug: 'casa-prueba', baseCurrency: 'MN' },
   });
   const orgId = org.id;
   await prisma.orgMember.createMany({
     data: users.map((u, i) => ({ userId: u.id, orgId, role: USERS[i].role })),
+  });
+  // Carlos: entra solo hasta 50 USD o 20 000 MN; en otras monedas, espera.
+  await prisma.orgMember.update({
+    where: { userId_orgId: { userId: carlos.id, orgId } },
+    data: { autoApprove: true, autoApproveLimits: { USD: 5000, MN: 2000000 } },
   });
 
   // Sin icono: la web muestra las iniciales de la cuenta
@@ -134,6 +141,8 @@ async function seedCasa(users: { id: string }[]) {
 
   const txs: Tx[] = [];
   const now = new Date();
+  // Lo historico entra aprobado por el propietario.
+  const APPROVED = { status: 'APPROVED' as const, reviewedBy: owner.id, reviewedAt: now };
   const day = (monthsAgo: number, d: number) => {
     const date = new Date(now.getFullYear(), now.getMonth() - monthsAgo, d, between(8, 20), between(0, 59));
     return date > now ? null : date;
@@ -216,6 +225,7 @@ async function seedCasa(users: { id: string }[]) {
     await prisma.transaction.create({
       data: {
         ...data,
+        ...APPROVED,
         orgId,
         createdBy: owner.id,
         source: 'seed-prueba',
@@ -228,10 +238,10 @@ async function seedCasa(users: { id: string }[]) {
   const pair = async (type: 'TRANSFER' | 'EXCHANGE', date: Date | null, description: string, from: string, amount: number, to: string, toAmount = amount) => {
     if (!date) return;
     const inc = await prisma.transaction.create({
-      data: { date, description, amount: toAmount, type, accountId: to, orgId, createdBy: owner.id, source: 'seed-prueba' },
+      data: { date, description, amount: toAmount, type, accountId: to, orgId, createdBy: owner.id, source: 'seed-prueba', ...APPROVED },
     });
     await prisma.transaction.create({
-      data: { date, description, amount, type, accountId: from, linkedTransactionId: inc.id, orgId, createdBy: owner.id, source: 'seed-prueba' },
+      data: { date, description, amount, type, accountId: from, linkedTransactionId: inc.id, orgId, createdBy: owner.id, source: 'seed-prueba', ...APPROVED },
     });
   };
   for (let m = 5; m >= 0; m--) {
@@ -259,6 +269,47 @@ async function seedCasa(users: { id: string }[]) {
     data: { name: 'Arreglo del bano', budget: 9000000, startDate: new Date(now.getFullYear(), now.getMonth() - 2, 1), orgId },
   });
 
+  // ── Aprobaciones: lo que anoto Pedro (no se aprueba solo) ──────────────
+  const hoy = (h: number) => new Date(now.getFullYear(), now.getMonth(), now.getDate(), h);
+  const submitted = { status: 'PENDING' as const, submittedAt: now, createdBy: pedro.id, orgId };
+  // 1. Gasto por Telegram, esperando
+  await prisma.transaction.create({
+    data: { ...submitted, date: hoy(9), description: 'Cemento', amount: 640000, type: 'EXPENSE', accountId: efectivoMN, categoryId: cat('Construccion'), source: 'telegram' },
+  });
+  // 2. Cambio de moneda, esperando (las dos piernas)
+  const cInc = await prisma.transaction.create({
+    data: { ...submitted, date: hoy(10), description: 'Cambio USD a MN', amount: 1950000, type: 'EXCHANGE', accountId: efectivoMN },
+  });
+  await prisma.transaction.create({
+    data: { ...submitted, date: hoy(10), description: 'Cambio USD a MN', amount: 5000, type: 'EXCHANGE', accountId: efectivoUSD, linkedTransactionId: cInc.id },
+  });
+  // 3. Pago de deuda, esperando (Tio Ramon sigue con lo pagado aprobado)
+  await prisma.transaction.create({
+    data: { ...submitted, date: hoy(11), description: 'Pago: Materiales del bano', amount: 500000, type: 'EXPENSE', accountId: bandec, categoryId: cat('Prestamos'), debtId: debtTio.id },
+  });
+  // 4. Rechazado por Ana, con motivo
+  await prisma.transaction.create({
+    data: {
+      ...submitted, status: 'REJECTED', reviewedBy: admin.id, reviewedAt: now,
+      rejectionReason: 'Fue con la tarjeta, no en efectivo', date: hoy(8), description: 'Almuerzo', amount: 300000,
+      type: 'EXPENSE', accountId: efectivoMN, categoryId: cat('Restaurantes'),
+    },
+  });
+  // 5. Aprobado por Ana tras corregir el importe (queda lo que envio Pedro)
+  const corregido = await prisma.transaction.create({
+    data: {
+      ...submitted, status: 'APPROVED', reviewedBy: admin.id, reviewedAt: now,
+      date: day(0, 1) ?? hoy(7), description: 'Gasolina', amount: 200000, type: 'EXPENSE', accountId: efectivoMN, categoryId: cat('Combustible'),
+      originalSnapshot: { amount: 250000, description: 'Gasolina moto', categoryId: cat('Transporte publico') },
+    },
+  });
+  await prisma.auditLog.create({
+    data: {
+      action: 'APPROVE', entity: 'Transaction', entityId: corregido.id, userId: admin.id, orgId,
+      changes: { before: { amount: 250000, description: 'Gasolina moto' }, after: { amount: 200000, description: 'Gasolina' } },
+    },
+  });
+
   console.log(`  Casa (prueba): ${await prisma.transaction.count({ where: { orgId } })} movimientos`);
 }
 
@@ -272,7 +323,7 @@ async function seedNegocio(ownerId: string) {
   const cat = await createCategories(orgId);
   const now = new Date();
   await prisma.transaction.create({
-    data: { date: new Date(now.getTime() - 61 * 86400000), description: 'Saldo inicial', amount: 50000, type: 'INCOME', accountId: caja.id, categoryId: cat('Saldo inicial'), orgId, createdBy: ownerId, source: 'seed-prueba' },
+    data: { date: new Date(now.getTime() - 61 * 86400000), description: 'Saldo inicial', amount: 50000, type: 'INCOME', accountId: caja.id, categoryId: cat('Saldo inicial'), orgId, createdBy: ownerId, source: 'seed-prueba', status: 'APPROVED' },
   });
   for (let i = 0; i < 40; i++) {
     const date = new Date(now.getTime() - between(0, 60) * 86400000);
@@ -288,6 +339,7 @@ async function seedNegocio(ownerId: string) {
         orgId,
         createdBy: ownerId,
         source: 'seed-prueba',
+        status: 'APPROVED',
       },
     });
   }

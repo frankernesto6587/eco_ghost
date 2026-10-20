@@ -17,6 +17,8 @@ const MONEY_KEYS = [
   'analytics',
   'budgets',
   'debts',
+  // Aprobar o rechazar mueve saldos y la bandeja
+  'approvals',
 ] as const;
 
 export function invalidateMoneyQueries(queryClient: QueryClient) {

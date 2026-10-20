@@ -9,6 +9,8 @@ import {
   Spin,
   Avatar,
   Checkbox,
+  InputNumber,
+  Switch,
 } from 'antd';
 import {
   CopyOutlined,
@@ -46,6 +48,18 @@ interface Member {
   role: Role;
   createdAt: string;
   user: MemberUser;
+  /** Solo contadores: lo suyo entra aprobado, hasta los topes por moneda (centavos) */
+  autoApprove?: boolean;
+  autoApproveLimits?: Record<string, number> | null;
+}
+
+/** "Sí, hasta 50 USD · 20 000 MN" / "Sí, sin tope" / "No". */
+function approvalSummary(m: Member) {
+  if (!m.autoApprove) return 'Autoconfirmar: no';
+  const limits = Object.entries(m.autoApproveLimits ?? {});
+  if (!limits.length) return 'Autoconfirmar: sí, sin tope';
+  const fmt = (c: number) => new Intl.NumberFormat('es-ES', { maximumFractionDigits: 2 }).format(c / 100);
+  return `Autoconfirmar hasta ${limits.map(([cur, c]) => `${fmt(c)} ${cur}`).join(' · ')}`;
 }
 
 interface OrgDetails {
@@ -107,6 +121,10 @@ export default function OrganizationPage() {
   const [activeTab, setActiveTab] = useState<'members' | 'settings'>('members');
   const [showInviteHelp, setShowInviteHelp] = useState(false);
   const [showTelegramHelp, setShowTelegramHelp] = useState(false);
+  // Autoconfirmar: miembro en edicion, interruptor y topes (en unidades, no centavos)
+  const [approvalMember, setApprovalMember] = useState<Member | null>(null);
+  const [approvalOn, setApprovalOn] = useState(false);
+  const [approvalLimits, setApprovalLimits] = useState<Record<string, number | null>>({});
 
   const orgId = currentOrg?.id ?? '';
 
@@ -137,6 +155,39 @@ export default function OrganizationPage() {
       message.error(t('common.error'));
     },
   });
+
+  const approvalMutation = useMutation({
+    mutationFn: ({ memberId, autoApprove, autoApproveLimits }: { memberId: string; autoApprove: boolean; autoApproveLimits: Record<string, number> | null }) =>
+      organizationsService.updateMemberApproval(orgId, memberId, { autoApprove, autoApproveLimits }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['members', orgId] });
+      message.success('Autoconfirmar actualizado');
+      setApprovalMember(null);
+    },
+    onError: () => {
+      message.error(t('common.error'));
+    },
+  });
+
+  const openApproval = (m: Member) => {
+    setApprovalMember(m);
+    setApprovalOn(!!m.autoApprove);
+    setApprovalLimits(Object.fromEntries(Object.entries(m.autoApproveLimits ?? {}).map(([k, v]) => [k, v / 100])));
+  };
+
+  const saveApproval = () => {
+    if (!approvalMember) return;
+    const limits = Object.fromEntries(
+      Object.entries(approvalLimits)
+        .filter(([, v]) => typeof v === 'number' && v > 0)
+        .map(([k, v]) => [k, Math.round((v as number) * 100)]),
+    );
+    approvalMutation.mutate({
+      memberId: approvalMember.id,
+      autoApprove: approvalOn,
+      autoApproveLimits: Object.keys(limits).length ? limits : null,
+    });
+  };
 
   const removeMemberMutation = useMutation({
     mutationFn: (memberId: string) => organizationsService.removeMember(orgId, memberId),
@@ -275,6 +326,15 @@ export default function OrganizationPage() {
             <div className={css.memberInfo}>
               <div className={css.memberName}>{member.user.name}</div>
               <div className={css.memberEmail}>{member.user.email}</div>
+              {member.role === Role.ACCOUNTANT && (
+                canManageMembers ? (
+                  <Button type="link" size="small" style={{ padding: 0, height: 'auto' }} onClick={() => openApproval(member)}>
+                    {approvalSummary(member)}
+                  </Button>
+                ) : (
+                  <div className={css.memberEmail}>{approvalSummary(member)}</div>
+                )
+              )}
             </div>
 
             <div className={css.memberMeta}>
@@ -547,6 +607,44 @@ export default function OrganizationPage() {
       {/* Tab content */}
       {activeTab === 'members' && membersContent}
       {activeTab === 'settings' && settingsContent}
+
+      {/* Autoconfirmar de un contador */}
+      <Modal
+        open={!!approvalMember}
+        title={`Autoconfirmar · ${approvalMember?.user.name ?? ''}`}
+        onCancel={() => setApprovalMember(null)}
+        onOk={saveApproval}
+        okText="Guardar"
+        cancelText="Cancelar"
+        confirmLoading={approvalMutation.isPending}
+        destroyOnClose
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '8px 0 16px' }}>
+          <Switch checked={approvalOn} onChange={setApprovalOn} />
+          <span>Lo que anote entra aprobado sin pasar por un admin</span>
+        </div>
+        {approvalOn && (
+          <>
+            <p style={{ color: 'var(--eco-fg3)', fontSize: 13, marginTop: 0 }}>
+              Sin ningún tope, todo entra solo. Si pones topes, entra solo lo que no los pase, y lo de una moneda sin tope espera aprobación.
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 10 }}>
+              {CURRENCIES.map((c) => (
+                <label key={c.code} style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, color: 'var(--eco-fg2)' }}>
+                  Hasta ({c.code})
+                  <InputNumber
+                    min={0}
+                    style={{ width: '100%' }}
+                    placeholder="—"
+                    value={approvalLimits[c.code] ?? null}
+                    onChange={(v) => setApprovalLimits((prev) => ({ ...prev, [c.code]: v }))}
+                  />
+                </label>
+              ))}
+            </div>
+          </>
+        )}
+      </Modal>
 
       {/* Regenerate Token Modal */}
       <Modal

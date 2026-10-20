@@ -42,6 +42,14 @@ enum TransactionType {
   EXCHANGE
 }
 
+/// Aprobacion: lo que anota alguien sin permiso de aprobar queda PENDING hasta
+/// que un propietario o admin lo acepta. Solo APPROVED cuenta en saldos.
+enum TransactionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 enum DebtType {
   RECEIVABLE
   PAYABLE
@@ -144,6 +152,11 @@ model OrgMember {
   id       String   @id @default(cuid())
   role     Role     @default(VIEWER)
   joinedAt DateTime @default(now())
+  /// Lo que anota entra aprobado sin pasar por un admin...
+  autoApprove       Boolean @default(false)
+  /// ...hasta estos topes por moneda, en centavos: {"USD": 5000, "MN": 2000000}.
+  /// Una moneda sin tope espera aprobacion; sin ningun tope, todo entra solo.
+  autoApproveLimits Json?
 
   userId String
   user   User         @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -206,6 +219,16 @@ model Transaction {
   deleteReason String?
   source       String?
 
+  /// Sin valor por defecto a proposito: cada sitio que crea movimientos tiene
+  /// que decidir el estado (el compilador avisa si se olvida).
+  status           TransactionStatus
+  submittedAt      DateTime?
+  reviewedBy       String?
+  reviewedAt       DateTime?
+  rejectionReason  String?
+  /// Lo que envio el autor, si el admin lo corrigio antes de aprobar.
+  originalSnapshot Json?
+
   tags        TransactionTag[]
   attachments Attachment[]
 
@@ -216,8 +239,10 @@ model Transaction {
   @@index([orgId, projectId])
   @@index([orgId, debtId])
   @@index([orgId, deletedAt])
-  // Consulta caliente de analitica: orgId + deletedAt IS NULL + type IN (...) + date BETWEEN
-  @@index([orgId, deletedAt, type, date])
+  // Consulta caliente de analitica: orgId + deletedAt IS NULL + status + type IN (...) + date BETWEEN
+  @@index([orgId, deletedAt, status, type, date])
+  // Bandeja de aprobaciones
+  @@index([orgId, status, createdAt])
   @@map("transactions")
 }
 
@@ -259,6 +284,8 @@ model Debt {
   updatedAt   DateTime   @updatedAt
   /// Borrado suave: la deuda y sus movimientos se apartan juntos.
   deletedAt   DateTime?
+  /// Una deuda nueva de quien no puede aprobar espera como su movimiento inicial.
+  approvalStatus TransactionStatus @default(APPROVED)
 
   orgId        String
   org          Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)

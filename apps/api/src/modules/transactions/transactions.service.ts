@@ -1,11 +1,12 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma, Transaction, TransactionType } from '@prisma/client';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma, Role, Transaction, TransactionStatus, TransactionType } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { computeAccountBalance } from '../../common/account-balance.util';
 import { parseEntryDate } from '../../common/date-range.util';
 import { assertOrgRefs } from '../../common/org-refs.util';
 import { recomputeDebt } from '../../common/debt-balance.util';
-import { flowWhere } from '../../common/tx-filters';
+import { Actor, flowWhere, visibleWhere } from '../../common/tx-filters';
+import { decideStatusFor, statusFields } from '../../common/approval-policy';
 import { TelegramService } from '../telegram/telegram.service';
 import { AuditService } from '../audit/audit.service';
 import {
@@ -31,7 +32,7 @@ const TRANSACTION_INCLUDE = {
 const ALLOWED_SORT_FIELDS = ['date', 'description', 'createdAt', 'amount'];
 
 const PAIR_TYPES: TransactionType[] = ['TRANSFER', 'EXCHANGE'];
-const isPair = (type: TransactionType) => PAIR_TYPES.includes(type);
+export const isPair = (type: TransactionType) => PAIR_TYPES.includes(type);
 
 /** Campos que se copian igual en las dos piernas de un par. */
 const SHARED_FIELDS = ['date', 'description', 'notes', 'categoryId', 'projectId'] as const;
@@ -40,10 +41,13 @@ const SHARED_FIELDS = ['date', 'description', 'notes', 'categoryId', 'projectId'
  * Las dos piernas de un traspaso o cambio. La que sale tiene
  * `linkedTransactionId` apuntando a la que entra.
  */
-interface Pair {
+export interface Pair {
   out: Transaction;
   inc: Transaction;
 }
+
+export type TransactionWithRelations = Prisma.TransactionGetPayload<{ include: typeof TRANSACTION_INCLUDE }>;
+export { TRANSACTION_INCLUDE };
 
 @Injectable()
 export class TransactionsService {
@@ -91,9 +95,17 @@ export class TransactionsService {
       if (dto.debtId) {
         throw new BadRequestException('Transfers and exchanges cannot be linked to a debt');
       }
-      this.assertPairCurrencies(dto.type, accounts.get(dto.accountId)!, accounts.get(dto.toAccountId)!);
+      const from = accounts.get(dto.accountId)!;
+      const to = accounts.get(dto.toAccountId)!;
+      this.assertPairCurrencies(dto.type, from, to);
+      const incAmount = dto.type === 'EXCHANGE' ? dto.toAmount! : dto.amount;
+      const status = await decideStatusFor(this.prisma, orgId, userId, [
+        { currency: from.currency, amount: dto.amount },
+        { currency: to.currency, amount: incAmount },
+      ]);
 
       const shared = {
+        ...statusFields(status, userId),
         date,
         description: dto.description,
         type: dto.type,
@@ -107,7 +119,7 @@ export class TransactionsService {
       // Primero la que entra (destino) y luego la que sale, enlazada a ella.
       const outgoing = await this.prisma.$transaction(async (tx) => {
         const inc = await tx.transaction.create({
-          data: { ...shared, accountId: dto.toAccountId!, amount: dto.type === 'EXCHANGE' ? dto.toAmount! : dto.amount },
+          data: { ...shared, accountId: dto.toAccountId!, amount: incAmount },
         });
         return tx.transaction.create({
           data: { ...shared, accountId: dto.accountId, amount: dto.amount, linkedTransactionId: inc.id },
@@ -118,13 +130,14 @@ export class TransactionsService {
         where: { id: outgoing.id },
         include: TRANSACTION_INCLUDE,
       });
-      this.notifyPair(orgId, dto, result);
+      if (status === TransactionStatus.APPROVED) this.notifyPair(orgId, dto, result);
+      else this.telegram.notifyPending(orgId, userId, result);
 
       this.audit.log({
         action: 'CREATE',
         entity: 'Transaction',
         entityId: outgoing.id,
-        metadata: { type: dto.type },
+        metadata: { type: dto.type, status },
         userId,
         orgId,
       });
@@ -140,11 +153,18 @@ export class TransactionsService {
       if (accounts.get(dto.accountId)!.currency !== debt.currency) {
         throw new BadRequestException(`This debt is in ${debt.currency}; the account must be in the same currency`);
       }
+      if (debt.approvalStatus !== TransactionStatus.APPROVED) {
+        throw new BadRequestException('This debt is waiting for approval; register payments once it is approved');
+      }
     }
+    const status = await decideStatusFor(this.prisma, orgId, userId, [
+      { currency: accounts.get(dto.accountId)!.currency, amount: dto.amount },
+    ]);
 
     // INCOME / EXPENSE
     const tx = await this.prisma.transaction.create({
       data: {
+        ...statusFields(status, userId),
         date,
         description: dto.description,
         amount: dto.amount,
@@ -162,6 +182,20 @@ export class TransactionsService {
     });
     if (dto.debtId) await recomputeDebt(this.prisma, dto.debtId);
 
+    this.audit.log({
+      action: 'CREATE',
+      entity: 'Transaction',
+      entityId: tx.id,
+      metadata: { type: dto.type, status },
+      userId,
+      orgId,
+    });
+
+    if (status !== TransactionStatus.APPROVED) {
+      this.telegram.notifyPending(orgId, userId, tx);
+      return tx;
+    }
+
     const icon = dto.type === 'INCOME' ? '💵' : '💸';
     const label = dto.type === 'INCOME' ? 'Ingreso' : 'Gasto';
     const balance = await computeAccountBalance(this.prisma, dto.accountId, orgId);
@@ -169,15 +203,6 @@ export class TransactionsService {
     const catLine = tx.category ? `\n📂 Categoria   : ${tx.category.name}` : '';
     const noteLine = dto.notes ? `\n📝 Nota          : ${dto.notes}` : '';
     this.telegram.notify(orgId, `${icon} *Nuevo ${label}*\n━━━━━━━━━━━━━━━━━━\n📋 Descripcion : ${dto.description}\n💰 Monto          : ${fmt(dto.amount)} ${tx.account.currency}${catLine}\n🏦 Cuenta        : ${tx.account.name}\n💵 Saldo           : ${fmt(balance)} ${tx.account.currency}${noteLine}\n━━━━━━━━━━━━━━━━━━`);
-
-    this.audit.log({
-      action: 'CREATE',
-      entity: 'Transaction',
-      entityId: tx.id,
-      metadata: { type: dto.type },
-      userId,
-      orgId,
-    });
 
     return tx;
   }
@@ -209,12 +234,14 @@ export class TransactionsService {
    * ignoraba en silencio el resto de filtros, asi que el resumen no cuadraba con
    * la lista que el usuario tenia delante.
    */
-  private buildWhere(orgId: string, query: TransactionQueryDto): Prisma.TransactionWhereInput {
+  private buildWhere(orgId: string, query: TransactionQueryDto, actor: Actor): Prisma.TransactionWhereInput {
     const { from, to, type, categoryId, accountId, projectId, currency, deleted, uncategorized } = query;
 
     const where: Prisma.TransactionWhereInput = {
       orgId,
       deletedAt: deleted ? { not: null } : null,
+      // Pendientes y rechazados solo los ven quien los anoto y quien aprueba.
+      AND: [visibleWhere(actor, query.status)],
     };
 
     if (from || to) {
@@ -241,10 +268,10 @@ export class TransactionsService {
     return where;
   }
 
-  async findAll(orgId: string, query: TransactionQueryDto) {
+  async findAll(orgId: string, query: TransactionQueryDto, actor: Actor) {
     const { page = 1, limit = 15, sortBy, sortOrder } = query;
 
-    const where = this.buildWhere(orgId, query);
+    const where = this.buildWhere(orgId, query, actor);
 
     // Build orderBy from sortBy/sortOrder, default to createdAt desc
     const dir = sortOrder ?? 'desc';
@@ -276,9 +303,14 @@ export class TransactionsService {
     };
   }
 
-  async findOne(orgId: string, id: string) {
+  async findOne(orgId: string, id: string, actor: Actor) {
     const transaction = await this.prisma.transaction.findFirst({
-      where: { id, orgId, deletedAt: null },
+      where: {
+        id,
+        orgId,
+        deletedAt: null,
+        AND: [visibleWhere(actor, [TransactionStatus.APPROVED, TransactionStatus.PENDING, TransactionStatus.REJECTED])],
+      },
       include: TRANSACTION_INCLUDE,
     });
 
@@ -290,7 +322,7 @@ export class TransactionsService {
   }
 
   /** Las dos piernas de un par a partir de cualquiera de ellas. */
-  private async findPair(db: Prisma.TransactionClient, t: Transaction, where: Prisma.TransactionWhereInput = {}): Promise<Pair | null> {
+  async findPair(db: Prisma.TransactionClient, t: Transaction, where: Prisma.TransactionWhereInput = {}): Promise<Pair | null> {
     if (t.linkedTransactionId) {
       const inc = await db.transaction.findFirst({ where: { id: t.linkedTransactionId, ...where } });
       return inc ? { out: t, inc } : null;
@@ -333,35 +365,35 @@ export class TransactionsService {
     }
 
     const { tagIds } = dto;
-    const result = await this.prisma.$transaction(async (tx) => {
-      const before = isPair(transaction.type) ? await this.findPair(tx, transaction, { deletedAt: null }) : null;
+    const { before, after } = await this.prisma.$transaction((tx) => this.applyEdits(tx, orgId, transaction, dto));
 
-      if (isPair(transaction.type)) {
-        if (!before) throw new BadRequestException('This transfer has lost its other side; delete it and enter it again');
-        await this.updatePair(tx, orgId, before, dto);
-      } else {
-        await this.updateSingle(tx, orgId, transaction, dto);
-      }
-
-      const out = before?.out ?? transaction;
-      const after = await tx.transaction.findUniqueOrThrow({ where: { id: out.id }, include: TRANSACTION_INCLUDE });
-
-      this.audit.log({
-        action: 'UPDATE',
-        entity: 'Transaction',
-        entityId: out.id,
-        changes: {
-          before: snapshot(out, before?.inc),
-          after: snapshot(after, after.linkedTransaction ?? undefined),
-          ...(tagIds !== undefined && { tagIds }),
-        } as Prisma.InputJsonValue,
-        userId,
-        orgId,
-      });
-      return after;
+    this.audit.log({
+      action: 'UPDATE',
+      entity: 'Transaction',
+      entityId: after.id,
+      changes: { before, after: snapshot(after, after.linkedTransaction ?? undefined), ...(tagIds !== undefined && { tagIds }) } as Prisma.InputJsonValue,
+      userId,
+      orgId,
     });
+    return after;
+  }
 
-    return result;
+  /**
+   * Aplica una edicion dentro de una transaccion de base de datos abierta. La
+   * usan editar un movimiento y "corregir y aprobar". Devuelve como estaba
+   * (para el historial) y como queda (siempre la pierna que sale, si es par).
+   */
+  async applyEdits(tx: Prisma.TransactionClient, orgId: string, transaction: Transaction, dto: UpdateTransactionDto) {
+    const pair = isPair(transaction.type) ? await this.findPair(tx, transaction, { deletedAt: null }) : null;
+    if (isPair(transaction.type)) {
+      if (!pair) throw new BadRequestException('This transfer has lost its other side; delete it and enter it again');
+      await this.updatePair(tx, orgId, pair, dto);
+    } else {
+      await this.updateSingle(tx, orgId, transaction, dto);
+    }
+    const out = pair?.out ?? transaction;
+    const after = await tx.transaction.findUniqueOrThrow({ where: { id: out.id }, include: TRANSACTION_INCLUDE });
+    return { before: snapshot(out, pair?.inc), after, pair };
   }
 
   private async updatePair(tx: Prisma.TransactionClient, orgId: string, { out, inc }: Pair, dto: UpdateTransactionDto) {
@@ -568,7 +600,7 @@ export class TransactionsService {
    * en pares (seria rehacer el traspaso) y la nueva tiene que ser de la misma
    * moneda: si no, el importe pasaria a significar otra cosa.
    */
-  async bulkUpdate(orgId: string, userId: string, dto: BulkUpdateDto) {
+  async bulkUpdate(orgId: string, userId: string, role: Role, dto: BulkUpdateDto) {
     const where = { orgId, deletedAt: null } as const;
 
     const count = await this.prisma.$transaction(async (tx) => {
@@ -579,8 +611,13 @@ export class TransactionsService {
 
       const rows = await tx.transaction.findMany({
         where: { ...where, id: { in: dto.ids } },
-        select: { id: true, type: true, debtId: true, account: { select: { currency: true } } },
+        select: { id: true, type: true, debtId: true, status: true, createdBy: true, account: { select: { currency: true } } },
       });
+      // El contador solo reordena lo suyo que aun no esta aprobado: lo aprobado
+      // ya cuenta y solo lo cambia quien aprueba.
+      if (role === Role.ACCOUNTANT && rows.some((r) => r.createdBy !== userId || r.status === TransactionStatus.APPROVED)) {
+        throw new ForbiddenException('You can only change your own movements that are not approved yet');
+      }
 
       if (dto.accountId !== undefined) {
         const target = accounts.get(dto.accountId)!;
@@ -648,8 +685,8 @@ export class TransactionsService {
     return { count: result.count };
   }
 
-  async getSummary(orgId: string, query: TransactionQueryDto) {
-    const where = this.buildWhere(orgId, query);
+  async getSummary(orgId: string, query: TransactionQueryDto, actor: Actor) {
+    const where = this.buildWhere(orgId, query, actor);
 
     // Solo INCOME/EXPENSE son flujo, pero hay que INTERSECAR con el filtro de tipo
     // del usuario en vez de pisarlo: si filtro a INCOME, el resumen no debe
@@ -691,7 +728,7 @@ export class TransactionsService {
 }
 
 /** Lo que se guarda en el historial antes y despues de editar. */
-function snapshot(out: Transaction, inc?: Transaction) {
+export function snapshot(out: Transaction, inc?: Transaction) {
   return {
     date: out.date,
     description: out.description,

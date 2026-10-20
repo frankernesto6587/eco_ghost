@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { Prisma, TransactionStatus } from '@prisma/client';
 import { COUNTED } from './tx-filters';
 
 /** Prisma normal o el cliente de una transaccion en curso. */
@@ -13,6 +13,11 @@ interface BalanceOptions {
   accountIds?: string[];
   /** Condiciones extra (p. ej. `date: { lt: inicio }` para el saldo a una fecha). */
   extraWhere?: Prisma.TransactionWhereInput;
+  /**
+   * Sumar movimientos en estos estados en vez de lo que cuenta (aprobado).
+   * Con `[PENDING]` da lo que movera cada cuenta cuando se apruebe lo pendiente.
+   */
+  statuses?: TransactionStatus[];
 }
 
 /**
@@ -31,9 +36,10 @@ interface BalanceOptions {
 export async function computeAccountBalances(
   db: Db,
   orgId: string,
-  { accountIds, extraWhere = {} }: BalanceOptions = {},
+  { accountIds, extraWhere = {}, statuses }: BalanceOptions = {},
 ): Promise<Map<string, number>> {
-  const base = { orgId, ...COUNTED, ...(accountIds && { accountId: { in: accountIds } }) };
+  const counted = statuses ? { deletedAt: null, status: { in: statuses } } : COUNTED;
+  const base = { orgId, ...counted, ...(accountIds && { accountId: { in: accountIds } }) };
   const where = (w: Prisma.TransactionWhereInput) => ({ AND: [base, extraWhere, w] });
   type Row = { accountId: string; type?: string; _sum: { amount: number | null } };
 

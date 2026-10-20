@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, TransactionStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TelegramService } from '../telegram/telegram.service';
 import { CreateDebtDto, UpdateDebtDto, AddPaymentDto, DebtQueryDto } from './dto';
@@ -7,7 +7,8 @@ import { computeAccountBalance } from '../../common/account-balance.util';
 import { parseEntryDate } from '../../common/date-range.util';
 import { assertOrgRefs } from '../../common/org-refs.util';
 import { debtInitialType, debtPaymentType, recomputeDebt } from '../../common/debt-balance.util';
-import { COUNTED } from '../../common/tx-filters';
+import { Actor, PENDING_LIVE, canApprove } from '../../common/tx-filters';
+import { decideStatusFor, statusFields } from '../../common/approval-policy';
 
 /** Nombre de la categoria de los movimientos de deudas. */
 const LOAN_CATEGORY = 'Prestamos';
@@ -44,13 +45,17 @@ export class DebtsService {
   }
 
   async create(orgId: string, userId: string, dto: CreateDebtDto) {
-    return this.prisma.$transaction(async (tx) => {
+    const { debt, initial, status, account } = await this.prisma.$transaction(async (tx) => {
       // La deuda va en la moneda de la cuenta con la que se abre.
       const accounts = await assertOrgRefs(tx, orgId, { accountIds: [dto.accountId] });
-      const currency = accounts.get(dto.accountId)!.currency;
+      const account = accounts.get(dto.accountId)!;
+      const currency = account.currency;
+      // La deuda y su movimiento inicial esperan juntos la aprobacion.
+      const status = await decideStatusFor(tx, orgId, userId, [{ currency, amount: dto.totalAmount }]);
 
       const debt = await tx.debt.create({
         data: {
+          approvalStatus: status,
           personName: dto.personName,
           description: dto.description,
           totalAmount: dto.totalAmount,
@@ -65,8 +70,10 @@ export class DebtsService {
       // Create initial transaction linked to the debt.
       // RECEIVABLE = we lent money, so money goes OUT (EXPENSE).
       // PAYABLE = we borrowed money, so money comes IN (INCOME).
-      await tx.transaction.create({
+      const initial = await tx.transaction.create({
+        include: { account: true },
         data: {
+          ...statusFields(status, userId),
           date: dto.date ? parseEntryDate(dto.date) : new Date(),
           description: `Debt: ${dto.description}`,
           amount: dto.totalAmount,
@@ -79,18 +86,35 @@ export class DebtsService {
         },
       });
 
-      const account = accounts.get(dto.accountId);
-      const balance = await computeAccountBalance(tx, dto.accountId, orgId);
-      const fmt = (n: number) => (n / 100).toFixed(2);
-      const cur = currency;
-      this.telegram.notify(orgId, `📋 *Nueva deuda*\n━━━━━━━━━━━━━━━━━━\n👤 Persona       : ${debt.personName}\n📋 Descripcion : ${dto.description}\n💰 Monto          : ${fmt(dto.totalAmount)} ${cur}\n🔖 Tipo              : ${dto.type === 'RECEIVABLE' ? 'Por cobrar' : 'Por pagar'}\n🏦 Cuenta        : ${account?.name ?? '?'}\n💵 Saldo           : ${fmt(balance)} ${cur}\n━━━━━━━━━━━━━━━━━━`);
-
-      return debt;
+      return { debt, initial, status, account };
     });
+
+    // Avisos despues de confirmar: dentro de la transaccion podian salir aunque luego fallara.
+    if (status !== TransactionStatus.APPROVED) {
+      this.telegram.notifyPending(orgId, userId, initial);
+      return debt;
+    }
+    const balance = await computeAccountBalance(this.prisma, dto.accountId, orgId);
+    const fmt = (n: number) => (n / 100).toFixed(2);
+    const cur = debt.currency;
+    this.telegram.notify(orgId, `📋 *Nueva deuda*\n━━━━━━━━━━━━━━━━━━\n👤 Persona       : ${debt.personName}\n📋 Descripcion : ${dto.description}\n💰 Monto          : ${fmt(dto.totalAmount)} ${cur}\n🔖 Tipo              : ${dto.type === 'RECEIVABLE' ? 'Por cobrar' : 'Por pagar'}\n🏦 Cuenta        : ${account.name}\n💵 Saldo           : ${fmt(balance)} ${cur}\n━━━━━━━━━━━━━━━━━━`);
+    return debt;
   }
 
-  async findAll(orgId: string, query: DebtQueryDto) {
-    const where: Prisma.DebtWhereInput = { orgId, deletedAt: null };
+  /** Deudas que ve alguien: pendientes y rechazadas solo las de su autor y quien aprueba. */
+  private visibleDebts(actor: Actor): Prisma.DebtWhereInput {
+    if (canApprove(actor.role)) return { approvalStatus: { in: [TransactionStatus.APPROVED, TransactionStatus.PENDING] } };
+    if (actor.role === 'VIEWER') return { approvalStatus: TransactionStatus.APPROVED };
+    return {
+      OR: [
+        { approvalStatus: TransactionStatus.APPROVED },
+        { approvalStatus: TransactionStatus.PENDING, createdBy: actor.userId },
+      ],
+    };
+  }
+
+  async findAll(orgId: string, query: DebtQueryDto, actor: Actor) {
+    const where: Prisma.DebtWhereInput = { orgId, deletedAt: null, AND: [this.visibleDebts(actor)] };
 
     if (query.status) where.status = query.status;
     if (query.type) where.type = query.type;
@@ -101,12 +125,13 @@ export class DebtsService {
     });
   }
 
-  async findOne(orgId: string, id: string) {
+  async findOne(orgId: string, id: string, actor: Actor) {
     const debt = await this.prisma.debt.findFirst({
-      where: { id, orgId, deletedAt: null },
+      where: { id, orgId, deletedAt: null, AND: [this.visibleDebts(actor)] },
       include: {
         transactions: {
-          where: COUNTED,
+          // Los pagos que esperan aprobacion se ven (marcados), pero no cuentan.
+          where: { deletedAt: null, status: { in: [TransactionStatus.APPROVED, TransactionStatus.PENDING] } },
           orderBy: { createdAt: 'desc' },
           include: { account: true },
         },
@@ -183,18 +208,27 @@ export class DebtsService {
       throw new NotFoundException(`Debt with id ${debtId} not found`);
     }
 
+    if (debt.approvalStatus !== TransactionStatus.APPROVED) {
+      throw new BadRequestException('This debt is waiting for approval; register payments once it is approved');
+    }
     if (debt.status === 'PAID') {
       throw new BadRequestException('This debt is already fully paid');
     }
 
-    const remaining = debt.totalAmount - debt.paidAmount;
+    // Lo que falta descontando tambien los pagos que esperan aprobacion: si no,
+    // dos pagos pendientes podrian pasarse del total.
+    const pendingPaid = await this.prisma.transaction.aggregate({
+      where: { debtId, ...PENDING_LIVE, type: debtPaymentType(debt.type) },
+      _sum: { amount: true },
+    });
+    const remaining = debt.totalAmount - debt.paidAmount - (pendingPaid._sum.amount ?? 0);
     if (dto.amount > remaining) {
       throw new BadRequestException(
         `Payment amount (${dto.amount}) exceeds remaining balance (${remaining})`,
       );
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const { transaction, status, account } = await this.prisma.$transaction(async (tx) => {
       // Los pagos van en la moneda de la deuda. Si alguien paga en otra, se
       // anota primero el cambio de moneda y luego el pago.
       const accounts = await assertOrgRefs(tx, orgId, { accountIds: [dto.accountId] });
@@ -203,10 +237,14 @@ export class DebtsService {
         throw new BadRequestException(`This debt is in ${debt.currency}; pay it from an account in ${debt.currency}`);
       }
 
+      const status = await decideStatusFor(tx, orgId, userId, [{ currency: debt.currency, amount: dto.amount }]);
+
       // RECEIVABLE debts: payments are INCOME (money coming in).
       // PAYABLE debts: payments are EXPENSE (money going out).
       const transaction = await tx.transaction.create({
+        include: { account: true },
         data: {
+          ...statusFields(status, userId),
           date: parseEntryDate(dto.date),
           description: dto.description || `Payment for debt: ${debt.description}`,
           amount: dto.amount,
@@ -220,16 +258,20 @@ export class DebtsService {
       });
 
       await recomputeDebt(tx, debtId);
-      const { paidAmount: newPaidAmount, status: newStatus } = await tx.debt.findUniqueOrThrow({ where: { id: debtId } });
-
-      const balance = await computeAccountBalance(tx, dto.accountId, orgId);
-      const fmt = (n: number) => (n / 100).toFixed(2);
-      const cur = debt.currency;
-      const statusLabel = newStatus === 'PAID' ? '\n✅ Estado         : Pagada completa' : '';
-      this.telegram.notify(orgId, `💰 *Pago registrado*\n━━━━━━━━━━━━━━━━━━\n👤 Persona       : ${debt.personName}\n📋 Descripcion : ${debt.description}\n💰 Monto          : ${fmt(dto.amount)} ${cur}\n📊 Pagado        : ${fmt(newPaidAmount)} / ${fmt(debt.totalAmount)} ${cur}${statusLabel}\n🏦 Cuenta        : ${account.name}\n💵 Saldo           : ${fmt(balance)} ${cur}\n━━━━━━━━━━━━━━━━━━`);
-
-      return transaction;
+      return { transaction, status, account };
     });
+
+    if (status !== TransactionStatus.APPROVED) {
+      this.telegram.notifyPending(orgId, userId, transaction);
+      return transaction;
+    }
+    const { paidAmount: newPaidAmount, status: newStatus } = await this.prisma.debt.findUniqueOrThrow({ where: { id: debtId } });
+    const balance = await computeAccountBalance(this.prisma, dto.accountId, orgId);
+    const fmt = (n: number) => (n / 100).toFixed(2);
+    const cur = debt.currency;
+    const statusLabel = newStatus === 'PAID' ? '\n✅ Estado         : Pagada completa' : '';
+    this.telegram.notify(orgId, `💰 *Pago registrado*\n━━━━━━━━━━━━━━━━━━\n👤 Persona       : ${debt.personName}\n📋 Descripcion : ${debt.description}\n💰 Monto          : ${fmt(dto.amount)} ${cur}\n📊 Pagado        : ${fmt(newPaidAmount)} / ${fmt(debt.totalAmount)} ${cur}${statusLabel}\n🏦 Cuenta        : ${account.name}\n💵 Saldo           : ${fmt(balance)} ${cur}\n━━━━━━━━━━━━━━━━━━`);
+    return transaction;
   }
 
 }

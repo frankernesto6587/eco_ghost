@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { Layout, Menu, Dropdown, Avatar, Typography, Space, Button, Tooltip, Modal, Form, Input, Select, App, theme, Drawer } from 'antd';
+import { Layout, Menu, Dropdown, Avatar, Typography, Space, Button, Tooltip, Modal, Form, Input, Select, App, theme, Drawer, Badge } from 'antd';
 import type { MenuProps } from 'antd';
 import {
+  AuditOutlined,
   DashboardOutlined,
   SwapOutlined,
   PieChartOutlined,
@@ -30,6 +31,8 @@ import { CURRENCIES } from '@ecoghost/shared';
 import { useAuthStore, useUIStore } from '@/store';
 import { useAuth } from '@/hooks/useAuth';
 import { useIsMobile } from '@/hooks/useIsMobile';
+import { usePermissions } from '@/hooks/usePermissions';
+import { useApprovalCounts } from '@/hooks/useApprovalCounts';
 import { authService } from '@/services/auth.service';
 import { organizationsService } from '@/services/organizations.service';
 import { APP_NAME, SIDEBAR_WIDTH, SIDEBAR_COLLAPSED_WIDTH } from '@/lib/constants';
@@ -48,6 +51,16 @@ export function AppLayout() {
   const { user, currentOrg, organizations } = useAuthStore();
   const { logout } = useAuth();
   const { sidebarCollapsed, toggleSidebar, isDark, setThemeMode, setIsMobile } = useUIStore();
+  const { canWrite, canApprove } = usePermissions();
+  const approvalCounts = useApprovalCounts().data;
+  // Quien aprueba ve lo que espera revision; quien anota, lo que le rechazaron.
+  const approvalBadge = canApprove ? approvalCounts?.toReview ?? 0 : approvalCounts?.mine.rejected ?? 0;
+  const approvalsLabel = (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+      {t('nav.approvals')}
+      <Badge count={approvalBadge} size="small" />
+    </span>
+  );
   const setCurrentOrg = useAuthStore((state) => state.setCurrentOrg);
   const isMobile = useIsMobile();
   const [navDrawerOpen, setNavDrawerOpen] = useState(false);
@@ -125,6 +138,7 @@ export function AppLayout() {
         icon: <PieChartOutlined />,
         label: t('nav.analytics'),
       },
+      ...(canWrite ? [{ key: '/approvals', icon: <AuditOutlined />, label: approvalsLabel }] : []),
       {
         key: '/accounts',
         icon: <WalletOutlined />,
@@ -151,7 +165,7 @@ export function AppLayout() {
         label: t('nav.organization'),
       },
     ],
-    [t],
+    [t, canWrite, approvalBadge],
   );
 
   const handleSwitchOrg = useCallback(
@@ -226,13 +240,14 @@ export function AppLayout() {
       { key: '/dashboard', icon: <HomeOutlined />, label: t('nav.dashboard') },
       { key: '/transactions', icon: <SwapOutlined />, label: t('nav.transactions') },
       { key: '/analysis', icon: <PieChartOutlined />, label: t('nav.analytics') },
+      ...(canWrite ? [{ key: '/approvals', icon: <AuditOutlined />, label: approvalsLabel }] : []),
       { key: '/accounts', icon: <WalletOutlined />, label: t('nav.accounts') },
       { key: '/debts', icon: <TeamOutlined />, label: t('nav.debts') },
       { key: '/categories', icon: <AppstoreOutlined />, label: t('nav.categories') },
       { key: '/settings', icon: <SettingOutlined />, label: t('nav.settings') },
       { key: '/organization', icon: <BankOutlined />, label: t('nav.organization') },
     ],
-    [t],
+    [t, canWrite, approvalBadge],
   );
 
   // ---------- Mobile Layout ----------

@@ -15,13 +15,7 @@ import { Role } from '@prisma/client';
 import { CurrentUser, Roles } from '../../common/decorators';
 import { RolesGuard, OrgParamGuard } from '../../common/guards';
 import { OrganizationsService } from './organizations.service';
-import {
-  CreateOrgDto,
-  UpdateOrgDto,
-  JoinOrgDto,
-  RegenerateTokenDto,
-  UpdateRoleDto,
-} from './dto';
+import { CreateOrgDto, UpdateOrgDto, JoinOrgDto, RegenerateTokenDto, UpdateRoleDto, UpdateMemberApprovalDto } from './dto';
 
 @ApiTags('Organizations')
 @ApiBearerAuth()
@@ -119,6 +113,19 @@ export class OrganizationsController {
     @Body() dto: UpdateRoleDto,
   ) {
     return this.organizationsService.updateMemberRole(id, memberId, dto);
+  }
+
+  @Patch(':id/members/:memberId/approval')
+  @UseGuards(RolesGuard, OrgParamGuard)
+  @Roles(Role.OWNER, Role.ADMIN)
+  @ApiOperation({ summary: 'Autoconfirmar y topes de un contador' })
+  async updateMemberApproval(
+    @Param('id') id: string,
+    @Param('memberId') memberId: string,
+    @CurrentUser('id') userId: string,
+    @Body() dto: UpdateMemberApprovalDto,
+  ) {
+    return this.organizationsService.updateMemberApproval(id, memberId, userId, dto);
   }
 
   @Delete(':id/members/:memberId')

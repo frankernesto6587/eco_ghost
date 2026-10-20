@@ -168,6 +168,7 @@ async function main() {
         ...tx,
         orgId: demoOrg.id,
         createdBy: demoUser.id,
+        status: 'APPROVED',
       },
     });
   }

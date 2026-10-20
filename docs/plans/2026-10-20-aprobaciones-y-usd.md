@@ -177,6 +177,10 @@ Al salir del modo plan se escriben en `docs/plans/2026-10-20-aprobaciones-y-usd.
 - `assertOpenPeriod()` bloquea anotar, editar o aprobar con fecha en un mes cerrado.
 
 **Tasas (`modules/rates`)**
+- **Fuente (pasada por Frank el 2026-10-20):** `https://eltoke.merxbit.com` (doc en `/doc`, sin auth).
+  - `GET /tasa?fecha=YYYY-MM-DD` da un valor por día: el que elTOQUE publica a las 7:00 hora de Cuba. Hay histórico desde al menos 2024.
+  - Viene en **CUP por unidad** (USD, EUR, MLC, `USDT_TRC20`→USDT).
+  - Antes de las 7:00, hoy da 404. Si elTOQUE limita (503), se reintenta con espera.
 - Descarga diaria desde el endpoint que pase Frank (`RATES_SOURCE_URL`).
 - Rellena los últimos 14 días que falten y tiene un script para el histórico.
 - Hoy (y ayer hasta las 06:00) se marca como ≈. Después, si falta la tasa, bloquea.

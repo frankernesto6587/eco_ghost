@@ -15,6 +15,8 @@ import { BudgetsModule } from './modules/budgets/budgets.module';
 import { TelegramModule } from './modules/telegram/telegram.module';
 import { TagsModule } from './modules/tags/tags.module';
 import { AuditModule } from './modules/audit/audit.module';
+import { ApprovalsModule } from './modules/approvals/approvals.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 import { GlobalExceptionFilter } from './common/filters';
 
 @Module({
@@ -36,6 +38,8 @@ import { GlobalExceptionFilter } from './common/filters';
     DashboardModule,
     AnalyticsModule,
     BudgetsModule,
+    ApprovalsModule,
+    NotificationsModule,
     TelegramModule,
     TagsModule,
     AuditModule,

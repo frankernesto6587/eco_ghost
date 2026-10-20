@@ -41,6 +41,16 @@ export const organizationsService = {
     return data;
   },
 
+  /** Autoconfirmar de un contador; topes en centavos por moneda (sin topes = todo entra solo). */
+  async updateMemberApproval(
+    orgId: string,
+    memberId: string,
+    payload: { autoApprove: boolean; autoApproveLimits?: Record<string, number> | null },
+  ) {
+    const { data } = await api.patch(`/organizations/${orgId}/members/${memberId}/approval`, payload);
+    return data;
+  },
+
   async updateMemberRole(orgId: string, memberId: string, payload: { role: string }) {
     const { data } = await api.patch(`/organizations/${orgId}/members/${memberId}`, payload);
     return data;

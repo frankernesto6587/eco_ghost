@@ -39,6 +39,9 @@ export interface Transaction {
   projectId: string | null;
   debtId: string | null;
   linkedTransactionId: string | null;
+  /** Solo APPROVED cuenta en saldos; PENDING espera a un admin; REJECTED volvio al autor. */
+  status?: 'PENDING' | 'APPROVED' | 'REJECTED';
+  rejectionReason?: string | null;
   orgId: string;
   createdBy: string;
   createdAt: string;

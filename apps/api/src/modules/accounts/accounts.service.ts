@@ -1,6 +1,8 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { TransactionStatus } from '@prisma/client';
 import { computeAccountBalance, computeAccountBalances } from '../../common/account-balance.util';
+import { Actor, PENDING_LIVE, pendingScope } from '../../common/tx-filters';
 import { TelegramService } from '../telegram/telegram.service';
 import { CreateAccountDto, UpdateAccountDto } from './dto';
 
@@ -27,19 +29,38 @@ export class AccountsService {
     return account;
   }
 
-  async findAll(orgId: string) {
+  /**
+   * Cuentas con su saldo (solo lo aprobado) y, aparte, lo que moveria lo
+   * pendiente que el usuario puede ver: `pendingDelta` y `pendingCount`.
+   */
+  async findAll(orgId: string, actor: Actor) {
     const accounts = await this.prisma.account.findMany({
       where: { orgId, isActive: true },
       orderBy: { name: 'asc' },
     });
+    const accountIds = accounts.map((a) => a.id);
+    const scope = pendingScope(actor);
 
-    const balanceMap = await computeAccountBalances(this.prisma, orgId, {
-      accountIds: accounts.map((a) => a.id),
-    });
+    const [balanceMap, pendingMap, pendingRows] = await Promise.all([
+      computeAccountBalances(this.prisma, orgId, { accountIds }),
+      scope
+        ? computeAccountBalances(this.prisma, orgId, { accountIds, statuses: [TransactionStatus.PENDING], extraWhere: scope })
+        : new Map<string, number>(),
+      scope
+        ? this.prisma.transaction.groupBy({
+            by: ['accountId'],
+            where: { orgId, accountId: { in: accountIds }, ...PENDING_LIVE, ...scope },
+            _count: { _all: true },
+          })
+        : [],
+    ]);
+    const pendingCount = new Map(pendingRows.map((r) => [r.accountId, r._count._all]));
 
     return accounts.map((account) => ({
       ...account,
       balance: balanceMap.get(account.id) ?? 0,
+      pendingDelta: pendingMap.get(account.id) ?? 0,
+      pendingCount: pendingCount.get(account.id) ?? 0,
     }));
   }
 

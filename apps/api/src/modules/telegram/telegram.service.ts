@@ -3,7 +3,9 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import { computeAccountBalance, computeAccountBalances } from '../../common/account-balance.util';
 import { APP_TZ, resolveRange } from '../../common/date-range.util';
-import { COUNTED, flowWhere } from '../../common/tx-filters';
+import { COUNTED, ENTRY_HEAD, PENDING_LIVE, flowWhere } from '../../common/tx-filters';
+import { decideStatusFor, statusFields } from '../../common/approval-policy';
+import { TransactionStatus } from '@prisma/client';
 
 interface TelegramFrom {
   id: number;
@@ -525,6 +527,11 @@ export class TelegramService {
     chatId: number,
     messageId: number,
   ) {
+    // Mismas reglas que la app y la web: si quien escribe no aprueba ni tiene
+    // autoconfirmar, el gasto queda pendiente hasta que lo acepte un admin.
+    const status = await decideStatusFor(this.prisma, pending.orgId, pending.userId, [
+      { currency: pending.currency, amount: pending.amount },
+    ]);
     const tx = await this.prisma.transaction.create({
       data: {
         date: new Date(),
@@ -536,6 +543,7 @@ export class TelegramService {
         orgId: pending.orgId,
         createdBy: pending.userId,
         source: 'telegram',
+        ...statusFields(status, pending.userId),
       },
       include: { category: true, account: true },
     });
@@ -549,6 +557,17 @@ export class TelegramService {
       where: { id: pending.userId },
       select: { name: true },
     });
+
+    if (status !== TransactionStatus.APPROVED) {
+      const queue = await this.pendingQueue(pending.orgId);
+      await this.editMessage(
+        chatId,
+        messageId,
+        `⏳ *Gasto pendiente de aprobación*\n━━━━━━━━━━━━━━━━━━\n📋 Descripcion : ${this.escape(tx.description)}\n💰 Monto          : ${fmt(tx.amount)} ${tx.account.currency}${catLine}\n🏦 Cuenta        : ${tx.account.name}\n👤 Por              : ${user?.name ?? '?'}\n━━━━━━━━━━━━━━━━━━\nLo revisará un administrador en la app (${queue} en cola).`,
+        [],
+      );
+      return;
+    }
 
     await this.editMessage(
       chatId,
@@ -730,14 +749,21 @@ export class TelegramService {
       return;
     }
 
-    const map = await computeAccountBalances(this.prisma, org.id, { accountIds: accounts.map((a) => a.id) });
-    const balances = accounts.map((a) => ({ ...a, balance: map.get(a.id) ?? 0 }));
+    const accountIds = accounts.map((a) => a.id);
+    const [map, pendingMap, queue] = await Promise.all([
+      computeAccountBalances(this.prisma, org.id, { accountIds }),
+      computeAccountBalances(this.prisma, org.id, { accountIds, statuses: [TransactionStatus.PENDING] }),
+      this.pendingQueue(org.id),
+    ]);
 
-    const lines = balances.map((a) =>
-      `🏦 ${this.escape(a.name)}  :  ${this.formatAmount(a.balance, a.currency)}`,
-    );
+    const lines = accounts.map((a) => {
+      const pend = pendingMap.get(a.id) ?? 0;
+      const pendLine = pend ? `\n      ⏳ pendiente: ${this.formatAmount(pend, a.currency)}` : '';
+      return `🏦 ${this.escape(a.name)}  :  ${this.formatAmount(map.get(a.id) ?? 0, a.currency)}${pendLine}`;
+    });
+    const queueLine = queue ? `\n⏳ ${queue} por aprobar` : '';
 
-    await this.sendMessage(chatId, `💰 *Saldos*\n━━━━━━━━━━━━━━━━━━\n${lines.join('\n')}\n━━━━━━━━━━━━━━━━━━`);
+    await this.sendMessage(chatId, `💰 *Saldos*\n━━━━━━━━━━━━━━━━━━\n${lines.join('\n')}\n━━━━━━━━━━━━━━━━━━${queueLine}`);
   }
 
   // ─── /resumen ──────────────────────────────────────────────────────
@@ -782,6 +808,8 @@ export class TelegramService {
       }
     }
     text += `━━━━━━━━━━━━━━━━━━`;
+    const queue = await this.pendingQueue(org.id);
+    if (queue) text += `\n⏳ ${queue} por aprobar (no cuentan todavía)`;
 
     await this.sendMessage(chatId, text);
   }
@@ -793,7 +821,7 @@ export class TelegramService {
     if (!org) return;
 
     const debts = await this.prisma.debt.findMany({
-      where: { orgId: org.id, deletedAt: null, status: { in: ['PENDING', 'PARTIAL'] } },
+      where: { orgId: org.id, deletedAt: null, approvalStatus: TransactionStatus.APPROVED, status: { in: ['PENDING', 'PARTIAL'] } },
       orderBy: { createdAt: 'desc' },
     });
 
@@ -856,6 +884,41 @@ export class TelegramService {
       await this.sendMessage(Number(org.telegramChatId), message);
     } catch (err) {
       this.logger.warn(`Failed to send Telegram notification for org ${orgId}: ${err}`);
+    }
+  }
+
+  /**
+   * Cuantas entradas esperan aprobacion. Un traspaso o cambio cuenta una vez
+   * (por la pierna que sale), no dos.
+   */
+  async pendingQueue(orgId: string): Promise<number> {
+    return this.prisma.transaction.count({ where: { orgId, ...PENDING_LIVE, ...ENTRY_HEAD } });
+  }
+
+  /** Aviso al grupo de que algo espera aprobacion (sin saldo: aun no cuenta). */
+  async notifyPending(
+    orgId: string,
+    authorId: string,
+    tx: {
+      type: string;
+      description: string;
+      amount: number;
+      account: { name: string; currency: string };
+      linkedTransaction?: { amount: number; account: { name: string; currency: string } } | null;
+      debtId?: string | null;
+    },
+  ) {
+    try {
+      const [author, queue] = await Promise.all([
+        this.prisma.user.findUnique({ where: { id: authorId }, select: { name: true } }),
+        this.pendingQueue(orgId),
+      ]);
+      const fmt = (n: number) => (n / 100).toFixed(2);
+      const kind = tx.debtId ? 'Deuda' : ({ INCOME: 'Ingreso', EXPENSE: 'Gasto', TRANSFER: 'Transferencia', EXCHANGE: 'Cambio' } as Record<string, string>)[tx.type];
+      const to = tx.linkedTransaction ? `\n🏦 Destino       : ${tx.linkedTransaction.account.name} (${fmt(tx.linkedTransaction.amount)} ${tx.linkedTransaction.account.currency})` : '';
+      await this.notify(orgId, `⏳ *Por aprobar* — ${author?.name ?? '?'}\n━━━━━━━━━━━━━━━━━━\n🔖 ${kind}: ${this.escape(tx.description)}\n💰 Monto          : ${fmt(tx.amount)} ${tx.account.currency}\n🏦 Cuenta        : ${tx.account.name}${to}\n━━━━━━━━━━━━━━━━━━\n${queue} en cola`);
+    } catch (err) {
+      this.logger.warn(`Failed to send pending notification for org ${orgId}: ${err}`);
     }
   }
 

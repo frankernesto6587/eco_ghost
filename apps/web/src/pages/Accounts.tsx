@@ -339,6 +339,13 @@ export default function AccountsPage() {
                     <div className={css.accEquiv}>
                       {account.currency.toLowerCase()} · {typeLabel.toLowerCase()}
                     </div>
+                    {/* Lo que moveria lo pendiente de aprobar (no esta en el saldo) */}
+                    {!!account.pendingCount && (
+                      <div className={css.accEquiv} style={{ color: 'var(--eco-cat-6)' }}>
+                        pendiente: {(account.pendingDelta ?? 0) > 0 ? '+' : ''}
+                        {formatCurrency(account.pendingDelta ?? 0, account.currency)} · {account.pendingCount} por aprobar
+                      </div>
+                    )}
 
                     {/* Mini chart placeholder */}
                     <div className={css.miniChart}>

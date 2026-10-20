@@ -37,6 +37,13 @@ export enum TransactionType {
 }
 
 /** Debt direction: RECEIVABLE = they owe me, PAYABLE = I owe them */
+/** Aprobacion: solo APPROVED cuenta en saldos y estadisticas. */
+export enum TransactionStatus {
+  PENDING = 'PENDING',
+  APPROVED = 'APPROVED',
+  REJECTED = 'REJECTED',
+}
+
 export enum DebtType {
   RECEIVABLE = 'RECEIVABLE',
   PAYABLE = 'PAYABLE',
@@ -144,6 +151,7 @@ export interface DashboardTransaction {
   categoryId: string | null;
   accountId: string;
   linkedTransactionId: string | null;
+  status: `${TransactionStatus}`;
   category: { id: string; name: string; icon: string | null; color: string | null } | null;
   account: { id: string; name: string; type: string; currency: string; icon: string | null };
 }
@@ -164,6 +172,47 @@ export interface DashboardOverview {
   activeProjects: number;
   recentTransactions: DashboardTransaction[];
   dailyBalance: DashboardDailyBalance[];
+  /** Aprobaciones: lo que espera revision (para quien aprueba) y lo propio */
+  pending: ApprovalCounts;
+}
+
+// ─── Aprobaciones ────────────────────────────────────────────────────
+
+export interface ApprovalCounts {
+  toReview: number;
+  mine: { pending: number; rejected: number };
+  unreadNotifications?: number;
+}
+
+export type ApprovalKind = 'INCOME' | 'EXPENSE' | 'TRANSFER' | 'EXCHANGE' | 'DEBT_CREATE' | 'DEBT_PAYMENT';
+
+export interface ApprovalLeg {
+  accountId: string;
+  accountName: string;
+  currency: string;
+  amount: number;
+}
+
+/** Una entrada de la bandeja (un par o una deuda cuentan como una) — GET /approvals */
+export interface ApprovalItem {
+  id: string;
+  kind: ApprovalKind;
+  status: `${TransactionStatus}`;
+  date: string;
+  description: string;
+  notes: string | null;
+  source: string | null;
+  author: { id: string; name: string | null };
+  submittedAt: string;
+  reviewer: { id: string; name: string | null } | null;
+  reviewedAt: string | null;
+  rejectionReason: string | null;
+  /** Lo que envio el autor, si quien aprobo lo corrigio */
+  originalSnapshot: Record<string, unknown> | null;
+  from: ApprovalLeg;
+  to: ApprovalLeg | null;
+  category: { id: string; name: string; icon: string | null; color: string | null } | null;
+  debt: { id: string; personName: string; description: string; type: `${DebtType}`; currency: string } | null;
 }
 
 // ─── Analitica ───────────────────────────────────────────────────────

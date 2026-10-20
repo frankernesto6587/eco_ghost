@@ -12,12 +12,14 @@ import css from './Approvals.module.css';
 
 const CURRENCIES = ['USD', 'EUR', 'MLC', 'USDT'];
 const num = (v: number) => new Intl.NumberFormat('es-ES', { maximumFractionDigits: 2 }).format(v);
+const hintRow = { display: 'flex', flexWrap: 'wrap' as const, gap: 8, alignItems: 'center', justifyContent: 'space-between' };
 
 /**
  * Tasas de referencia (MN por unidad) y cierres de mes.
  *
  * Las tasas llegan solas de elTOQUE cada dia a las 7:30; aqui se ven, se
- * corrigen a mano y se ponen las que falten (sin ellas, lo que entro en MN
+ * corrigen a mano y se ponen las que falten (el cuadro sugiere la de elTOQUE
+ * de ese dia, o la ultima anterior; sin ellas, lo que entro en MN
  * ese dia queda sin valorar y los gastos de ese dia se valoran a mercado con
  * la tasa anterior, como estimados). Cerrar un mes congela sus numeros.
  */
@@ -58,6 +60,16 @@ export default function RatesPage() {
     onSuccess: () => changed('Vuelve la tasa de elTOQUE'),
     onError: failed,
   });
+  // elTOQUE a veces no publica o no responde: se le vuelve a pedir ese dia.
+  const fetchRate = useMutation({
+    mutationFn: (day: string) => valuationService.fetchRate(day),
+    onSuccess: (r) => {
+      if (r.found > 0) { setEditing(null); changed('Llegó la tasa de elTOQUE'); }
+      else if (r.unavailable) message.warning('elTOQUE no responde ahora; prueba en un minuto');
+      else message.info('elTOQUE no tiene tasa de ese día (publica a las 7:00)');
+    },
+    onError: failed,
+  });
   const close = useMutation({
     mutationFn: (m: string) => valuationService.closeMonth(m),
     onSuccess: (r) => { setCloseTo(null); changed(`Cerrado hasta ${r.closedThrough}`); },
@@ -78,6 +90,18 @@ export default function RatesPage() {
     }
     return out.reverse();
   }, [ratesQuery.data, month]);
+
+  // Lo que se sugiere en el cuadro de una tasa: la de elTOQUE de ese dia y, si
+  // no la hay, la ultima anterior.
+  const editingRow = editing ? ratesQuery.data?.find((r) => r.day === editing.day) : undefined;
+  const editingAuto = editing ? editingRow?.eltoque[editing.currency] : undefined;
+  const editingManual = editing ? editingRow?.manual[editing.currency] : undefined;
+  const dayBefore = editing ? dayjs(editing.day).subtract(1, 'day').format('YYYY-MM-DD') : null;
+  const previous = useQuery({
+    queryKey: ['analytics', 'rates', 'suggest', orgId, dayBefore],
+    queryFn: () => valuationService.suggest(dayBefore!),
+    enabled: !!dayBefore && editingAuto === undefined,
+  }).data?.rates[editing?.currency ?? ''];
 
   const missing = status?.missingRates ?? [];
   const closed = status?.closedThrough ?? null;
@@ -208,9 +232,9 @@ export default function RatesPage() {
         onOk={() => editing?.value && setRate.mutate({ day: editing.day, currency: editing.currency, value: editing.value })}
         footer={(orig) => (
           <>
-            {editing && ratesQuery.data?.find((r) => r.day === editing.day)?.manual[editing.currency] !== undefined && (
+            {editing && editingManual !== undefined && editingAuto === undefined && (
               <Button danger onClick={() => { delRate.mutate({ day: editing.day, currency: editing.currency }); setEditing(null); }}>
-                Quitar la mía (usar elTOQUE)
+                Quitar la mía
               </Button>
             )}
             {orig}
@@ -227,6 +251,39 @@ export default function RatesPage() {
           value={editing?.value ?? undefined}
           onChange={(v) => editing && setEditing({ ...editing, value: typeof v === 'number' ? v : null })}
         />
+        {editing && (
+          <div style={{ display: 'grid', gap: 6, marginTop: 12, fontSize: 13, color: 'var(--eco-fg2)' }}>
+            {editingAuto !== undefined ? (
+              <div style={hintRow}>
+                <span>elTOQUE ese día: <b>{num(editingAuto)} MN</b></span>
+                {editingManual !== undefined ? (
+                  <Button size="small" loading={delRate.isPending} onClick={() => delRate.mutate({ day: editing.day, currency: editing.currency }, { onSuccess: () => setEditing(null) })}>
+                    Volver a la de elTOQUE
+                  </Button>
+                ) : editing.value !== editingAuto && (
+                  <Button size="small" onClick={() => setEditing({ ...editing, value: editingAuto })}>Usar</Button>
+                )}
+              </div>
+            ) : (
+              <>
+                <div style={hintRow}>
+                  <span>elTOQUE no tiene la de ese día.</span>
+                  <Button size="small" loading={fetchRate.isPending} onClick={() => fetchRate.mutate(editing.day)}>Traer de elTOQUE</Button>
+                </div>
+                {previous && (
+                  <div style={hintRow}>
+                    <span>
+                      La última anterior, del {dayjs(previous.day).format('DD/MM')}{previous.source === 'MANUAL' ? ' (puesta a mano)' : ''}: <b>{num(previous.value)} MN</b>
+                    </span>
+                    {editing.value !== previous.value && (
+                      <Button size="small" onClick={() => setEditing({ ...editing, value: previous.value })}>Usar</Button>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
       </Modal>
     </div>
   );

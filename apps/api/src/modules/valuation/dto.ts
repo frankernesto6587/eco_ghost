@@ -26,6 +26,12 @@ export class RatesQueryDto {
   to: string;
 }
 
+export class SuggestRateQueryDto {
+  @ApiProperty({ example: '2026-10-20' })
+  @Matches(DAY, { message: 'day debe ser YYYY-MM-DD' })
+  day: string;
+}
+
 export class SetRatesDto {
   @ApiProperty({ example: { USD: 810, MLC: 560 }, description: 'MN por 1 unidad de cada moneda' })
   @IsObject()

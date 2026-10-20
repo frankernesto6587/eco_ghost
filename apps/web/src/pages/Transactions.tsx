@@ -42,6 +42,7 @@ import { useUIStore } from '@/store';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import CategoryIcon from '@/components/common/CategoryIcon';
 import TransactionDrawer, { type DrawerTransaction } from '@/components/transactions/TransactionDrawer';
+import { ExchangeRateHint } from '@/components/transactions/ExchangeRateHint';
 import s from './Transactions.module.css';
 import { approxReport, useValuationStatus } from '@/hooks/useValuation';
 
@@ -1583,6 +1584,7 @@ export default function TransactionsPage() {
                       />
                     </Form.Item>
                   )}
+                  {watchedType === 'EXCHANGE' && <ExchangeRateHint form={form} accounts={accounts} />}
                 </>
               )}
 

@@ -69,3 +69,11 @@ Verificación: `curl https://apieco-prueba.merxbit.com/api/v1/...` con un usuari
 - [x] **Entorno de pruebas sigue la rama `prueba`** (recomendado) o se despliega a mano.
 - [x] **Web de pruebas** (`eco-prueba.merxbit.com`): sí o solo la API.
 - [x] Aprobar este plan.
+
+## Estado y pendientes (2026-10-20)
+- Hecho: fases 1–4 en producción (PR #2, #3, #4); paleta Dracula/Alucard en la web (PR #5).
+- App Android: v0.2.0 de pruebas (login, organización, Inicio, Movimientos, botón + "Anotar"). Código en las ramas `s4/andamiaje` y `s5/alta-rapida`, **sin mergear a `main`**.
+- Siguiente: rediseño de lógica en `2026-10-20-aprobaciones-y-usd.md` (Fase 0 integridad → Fase 1 aprobaciones → Fase 2 valoración FIFO en USD).
+- Pendiente de la app: detalle/edición/borrado de movimientos, filtros y búsqueda, etiquetas en "Anotar", caché offline (Room); Deudas y presupuestos (S6); Análisis (S7); push, widget, biometría, CI (S8/S9).
+- Pendiente de Frank: clientes OAuth Android en la consola de Google (`com.merxbit.ecoghost` y `.prueba`, SHA-1 `B4:EA:3C:EA:63:B6:B8:C8:28:CA:B5:B6:A2:8D:22:71:69:95:3A:64`); el endpoint de tasas de elTOQUE para la Fase 2.
+- Limpieza: el registro DNS `eco-prueba` ya no se usa.

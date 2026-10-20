@@ -35,7 +35,7 @@ import {
 import type { Budget } from '@ecoghost/shared';
 import c from '@/components/analytics/Analytics.module.css';
 import s from './Analytics.module.css';
-import { useValuationStatus } from '@/hooks/useValuation';
+import { signedMoney, useValuationStatus } from '@/hooks/useValuation';
 
 /** Valor del chip "todo en <moneda de estadisticas>". */
 const REPORT_KEY = '__REPORT__';
@@ -414,7 +414,7 @@ export default function AnalyticsPage() {
           )}
 
           {/* ═══════ Metricas del periodo ═══════ */}
-          <section className={s.statGrid}>
+          <section className={summary?.totals.fx ? s.statGrid4 : s.statGrid}>
             {summaryQuery.isLoading || !summary ? (
               <>
                 <CardSkeleton height={62} label={t('analytics.expenses')} />
@@ -445,6 +445,25 @@ export default function AnalyticsPage() {
                   tone="pos"
                   vsLabel={t('analytics.vsPrevious')}
                 />
+                {summary.totals.fx && (
+                  // En "Todo en USD" los gastos van a mercado del dia; esto es lo
+                  // que costaron de mas (o de menos) por FIFO, y entra en el neto.
+                  <StatDeltaCard
+                    label={t('analytics.fx')}
+                    amount={summary.totals.fx.total}
+                    currency={currency}
+                    previousAmount={summary.totals.fx.previousTotal}
+                    deltaPct={null}
+                    higherIsBetter
+                    previousRange={summary.previousRange}
+                    tone={summary.totals.fx.total < 0 ? 'neg' : 'pos'}
+                    vsLabel={t('analytics.vsPrevious')}
+                    note={t('analytics.fxParts', {
+                      exchange: signedMoney(summary.totals.fx.exchange, currency),
+                      holding: signedMoney(summary.totals.fx.holding, currency),
+                    })}
+                  />
+                )}
                 <StatDeltaCard
                   label={t('analytics.net')}
                   amount={summary.totals.net}

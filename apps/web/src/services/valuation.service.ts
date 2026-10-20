@@ -24,7 +24,13 @@ export interface PatrimonyRow {
 export interface Patrimony {
   reportCurrency: string;
   currencies: PatrimonyRow[];
-  totals: { atCost: number | null; atToday: number | null; unrealized: number | null };
+  totals: {
+    atCost: number | null;
+    atToday: number | null;
+    unrealized: number | null;
+    unrealizedExchange: number | null;
+    unrealizedHolding: number | null;
+  };
 }
 
 export interface RateDay {
@@ -33,17 +39,25 @@ export interface RateDay {
   manual: Record<string, number>;
 }
 
+/** De donde sale el valor de un movimiento (centavos de la moneda de estadisticas). */
 export interface Breakdown {
   id: string;
+  /** Coste FIFO */
   reportAmount: number | null;
+  /** A la tasa de mercado de su dia */
+  marketAmount: number | null;
   status: 'EXACT' | 'ESTIMATE' | 'MISSING_RATE' | null;
+  /** Diferencia de cambio (a favor > 0) = fxExchange + fxHolding */
   fxResult: number | null;
+  fxExchange: number | null;
+  fxHolding: number | null;
   parts: {
     kind: 'LOT' | 'DEFICIT' | 'DEFICIT_SETTLED';
     currency: string;
     qty: number;
     cost: number | null;
-    lot: { origin: string; day: string; description: string | null; rate: number | null } | null;
+    market: number | null;
+    lot: { origin: string; day: string; description: string | null; rate: number | null; marketRate: number | null } | null;
   }[];
 }
 

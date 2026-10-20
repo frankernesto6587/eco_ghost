@@ -225,6 +225,8 @@
     "expenses": "Expenses",
     "income": "Income",
     "net": "Net",
+    "fx": "Exchange differences",
+    "fxParts": "exchange {{exchange}} · holding {{holding}}",
     "vsPrevious": "vs",
     "byCategory": "What you spend on",
     "uncategorized": "Uncategorized",

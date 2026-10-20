@@ -39,6 +39,14 @@
   margin-bottom: 12px;
 }
 
+/* Con la diferencia de cambio ("Todo en USD"): cuatro tarjetas */
+.statGrid4 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
 .splitGrid {
   display: grid;
   grid-template-columns: 1.6fr 1fr;

@@ -42,8 +42,14 @@ export interface Transaction {
   /** Solo APPROVED cuenta en saldos; PENDING espera a un admin; REJECTED volvio al autor. */
   status?: 'PENDING' | 'APPROVED' | 'REJECTED';
   rejectionReason?: string | null;
-  /** Valor en la moneda de estadisticas (centavos), si la valoracion esta activa */
+  /** Coste FIFO en la moneda de estadisticas (centavos), si la valoracion esta activa */
   reportAmount?: number | null;
+  /** A la tasa de mercado de su dia: lo que suman las estadisticas */
+  marketAmount?: number | null;
+  /** Diferencia de cambio (a favor > 0) = por cambio + por retener */
+  fxResult?: number | null;
+  fxExchange?: number | null;
+  fxHolding?: number | null;
   valuationStatus?: 'EXACT' | 'ESTIMATE' | 'MISSING_RATE' | null;
   orgId: string;
   createdBy: string;

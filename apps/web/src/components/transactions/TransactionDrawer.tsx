@@ -1,6 +1,9 @@
 import { Drawer, Button, Popconfirm } from 'antd';
 import { EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { useQuery } from '@tanstack/react-query';
 import { formatCurrency } from '@/lib/formatters';
+import { reportMoney, signedMoney, useValuationStatus } from '@/hooks/useValuation';
+import { valuationService } from '@/services/valuation.service';
 import dayjs from 'dayjs';
 import css from './TransactionDrawer.module.css';
 
@@ -146,6 +149,8 @@ export default function TransactionDrawer({ transaction: tx, open, onClose, onEd
             </>
           )}
         </dl>
+
+        {(isExpense || isExchange) && <FxDetail txId={tx.id} currency={currency} />}
       </div>
 
       {/* Footer actions */}
@@ -172,5 +177,71 @@ export default function TransactionDrawer({ transaction: tx, open, onClose, onEd
         </div>
       )}
     </Drawer>
+  );
+}
+
+const num = (v: number) => new Intl.NumberFormat('es-ES', { maximumFractionDigits: 2 }).format(v);
+
+/**
+ * El gasto (o la venta) en la moneda de estadisticas, como la NIC 21: a
+ * mercado del dia, lo que costo por FIFO y, entre los dos, la diferencia de
+ * cambio partida en "por cambio" y "por retener". Debajo, de que cambios salio.
+ */
+function FxDetail({ txId, currency }: { txId: string; currency: string }) {
+  const valuation = useValuationStatus().data;
+  const R = valuation?.reportCurrency;
+  const enabled = !!valuation?.enabled && !!R && currency !== R;
+  const { data } = useQuery({
+    queryKey: ['analytics', 'breakdown', txId],
+    queryFn: () => valuationService.breakdown(txId),
+    enabled,
+  });
+  if (!enabled || !data || !R) return null;
+  if (data.marketAmount === null || data.reportAmount === null) {
+    return data.status === 'MISSING_RATE' ? <div className={css.fx}><div className={css.fxTitle}>En {R}</div><span className={css.dimmed}>falta una tasa para valorarlo</span></div> : null;
+  }
+  const tone = (c: number | null) => (c === null || c === 0 ? undefined : c < 0 ? css.amtNeg : css.amtPos);
+  const rows: [string, number | null, boolean?][] = [
+    ['A mercado del día', data.marketAmount],
+    ['Costo real (FIFO)', data.reportAmount],
+    ['Diferencia de cambio', data.fxResult, true],
+  ];
+  return (
+    <div className={css.fx}>
+      <div className={css.fxTitle}>
+        En {R}
+        {data.status === 'ESTIMATE' && <span className={css.dimmed}> · estimado</span>}
+      </div>
+      <dl className={css.fxRows}>
+        {rows.map(([label, cents, signed]) => (
+          <div key={label} className={css.fxRow}>
+            <dt>{label}</dt>
+            <dd className={signed ? tone(cents) : undefined}>{cents === null ? '—' : signed ? signedMoney(cents, R) : reportMoney(cents, R)}</dd>
+          </div>
+        ))}
+        <div className={`${css.fxRow} ${css.fxSub}`}>
+          <dt>por cambio</dt>
+          <dd className={tone(data.fxExchange)}>{signedMoney(data.fxExchange ?? 0, R)}</dd>
+        </div>
+        <div className={`${css.fxRow} ${css.fxSub}`}>
+          <dt>por retener</dt>
+          <dd className={tone(data.fxHolding)}>{signedMoney(data.fxHolding ?? 0, R)}</dd>
+        </div>
+      </dl>
+      {data.parts.length > 0 && (
+        <ul className={css.fxParts}>
+          {data.parts.map((p, i) => (
+            <li key={i}>
+              {formatCurrency(p.qty, p.currency)} {p.currency.toLowerCase()} ·{' '}
+              {p.lot
+                ? `${p.lot.origin === 'EXCHANGE' ? 'cambio' : p.lot.origin === 'CARRY' ? 'cambio entre monedas' : 'entrada'} del ${dayjs(p.lot.day).format('DD/MM')}` +
+                  (p.lot.origin === 'EXCHANGE' && p.lot.rate ? ` a ${num(p.lot.rate)}` : '') +
+                  (p.lot.marketRate ? ` (mercado ${num(p.lot.marketRate)})` : '')
+                : 'sin bolsa: estimado a la tasa del día'}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }

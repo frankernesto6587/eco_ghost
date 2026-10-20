@@ -225,6 +225,8 @@
     "expenses": "Gastos",
     "income": "Ingresos",
     "net": "Neto",
+    "fx": "Diferencias de cambio",
+    "fxParts": "por cambio {{exchange}} · por retener {{holding}}",
     "vsPrevious": "vs",
     "byCategory": "En que gastas",
     "uncategorized": "Sin categorizar",

@@ -74,7 +74,8 @@ ok(after.balance === before.balance, 'el saldo de Efectivo MN no cambia', { befo
 ok(after.pendingDelta === before.pendingDelta - 640000 && after.pendingCount === before.pendingCount + 1, 'pero aparece como pendiente en la cuenta', { before, after });
 const dashAfter = (await frank('GET', '/dashboard/overview')).body;
 ok(dashAfter.pending.toReview === dashBefore.pending.toReview + 1, 'el panel de Frank cuenta uno mas por revisar', dashAfter.pending);
-ok(JSON.stringify(dashAfter.monthExpense) === JSON.stringify(dashBefore.monthExpense), 'el gasto del mes no cambia');
+const sorted = (o) => JSON.stringify(Object.entries(o ?? {}).sort());
+ok(sorted(dashAfter.monthExpense) === sorted(dashBefore.monthExpense), 'el gasto del mes no cambia', { antes: dashBefore.monthExpense, ahora: dashAfter.monthExpense });
 const summaryAfter = (await frank('GET', '/analytics/summary?currency=MN')).body;
 ok(summaryAfter.totals?.expense === summaryBefore.totals?.expense, 'Analisis no lo cuenta', { antes: summaryBefore.totals, ahora: summaryAfter.totals });
 

@@ -42,6 +42,15 @@ enum TransactionType {
   EXCHANGE
 }
 
+/// Valoracion en la moneda de estadisticas: EXACT (de un cambio o a la tasa del
+/// dia), ESTIMATE (deficit sin cubrir o tasa aun no publicada) o MISSING_RATE
+/// (falta la tasa de un dia y el admin tiene que ponerla).
+enum ValuationStatus {
+  EXACT
+  ESTIMATE
+  MISSING_RATE
+}
+
 /// Aprobacion: lo que anota alguien sin permiso de aprobar queda PENDING hasta
 /// que un propietario o admin lo acepta. Solo APPROVED cuenta en saldos.
 enum TransactionStatus {
@@ -128,6 +137,14 @@ model Organization {
   telegramChatId   BigInt?
   defaultAccountId String?
   defaultAccount   Account? @relation("DefaultAccount", fields: [defaultAccountId], references: [id], onDelete: SetNull)
+  /// Moneda de las estadisticas principales (los gastos en MN se valoran en ella por FIFO).
+  reportCurrency       String    @default("USD")
+  valuationEnabled     Boolean   @default(false)
+  /// Huella de los movimientos y tasas con que se calculo la valoracion: si cambia, se recalcula.
+  valuationFingerprint String?
+  valuedAt             DateTime?
+  /// Lo que el motor dejo pendiente: tasas que faltan, deficits sin cubrir, descuadres.
+  valuationIssues      Json?
   createdAt        DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -138,7 +155,9 @@ model Organization {
   debts         Debt[]
   projects      Project[]
   cashCounts    CashCount[]
-  exchangeRates ExchangeRate[]
+  rateOverrides RateOverride[]
+  fxLots        FxLot[]
+  fxAllocations FxAllocation[]
   budgets       Budget[]
   integrations  Integration[]
   notifications Notification[]
@@ -228,6 +247,12 @@ model Transaction {
   rejectionReason  String?
   /// Lo que envio el autor, si el admin lo corrigio antes de aprobar.
   originalSnapshot Json?
+
+  /// Valor en la moneda de estadisticas (centavos), lo calcula el motor FIFO.
+  reportAmount    Int?
+  valuationStatus ValuationStatus?
+  /// Resultado cambiario realizado (centavos de la moneda de estadisticas).
+  fxResult        Int?
 
   tags        TransactionTag[]
   attachments Attachment[]
@@ -365,20 +390,74 @@ model Budget {
   @@map("budgets")
 }
 
-model ExchangeRate {
-  id           String   @id @default(cuid())
-  fromCurrency String
-  toCurrency   String
-  rate         Decimal  @db.Decimal(16, 6)
-  date         DateTime
-  source       String   @default("MANUAL")
+/// Tasa de referencia diaria de elTOQUE (via eltoke.merxbit.com): MN por 1 unidad.
+/// Comun a todas las organizaciones.
+model ReferenceRate {
+  day       String   // 'YYYY-MM-DD' en hora de Cuba
+  currency  String   // USD, EUR, MLC, USDT
+  mnPerUnit Decimal  @db.Decimal(16, 6)
+  source    String   @default("ELTOQUE")
+  fetchedAt DateTime @default(now())
+
+  @@id([day, currency])
+  @@map("reference_rates")
+}
+
+/// Tasa de un dia puesta a mano por un admin: gana a la de elTOQUE en su organizacion.
+model RateOverride {
+  id        String   @id @default(cuid())
+  day       String
+  currency  String
+  mnPerUnit Decimal  @db.Decimal(16, 6)
+  createdBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   orgId String
   org   Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
-  @@unique([orgId, fromCurrency, toCurrency, date])
-  @@index([orgId])
-  @@map("exchange_rates")
+  @@unique([orgId, day, currency])
+  @@map("rate_overrides")
+}
+
+/// Lote FIFO de una moneda (lo calcula el motor; se reconstruye entero).
+model FxLot {
+  id                  String  @id @default(cuid())
+  seq                 Int
+  currency            String
+  sourceTxId          String
+  day                 String
+  /// EXCHANGE (cambio con tasa real), REFERENCE (entrada a la tasa del dia), CARRY (cambio entre monedas de bolsa)
+  origin              String
+  qty                 Int
+  costMicros          BigInt?
+  estimated           Boolean @default(false)
+  remainingQty        Int
+  remainingCostMicros BigInt?
+
+  orgId String
+  org   Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, currency])
+  @@map("fx_lots")
+}
+
+/// De que lote salio cada gasto (o el deficit que lo cubrio).
+model FxAllocation {
+  id           String  @id @default(cuid())
+  consumerTxId String
+  currency     String
+  lotSeq       Int?
+  qty          Int
+  costMicros   BigInt?
+  /// LOT, DEFICIT (estimado, sin cubrir) o DEFICIT_SETTLED (cubierto por un lote posterior)
+  kind         String
+
+  orgId String
+  org   Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, consumerTxId])
+  @@map("fx_allocations")
 }
 
 model Integration {

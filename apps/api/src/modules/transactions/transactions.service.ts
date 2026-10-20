@@ -9,6 +9,7 @@ import { Actor, flowWhere, visibleWhere } from '../../common/tx-filters';
 import { decideStatusFor, statusFields } from '../../common/approval-policy';
 import { TelegramService } from '../telegram/telegram.service';
 import { AuditService } from '../audit/audit.service';
+import { ValuationService } from '../valuation/valuation.service';
 import {
   CreateTransactionDto,
   UpdateTransactionDto,
@@ -55,6 +56,7 @@ export class TransactionsService {
     private readonly prisma: PrismaService,
     private readonly telegram: TelegramService,
     private readonly audit: AuditService,
+    private readonly valuation: ValuationService,
   ) {}
 
   /**
@@ -272,6 +274,8 @@ export class TransactionsService {
     const { page = 1, limit = 15, sortBy, sortOrder } = query;
 
     const where = this.buildWhere(orgId, query, actor);
+    // reportAmount/valuationStatus al dia (recalcula solo si cambio algo)
+    await this.valuation.ensureFresh(orgId);
 
     // Build orderBy from sortBy/sortOrder, default to createdAt desc
     const dir = sortOrder ?? 'desc';
@@ -304,6 +308,7 @@ export class TransactionsService {
   }
 
   async findOne(orgId: string, id: string, actor: Actor) {
+    await this.valuation.ensureFresh(orgId);
     const transaction = await this.prisma.transaction.findFirst({
       where: {
         id,

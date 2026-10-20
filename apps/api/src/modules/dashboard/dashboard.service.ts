@@ -3,11 +3,45 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { resolveRange, dayKey, dayLabels, toDayLabel } from '../../common/date-range.util';
 import { computeAccountBalances } from '../../common/account-balance.util';
 import { Role, TransactionStatus } from '@prisma/client';
-import { Actor, ENTRY_HEAD, canApprove, flowWhere, visibleWhere } from '../../common/tx-filters';
+import { Actor, COUNTED, ENTRY_HEAD, canApprove, flowWhere, visibleWhere } from '../../common/tx-filters';
+import { ValuationService } from '../valuation/valuation.service';
 
 @Injectable()
 export class DashboardService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly valuation: ValuationService,
+  ) {}
+
+  /**
+   * El mismo resumen en la moneda de estadisticas (USD por defecto), con los
+   * gastos en MN valorados por FIFO. null si la organizacion no lo tiene activo.
+   */
+  private async report(orgId: string, from: Date, to: Date) {
+    const cfg = await this.valuation.ensureFresh(orgId);
+    if (!cfg.valuationEnabled) return null;
+    const inRange = { orgId, date: { gte: from, lt: to } };
+    const [flows, fx, incomplete, estimates, patrimony] = await Promise.all([
+      this.prisma.transaction.groupBy({ by: ['type'], where: flowWhere(inRange), _sum: { reportAmount: true } }),
+      this.prisma.transaction.aggregate({ where: { ...inRange, ...COUNTED, fxResult: { not: 0 } }, _sum: { fxResult: true } }),
+      this.prisma.transaction.count({ where: flowWhere({ ...inRange, reportAmount: null }) }),
+      this.prisma.transaction.count({ where: flowWhere({ ...inRange, valuationStatus: 'ESTIMATE' }) }),
+      this.valuation.patrimony(orgId),
+    ]);
+    const sum = (t: string) => flows.find((f) => f.type === t)?._sum.reportAmount ?? 0;
+    return {
+      currency: cfg.reportCurrency,
+      monthIncome: sum('INCOME'),
+      monthExpense: sum('EXPENSE'),
+      net: sum('INCOME') - sum('EXPENSE'),
+      /** Resultado cambiario de vender MN (u otra moneda) en el rango */
+      fxResult: fx._sum.fxResult ?? 0,
+      /** Movimientos del rango sin valorar (falta una tasa): los totales no los incluyen */
+      incomplete,
+      estimates,
+      patrimony: patrimony.totals,
+    };
+  }
 
   async getOverview(orgId: string, actor: Actor, from?: string, to?: string) {
     const now = new Date();
@@ -208,6 +242,7 @@ export class DashboardService {
     ]);
 
     return {
+      report: await this.report(orgId, startOfMonth, rangeEnd),
       pending: { toReview, mine: { pending: minePending, rejected: mineRejected } },
       totalBalance,
       rangeBalance,

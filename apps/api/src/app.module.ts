@@ -17,6 +17,8 @@ import { TagsModule } from './modules/tags/tags.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { ApprovalsModule } from './modules/approvals/approvals.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
+import { ValuationModule } from './modules/valuation/valuation.module';
+import { ScheduleModule } from '@nestjs/schedule';
 import { GlobalExceptionFilter } from './common/filters';
 
 @Module({
@@ -40,6 +42,9 @@ import { GlobalExceptionFilter } from './common/filters';
     BudgetsModule,
     ApprovalsModule,
     NotificationsModule,
+    ValuationModule,
+    // Tareas programadas (descarga diaria de tasas)
+    ScheduleModule.forRoot(),
     TelegramModule,
     TagsModule,
     AuditModule,

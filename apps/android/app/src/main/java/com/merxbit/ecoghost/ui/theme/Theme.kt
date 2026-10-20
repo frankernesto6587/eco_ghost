@@ -40,29 +40,32 @@ data class EcoColors(
     val income: Color,
     val warning: Color,
     val danger: Color,
-    /** El saldo grande de Inicio: texto en Calma, acento dorado en Noche. */
+    /** El saldo grande de Inicio: texto en Alucard, acento morado en Dracula. */
     val hero: Color,
 )
 
-// Tema claro "Calma" (S2)
-val Calma = EcoColors(
-    bg = Color(0xFFF6F7F5), surface = Color(0xFFFFFFFF), surface2 = Color(0xFFECEFEC),
-    text = Color(0xFF151A17), muted = Color(0xFF68706A), line = Color(0xFFE0E4E1),
-    accent = Color(0xFF1F6B4A), onAccent = Color(0xFFFFFFFF), accentSoft = Color(0xFFE2EFE8),
-    income = Color(0xFF1F6B4A), warning = Color(0xFFA86A14), danger = Color(0xFFB23A3A),
-    hero = Color(0xFF151A17),
+// Mismos colores que la web (draculatheme.com/spec): claro = Alucard, oscuro = Dracula.
+// Fondo = "Background Dark/Lighter", tarjetas = "Background", texto apagado entre Foreground y Comment.
+
+// Tema claro "Alucard"
+val Alucard = EcoColors(
+    bg = Color(0xFFECE9DF), surface = Color(0xFFFFFBEB), surface2 = Color(0xFFEFEDDC),
+    text = Color(0xFF1F1F1F), muted = Color(0xFF6C664B), line = Color(0xFFCECCC0),
+    accent = Color(0xFF644AC9), onAccent = Color(0xFFFFFBEB), accentSoft = Color(0xFFE5DEF2),
+    income = Color(0xFF14710A), warning = Color(0xFFA34D14), danger = Color(0xFFCB3A2A),
+    hero = Color(0xFF1F1F1F),
 )
 
-// Tema oscuro "Noche" (S2)
-val Noche = EcoColors(
-    bg = Color(0xFF0F1216), surface = Color(0xFF171B21), surface2 = Color(0xFF1F252D),
-    text = Color(0xFFECEEF1), muted = Color(0xFF8E96A2), line = Color(0xFF262D36),
-    accent = Color(0xFFD8B46A), onAccent = Color(0xFF17130A), accentSoft = Color(0xFF2A2618),
-    income = Color(0xFF5CC89A), warning = Color(0xFFE3A14A), danger = Color(0xFFF07A7A),
-    hero = Color(0xFFD8B46A),
+// Tema oscuro "Dracula"
+val Dracula = EcoColors(
+    bg = Color(0xFF21222C), surface = Color(0xFF282A36), surface2 = Color(0xFF343746),
+    text = Color(0xFFF8F8F2), muted = Color(0xFF9AA3CC), line = Color(0xFF44475A),
+    accent = Color(0xFFBD93F9), onAccent = Color(0xFF282A36), accentSoft = Color(0xFF403B55),
+    income = Color(0xFF50FA7B), warning = Color(0xFFFFB86C), danger = Color(0xFFFF5555),
+    hero = Color(0xFFBD93F9),
 )
 
-val LocalEco = staticCompositionLocalOf { Calma }
+val LocalEco = staticCompositionLocalOf { Alucard }
 
 @OptIn(ExperimentalTextApi::class)
 private fun manrope(weight: Int) = Font(
@@ -124,7 +127,7 @@ private fun EcoColors.toMaterial(dark: Boolean): ColorScheme {
         surfaceContainer = surface, surfaceContainerLow = surface, surfaceContainerHigh = surface,
         surfaceContainerHighest = surface2, surfaceContainerLowest = surface,
         outline = line, outlineVariant = line,
-        error = danger, onError = Color.White,
+        error = danger, onError = onAccent,
     )
 }
 
@@ -137,14 +140,14 @@ fun EcoTheme(mode: ThemeMode = ThemeMode.SYSTEM, content: @Composable () -> Unit
         ThemeMode.LIGHT -> false
         ThemeMode.DARK -> true
     }
-    val eco = if (dark) Noche else Calma
+    val eco = if (dark) Dracula else Alucard
     CompositionLocalProvider(LocalEco provides eco) {
         MaterialTheme(
             colorScheme = eco.toMaterial(dark),
             typography = EcoTypography,
             shapes = EcoShapes,
         ) {
-            // Texto e iconos sin color explícito toman el del tema (si no, salen negros en Noche)
+            // Texto e iconos sin color explícito toman el del tema (si no, salen negros en Dracula)
             CompositionLocalProvider(LocalContentColor provides eco.text, content = content)
         }
     }

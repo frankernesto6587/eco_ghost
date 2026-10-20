@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="bg">#F6F7F5</color>
-    <color name="icon_bg">#1F6B4A</color>
-    <color name="icon_fg">#FFFFFF</color>
+    <!-- Alucard / Dracula, igual que el tema de la app -->
+    <color name="bg">#ECE9DF</color>
+    <color name="icon_bg">#BD93F9</color>
+    <color name="icon_fg">#282A36</color>
 </resources>

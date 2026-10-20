@@ -30,6 +30,8 @@ import type { CreateOrganizationDto } from '@/services/organizations.service';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useAuthStore } from '@/store/auth.store';
 import { formatDate } from '@/lib/formatters';
+import { valuationService } from '@/services/valuation.service';
+import { useValuationStatus } from '@/hooks/useValuation';
 import css from './Organization.module.css';
 
 // ---------- Types ----------
@@ -153,6 +155,22 @@ export default function OrganizationPage() {
     },
     onError: () => {
       message.error(t('common.error'));
+    },
+  });
+
+  // Estadisticas en la moneda de estadisticas (FIFO)
+  const valuation = useValuationStatus().data;
+  const valuationMutation = useMutation({
+    mutationFn: (payload: { enabled?: boolean; reportCurrency?: string }) => valuationService.settings(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['analytics'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      message.success('Estadísticas actualizadas');
+    },
+    onError: (e: unknown) => {
+      const m = (e as { response?: { data?: { message?: string } } }).response?.data?.message;
+      message.error(m ?? t('common.error'));
     },
   });
 
@@ -426,6 +444,41 @@ export default function OrganizationPage() {
                 </Button>
               </Form.Item>
             </Form>
+          </div>
+        </div>
+      </div>
+
+      {/* Estadisticas en USD (valoracion FIFO) */}
+      <div className={css.section}>
+        <div className={css.sectionHead}>
+          <h3 className={css.sectionTitle}>Estadísticas en una sola moneda</h3>
+        </div>
+        <div className={css.sectionBody}>
+          <div className={css.settingsForm}>
+            <p style={{ color: 'var(--eco-fg3)', marginTop: 0 }}>
+              Valora todo en una moneda. Los gastos en MN (u otra moneda) se valoran a la tasa real de tus
+              cambios, el más viejo primero. Lo que no viene de un cambio, a la tasa de elTOQUE de ese día.
+            </p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+              <Switch
+                checked={!!valuation?.enabled}
+                loading={valuationMutation.isPending}
+                onChange={(enabled) => valuationMutation.mutate({ enabled })}
+              />
+              <span>Activar</span>
+              <Select
+                style={{ width: 160 }}
+                value={valuation?.reportCurrency ?? 'USD'}
+                disabled={!valuation?.enabled || !!valuation?.closedThrough}
+                onChange={(reportCurrency) => valuationMutation.mutate({ reportCurrency })}
+                options={CURRENCIES.filter((c) => c.code !== 'MN').map((c) => ({ label: `En ${c.code}`, value: c.code }))}
+              />
+            </div>
+            {valuation?.closedThrough && (
+              <p style={{ color: 'var(--eco-fg3)', fontSize: 12 }}>
+                Hay meses cerrados (hasta {valuation.closedThrough}): para cambiar la moneda hay que reabrirlos.
+              </p>
+            )}
           </div>
         </div>
       </div>

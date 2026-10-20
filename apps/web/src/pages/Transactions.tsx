@@ -43,6 +43,7 @@ import { useIsMobile } from '@/hooks/useIsMobile';
 import CategoryIcon from '@/components/common/CategoryIcon';
 import TransactionDrawer, { type DrawerTransaction } from '@/components/transactions/TransactionDrawer';
 import s from './Transactions.module.css';
+import { approxReport, useValuationStatus } from '@/hooks/useValuation';
 
 const { RangePicker } = DatePicker;
 const { TextArea } = Input;
@@ -161,6 +162,12 @@ export default function TransactionsPage() {
   const { message, modal } = App.useApp();
   const queryClient = useQueryClient();
   const { canWrite, canEditTx } = usePermissions();
+  // "≈ 10,67 USD" al lado de lo que no esta en la moneda de estadisticas
+  const valuation = useValuationStatus().data;
+  const approx = (tx: Transaction) =>
+    valuation?.enabled && tx.account.currency !== valuation.reportCurrency && tx.type !== 'TRANSFER'
+      ? approxReport(tx.reportAmount, valuation.reportCurrency, tx.valuationStatus)
+      : null;
   const isMobile = useIsMobile();
   const [form] = Form.useForm<TransactionFormValues>();
   const watchedType = Form.useWatch('type', form);
@@ -1180,6 +1187,7 @@ export default function TransactionsPage() {
                 </div>
                 <div className={`${s.mobileCardAmt} ${colorClass}`}>
                   {prefix}{formatCurrency(Math.abs(tx.amount), currency)}
+                  {approx(tx) && <div style={{ fontSize: 11, color: 'var(--eco-fg3)', fontWeight: 400 }}>{approx(tx)}</div>}
                 </div>
                 {viewDeleted && canEditTx && (
                   <Button
@@ -1323,6 +1331,7 @@ export default function TransactionsPage() {
                   <div className={`${s.cAmt} ${amtClass}`}>
                     {prefix}{formatCurrency(Math.abs(tx.amount), currency)}
                     <span className={s.amtCur}>{currency.toLowerCase()}</span>
+                    {approx(tx) && <div style={{ fontSize: 11, color: 'var(--eco-fg3)', fontWeight: 400 }}>{approx(tx)}</div>}
                   </div>
                 </div>
               );

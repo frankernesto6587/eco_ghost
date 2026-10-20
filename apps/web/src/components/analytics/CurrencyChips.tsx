@@ -12,6 +12,8 @@ interface Props {
   currencies: string[];
   value: string | null;
   onChange: (currency: string) => void;
+  /** Texto para opciones especiales (p. ej. "Todo en USD") */
+  labels?: Record<string, string>;
 }
 
 /**
@@ -19,7 +21,7 @@ interface Props {
  * cuentas, no con la constante CURRENCIES: una org con solo MN y USD no debe
  * ver chips de EUR y MLC.
  */
-export function CurrencyChips({ currencies, value, onChange }: Props) {
+export function CurrencyChips({ currencies, value, onChange, labels }: Props) {
   if (currencies.length <= 1) return null;
 
   return (
@@ -35,7 +37,7 @@ export function CurrencyChips({ currencies, value, onChange }: Props) {
           {CURRENCY_ICONS[cur] && (
             <img src={CURRENCY_ICONS[cur]} alt="" className={s.chipIcon} />
           )}
-          {cur}
+          {labels?.[cur] ?? cur}
         </button>
       ))}
     </div>

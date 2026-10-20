@@ -42,6 +42,9 @@ export interface Transaction {
   /** Solo APPROVED cuenta en saldos; PENDING espera a un admin; REJECTED volvio al autor. */
   status?: 'PENDING' | 'APPROVED' | 'REJECTED';
   rejectionReason?: string | null;
+  /** Valor en la moneda de estadisticas (centavos), si la valoracion esta activa */
+  reportAmount?: number | null;
+  valuationStatus?: 'EXACT' | 'ESTIMATE' | 'MISSING_RATE' | null;
   orgId: string;
   createdBy: string;
   createdAt: string;

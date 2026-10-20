@@ -409,6 +409,9 @@ export default function DashboardPage() {
         />
       )}
 
+      {/* El mes y el patrimonio en la moneda de estadisticas (si esta activa) */}
+      {overview?.report && <ReportStrip report={overview.report} onRates={() => navigate('/rates')} />}
+
       {/* ═══════ HERO + STAT CARDS ═══════ */}
       <section className={s.heroGrid}>
         {/* Hero: Total Balance */}
@@ -804,5 +807,55 @@ export default function DashboardPage() {
         </footer>
       </section>
     </div>
+  );
+}
+
+/** Importe en la moneda de estadisticas, con centavos: "1 151,52 USD". */
+const reportMoney = (cents: number, currency: string) =>
+  `${new Intl.NumberFormat('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(cents / 100)} ${currency}`;
+
+/**
+ * El rango en una sola moneda: los gastos en MN valorados a la tasa real de
+ * los cambios (FIFO) y el patrimonio a lo que costo y a la tasa de hoy.
+ */
+function ReportStrip({ report, onRates }: { report: NonNullable<DashboardOverview['report']>; onRates: () => void }) {
+  const cur = report.currency;
+  const pat = report.patrimony;
+  return (
+    <section className={s.reportGrid}>
+      <article className={s.card}>
+        <div className={s.cardLabel}><span className={s.cardDot} />gastos en {cur}</div>
+        <div className={s.reportNum}>{reportMoney(report.monthExpense, cur)}</div>
+        <div className={s.reportSub}>
+          ingresos {reportMoney(report.monthIncome, cur)}
+          {report.estimates > 0 && ` · ${report.estimates} estimados`}
+        </div>
+      </article>
+      <article className={s.card}>
+        <div className={s.cardLabel}><span className={s.cardDot} />neto en {cur}</div>
+        <div className={s.reportNum} style={{ color: report.net < 0 ? 'var(--eco-neg)' : 'var(--eco-pos)' }}>
+          {report.net > 0 ? '+' : ''}{reportMoney(report.net, cur)}
+        </div>
+        <div className={s.reportSub}>
+          {report.fxResult !== 0 ? `resultado cambiario ${report.fxResult > 0 ? '+' : ''}${reportMoney(report.fxResult, cur)}` : 'sin ventas de moneda'}
+        </div>
+      </article>
+      <article className={s.card}>
+        <div className={s.cardLabel}><span className={s.cardDot} />patrimonio en {cur}</div>
+        <div className={s.reportNum}>{pat.atCost === null ? '—' : reportMoney(pat.atCost, cur)}</div>
+        <div className={s.reportSub}>
+          {pat.atToday === null
+            ? 'a costo · falta la tasa de hoy'
+            : `a tasa de hoy ${reportMoney(pat.atToday, cur)}${pat.unrealized ? ` (${pat.unrealized > 0 ? '+' : ''}${reportMoney(pat.unrealized, cur)})` : ''}`}
+        </div>
+      </article>
+      {report.incomplete > 0 && (
+        <article className={s.card} style={{ cursor: 'pointer' }} onClick={onRates}>
+          <div className={s.cardLabel} style={{ color: 'var(--eco-neg)' }}>falta tasa</div>
+          <div className={s.reportNum}>{report.incomplete}</div>
+          <div className={s.reportSub}>movimientos sin valorar: no están en estos totales. Poner tasas →</div>
+        </article>
+      )}
+    </section>
   );
 }

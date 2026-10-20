@@ -10,6 +10,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { useAuthStore } from '@/store/auth.store';
 import { invalidateMoneyQueries } from '@/lib/invalidateMoney';
 import { flattenCategories } from '@/lib/categoryTree';
+import { ExchangeRateHint } from '@/components/transactions/ExchangeRateHint';
 import { formatRelativeDate } from '@/lib/formatters';
 import css from './Approvals.module.css';
 
@@ -326,6 +327,7 @@ export default function ApprovalsPage() {
               )}
             </div>
           )}
+          {editingItem?.kind === 'EXCHANGE' && <ExchangeRateHint form={form} accounts={accounts} />}
           {!isDebt && (
             <Form.Item name="categoryId" label="Categoría">
               <TreeSelect allowClear showSearch treeData={categoryTree} treeNodeFilterProp="name" treeDefaultExpandAll placeholder="Sin categoría" />

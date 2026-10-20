@@ -29,6 +29,8 @@ export class RatesService implements OnModuleInit {
   private readonly logger = new Logger(RatesService.name);
   private readonly base = (process.env.RATES_SOURCE_URL ?? 'https://eltoke.merxbit.com').replace(/\/$/, '');
   private syncing = false;
+  /** Dias ya pedidos a elTOQUE desde `suggest`, para no insistir en cada consulta. */
+  private readonly tried = new Map<string, number>();
 
   constructor(private readonly prisma: PrismaService) {}
 
@@ -74,7 +76,7 @@ export class RatesService implements OnModuleInit {
         const day = d.format('YYYY-MM-DD');
         if (have.has(day)) continue;
         const n = await this.fetchDay(day);
-        if (n > 0) fetched++;
+        if (n) fetched++;
         else missing.push(day);
         await sleep(7_000);
       }
@@ -85,21 +87,26 @@ export class RatesService implements OnModuleInit {
     }
   }
 
-  /** Baja y guarda un dia. Devuelve cuantas monedas guardo (0 si ese dia no hay tasa). */
-  async fetchDay(day: string): Promise<number> {
-    for (let attempt = 0; attempt < 5; attempt++) {
+  /**
+   * Baja y guarda un dia. Devuelve cuantas monedas guardo (0 si ese dia no hay
+   * tasa), o null si elTOQUE no respondio. Con un solo intento (a peticion de
+   * alguien) no espera: si elTOQUE esta ocupado, se dice y ya.
+   */
+  async fetchDay(day: string, attempts = 5): Promise<number | null> {
+    for (let attempt = 0; attempt < attempts; attempt++) {
+      const last = attempt === attempts - 1;
       let res: Response;
       try {
-        res = await fetch(`${this.base}/tasa?fecha=${day}`, { signal: AbortSignal.timeout(20_000) });
+        res = await fetch(`${this.base}/tasa?fecha=${day}`, { signal: AbortSignal.timeout(attempts > 1 ? 20_000 : 10_000) });
       } catch (e) {
         this.logger.warn(`Tasas ${day}: sin respuesta (${e})`);
-        await sleep(5_000 * (attempt + 1));
+        if (!last) await sleep(5_000 * (attempt + 1));
         continue;
       }
       if (res.status === 404) return 0; // ese dia no tiene tasa (o hoy antes de las 7:00)
       if (res.status === 503 || res.status === 502) {
         // elTOQUE limita por minuto o no responde: esperar y reintentar
-        await sleep(65_000);
+        if (!last) await sleep(65_000);
         continue;
       }
       if (!res.ok) {
@@ -121,8 +128,44 @@ export class RatesService implements OnModuleInit {
       }
       return saved;
     }
-    this.logger.warn(`Tasas ${day}: no se pudo bajar tras 5 intentos`);
-    return 0;
+    this.logger.warn(`Tasas ${day}: no se pudo bajar tras ${attempts} intentos`);
+    return null;
+  }
+
+  /** Un admin vuelve a pedir a elTOQUE un dia que falta (una sola consulta). */
+  async fetchNow(orgId: string, day: string) {
+    const saved = await this.fetchDay(day, 1);
+    return { found: saved ?? 0, unavailable: saved === null, rows: await this.list(orgId, day, day) };
+  }
+
+  /**
+   * La tasa que rige un dia, por moneda: la puesta a mano, si no la de
+   * elTOQUE, y si ese dia no tiene, la ultima anterior (hasta un mes atras).
+   * Es la sugerencia al anotar un cambio. Si al dia le falta la de elTOQUE se
+   * le pide una vez (como mucho cada 10 minutos por dia).
+   */
+  async suggest(orgId: string, day: string) {
+    const today = dayKey(new Date());
+    const upTo = day > today ? today : day;
+    if (process.env.RATES_SYNC !== 'off') {
+      const have = await this.prisma.referenceRate.findUnique({ where: { day_currency: { day: upTo, currency: 'USD' } }, select: { day: true } });
+      const at = this.tried.get(upTo);
+      if (!have && (!at || Date.now() - at > 10 * 60_000)) {
+        this.tried.set(upTo, Date.now());
+        await this.fetchDay(upTo, 1);
+      }
+    }
+    const rows = await this.list(orgId, dayjs(upTo).subtract(31, 'day').format('YYYY-MM-DD'), upTo);
+    rows.sort((a, b) => b.day.localeCompare(a.day));
+    const rates: Record<string, { value: number; day: string; source: 'MANUAL' | 'ELTOQUE' }> = {};
+    for (const r of rows) {
+      for (const c of RATE_CURRENCIES) {
+        if (rates[c]) continue;
+        if (r.manual[c] !== undefined) rates[c] = { value: r.manual[c], day: r.day, source: 'MANUAL' };
+        else if (r.eltoque[c] !== undefined) rates[c] = { value: r.eltoque[c], day: r.day, source: 'ELTOQUE' };
+      }
+    }
+    return { day: upTo, rates };
   }
 
   /** Tasas de un rango: las de elTOQUE y las corregidas por la organizacion. */

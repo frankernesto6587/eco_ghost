@@ -39,6 +39,12 @@ export interface RateDay {
   manual: Record<string, number>;
 }
 
+/** La tasa que rige un dia por moneda: la de ese dia o, si falta, la ultima anterior. */
+export interface RateSuggestion {
+  day: string;
+  rates: Record<string, { value: number; day: string; source: 'MANUAL' | 'ELTOQUE' }>;
+}
+
 /** De donde sale el valor de un movimiento (centavos de la moneda de estadisticas). */
 export interface Breakdown {
   id: string;
@@ -88,6 +94,15 @@ export const valuationService = {
   },
   async rates(from: string, to: string): Promise<RateDay[]> {
     const { data } = await api.get('/rates', { params: { from, to } });
+    return data;
+  },
+  async suggest(day: string): Promise<RateSuggestion> {
+    const { data } = await api.get('/rates/suggest', { params: { day } });
+    return data;
+  },
+  /** Volver a pedir a elTOQUE un dia; `unavailable` si no respondio. */
+  async fetchRate(day: string): Promise<{ found: number; unavailable: boolean; rows: RateDay[] }> {
+    const { data } = await api.post(`/rates/${day}/fetch`);
     return data;
   },
   async setRates(day: string, rates: Record<string, number>): Promise<RateDay[]> {

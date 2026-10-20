@@ -8,7 +8,7 @@ import { RolesGuard } from '../../common/guards';
 import { dayKey } from '../../common/date-range.util';
 import { RatesService } from './rates.service';
 import { ValuationService } from './valuation.service';
-import { RatesQueryDto, SetRatesDto, ValuationSettingsDto } from './dto';
+import { RatesQueryDto, SetRatesDto, SuggestRateQueryDto, ValuationSettingsDto } from './dto';
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
@@ -95,6 +95,20 @@ export class ValuationController {
   @ApiOperation({ summary: 'Tasas por dia: las de elTOQUE y las corregidas a mano' })
   list(@OrgId() orgId: string, @Query() q: RatesQueryDto) {
     return this.rates.list(orgId, q.from, q.to);
+  }
+
+  @Get('rates/suggest')
+  @ApiOperation({ summary: 'Tasa que rige un dia (la de ese dia o la ultima anterior): la sugerencia al anotar un cambio' })
+  suggest(@OrgId() orgId: string, @Query() q: SuggestRateQueryDto) {
+    return this.rates.suggest(orgId, q.day);
+  }
+
+  @Post('rates/:day/fetch')
+  @Roles(Role.OWNER, Role.ADMIN)
+  @ApiOperation({ summary: 'Volver a pedir a elTOQUE la tasa de un dia' })
+  fetch(@OrgId() orgId: string, @Param('day') day: string) {
+    if (!DAY.test(day) || day > dayKey(new Date())) throw new BadRequestException('day debe ser YYYY-MM-DD y no futuro');
+    return this.rates.fetchNow(orgId, day);
   }
 
   @Put('rates/:day')

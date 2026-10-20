@@ -39,7 +39,8 @@ export class DebtsService {
     if (existing) return existing.id;
 
     const created = await tx.category.create({
-      data: { name: LOAN_CATEGORY, icon: 'transaction', orgId },
+      // Prestar y pedir prestado: la usan gastos e ingresos.
+      data: { name: LOAN_CATEGORY, icon: 'transaction', kind: 'BOTH', orgId },
       select: { id: true },
     });
     return created.id;

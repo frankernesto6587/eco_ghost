@@ -20,6 +20,7 @@ const ALLOWED = new Set([
   'modules/approvals/approvals.service.ts', // la bandeja trabaja con pendientes
   'modules/dashboard/dashboard.service.ts', // deudas, conteos de la bandeja y lista visible
   'modules/telegram/telegram.service.ts', // deudas
+  'modules/categories/categories.service.ts', // al cambiar el tipo, cuenta tambien lo pendiente
 ]);
 
 function files(dir: string): string[] {

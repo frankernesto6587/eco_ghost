@@ -71,6 +71,7 @@ import androidx.lifecycle.viewModelScope
 import com.merxbit.ecoghost.data.AmountInput
 import com.merxbit.ecoghost.data.ApprovalsRepository
 import com.merxbit.ecoghost.data.Category
+import com.merxbit.ecoghost.data.CategoryGroup
 import com.merxbit.ecoghost.data.Dates
 import com.merxbit.ecoghost.data.Draft
 import com.merxbit.ecoghost.data.EntryData
@@ -353,16 +354,18 @@ fun EntryContent(
     }
 
     if (pickDate) DateDialog(form.date, { pickDate = false }) { onChange(form.copy(date = it)); pickDate = false }
-    if (pickCategory) CategoryPicker(data, form.categoryId, { pickCategory = false }) {
+    if (pickCategory) CategoryPicker(data.groupsFor(form.type.name), form.categoryId, { pickCategory = false }) {
         onChange(form.copy(categoryId = it)); pickCategory = false
     }
 }
 
-/** Las 5 más usadas para el tipo; si aún no hay uso, las primeras. La elegida siempre se ve. */
+/** Las 5 más usadas para el tipo; si aún no hay uso, las primeras. La elegida siempre se ve. Solo las de su tipo. */
 private fun quickCategories(form: EntryForm, data: EntryData): List<Category> {
-    val used = data.usage[form.type].orEmpty().mapNotNull(data.categories::get)
-    val base = used.ifEmpty { data.groups.flatMap { g -> g.children.ifEmpty { listOf(g.root) } } }.take(5)
-    val chosen = form.categoryId?.let(data.categories::get)
+    val groups = data.groupsFor(form.type.name)
+    val fit = groups.flatMap { listOf(it.root) + it.children }.associateBy { it.id }
+    val used = data.usage[form.type].orEmpty().mapNotNull(fit::get)
+    val base = used.ifEmpty { groups.flatMap { g -> g.children.ifEmpty { listOf(g.root) } } }.take(5)
+    val chosen = form.categoryId?.let(fit::get)
     return if (chosen == null || chosen in base) base else listOf(chosen) + base
 }
 
@@ -473,12 +476,12 @@ private fun DateDialog(date: LocalDate, onDismiss: () -> Unit, onPick: (LocalDat
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-private fun CategoryPicker(data: EntryData, selected: String?, onDismiss: () -> Unit, onPick: (String) -> Unit) {
+private fun CategoryPicker(groups: List<CategoryGroup>, selected: String?, onDismiss: () -> Unit, onPick: (String) -> Unit) {
     val c = Eco.colors
     ModalBottomSheet(onDismiss, containerColor = c.surface, shape = EcoShape.sheet) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 24.dp)) {
             Text("Categoría", style = MaterialTheme.typography.titleLarge)
-            data.groups.forEach { g ->
+            groups.forEach { g ->
                 val color = parseColor(g.root.color)
                 Row(
                     Modifier.fillMaxWidth().padding(top = 14.dp, bottom = 8.dp).clip(EcoShape.card).clickable { onPick(g.root.id) },

@@ -143,6 +143,8 @@ data class CategoryNodeDto(
     val icon: String? = null,
     val color: String? = null,
     val isAdjustment: Boolean = false,
+    /** EXPENSE, INCOME o BOTH: en qué movimientos sale. Sin dato (API vieja), en todos. */
+    val kind: String = "BOTH",
     val parentId: String? = null,
     val children: List<CategoryNodeDto> = emptyList(),
 )

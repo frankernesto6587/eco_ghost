@@ -75,6 +75,7 @@ export const MEMBER_MANAGEMENT_ROLES: Role[] = [Role.OWNER, Role.ADMIN];
 export const DEFAULT_CATEGORIES = [
   {
     name: 'Ingresos',
+    kind: 'INCOME',
     icon: 'dollar',
     color: '#5ac576',
     children: [
@@ -87,6 +88,7 @@ export const DEFAULT_CATEGORIES = [
   },
   {
     name: 'Vivienda',
+    kind: 'EXPENSE',
     icon: 'home',
     color: '#6d95ee',
     children: [
@@ -98,6 +100,7 @@ export const DEFAULT_CATEGORIES = [
   },
   {
     name: 'Alimentacion',
+    kind: 'EXPENSE',
     icon: 'coffee',
     color: '#fa7c20',
     children: [
@@ -108,6 +111,7 @@ export const DEFAULT_CATEGORIES = [
   },
   {
     name: 'Transporte',
+    kind: 'EXPENSE',
     icon: 'car',
     color: '#c97adb',
     children: [
@@ -118,6 +122,7 @@ export const DEFAULT_CATEGORIES = [
   },
   {
     name: 'Familia',
+    kind: 'EXPENSE',
     icon: 'team',
     color: '#ed8b8b',
     children: [
@@ -129,6 +134,7 @@ export const DEFAULT_CATEGORIES = [
   },
   {
     name: 'Tecnologia',
+    kind: 'EXPENSE',
     icon: 'laptop',
     color: '#00bec7',
     children: [
@@ -140,6 +146,7 @@ export const DEFAULT_CATEGORIES = [
   },
   {
     name: 'Otros gastos',
+    kind: 'EXPENSE',
     icon: 'ellipsis',
     color: '#a68f68',
     children: [],

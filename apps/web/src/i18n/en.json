@@ -110,6 +110,7 @@
     "deleteSuccess": "Transaction deleted successfully",
     "uncategorizedFilter": "Uncategorized",
     "bulkAssignCategory": "Assign category",
+    "bulkNoCategoryForPairs": "Transfers and exchanges take no category",
     "bulkAssignSuccess": "{{count}} transactions updated"
   },
   "accounts": {

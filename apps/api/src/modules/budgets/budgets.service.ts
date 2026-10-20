@@ -173,9 +173,10 @@ export class BudgetsService {
     if (dto.categoryId) {
       const cat = await this.prisma.category.findFirst({
         where: { id: dto.categoryId, orgId },
-        select: { id: true },
+        select: { id: true, kind: true },
       });
       if (!cat) throw new NotFoundException('Categoria no encontrada');
+      if (cat.kind === 'INCOME') throw new BadRequestException('Los presupuestos son de gasto: elige una categoría de gasto');
     }
     if (dto.endMonth && dto.endMonth < dto.startMonth) {
       throw new ConflictException('endMonth no puede ser anterior a startMonth');

@@ -84,14 +84,19 @@ class ScreensTest {
         accounts = home.accounts,
         groups = EntryRepository.groups(
             listOf(
-                CategoryNodeDto("ali", "Alimentacion", "coffee", "#fa7c20", children = listOf(
+                CategoryNodeDto("ing", "Ingresos", "dollar", "#5ac576", kind = "INCOME", children = listOf(
+                    CategoryNodeDto("sal", "Salario"), CategoryNodeDto("ven", "Ventas"), CategoryNodeDto("comi", "Comisiones USDT"),
+                )),
+                CategoryNodeDto("ali", "Alimentacion", "coffee", "#fa7c20", kind = "EXPENSE", children = listOf(
                     CategoryNodeDto("mer", "Mercado"), CategoryNodeDto("del", "Delivery"), CategoryNodeDto("res", "Restaurantes"),
                 )),
-                CategoryNodeDto("tra", "Transporte", "car", "#c97adb", children = listOf(CategoryNodeDto("com", "Combustible"))),
-                CategoryNodeDto("viv", "Vivienda", "home", "#6d95ee", children = listOf(CategoryNodeDto("cons", "Construccion"))),
+                CategoryNodeDto("tra", "Transporte", "car", "#c97adb", kind = "EXPENSE", children = listOf(CategoryNodeDto("com", "Combustible"))),
+                CategoryNodeDto("viv", "Vivienda", "home", "#6d95ee", kind = "EXPENSE", children = listOf(CategoryNodeDto("cons", "Construccion"))),
+                CategoryNodeDto("pre", "Prestamos", "transaction", null, kind = "BOTH"),
             ),
         ),
-        usage = mapOf(EntryType.EXPENSE to listOf("mer", "cons", "del", "com", "res")),
+        // Uso de antes del arreglo: "Salario" en un gasto ya no se ofrece.
+        usage = mapOf(EntryType.EXPENSE to listOf("mer", "sal", "cons", "del", "com", "res"), EntryType.INCOME to listOf("sal", "comi")),
         preferredAccountId = "2",
     )
 
@@ -132,6 +137,9 @@ class ScreensTest {
     @Test fun inicioOscuro() = shot("inicio-oscuro", ThemeMode.DARK) { HomeContent(org, "Frank", home, null, false, {}) }
     @Test fun anotarGastoClaro() = shot("anotar-gasto-claro", ThemeMode.LIGHT) {
         entry(EntryForm(amount = "6400", accountId = "2", categoryId = "mer", description = "Agro"))
+    }
+    @Test fun anotarIngresoOscuro() = shot("anotar-ingreso-oscuro", ThemeMode.DARK) {
+        entry(EntryForm(type = EntryType.INCOME, amount = "450", accountId = "4", categoryId = "sal"))
     }
     @Test fun anotarCambioOscuro() = shot("anotar-cambio-oscuro", ThemeMode.DARK) {
         entry(EntryForm(type = EntryType.TRANSFER, amount = "100", toAmount = "38000", typingTo = true, accountId = "4", toAccountId = "2"))

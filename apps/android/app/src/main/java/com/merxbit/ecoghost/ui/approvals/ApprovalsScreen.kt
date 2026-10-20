@@ -402,7 +402,7 @@ private fun CorrectSheet(item: ApprovalItemDto, data: EntryData?, rates: RateSug
             if (!pair && !debt && data != null) {
                 Text("CATEGORÍA", style = MaterialTheme.typography.labelSmall, color = c.muted)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    data.groups.flatMap { g -> g.children.ifEmpty { listOf(g.root) } }.forEach { cat ->
+                    data.groupsFor(item.kind).flatMap { g -> g.children.ifEmpty { listOf(g.root) } }.forEach { cat ->
                         EcoChip(cat.name, categoryId == cat.id) { categoryId = cat.id }
                     }
                 }

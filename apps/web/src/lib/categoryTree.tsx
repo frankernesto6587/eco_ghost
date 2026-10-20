@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { categoryFits } from '@ecoghost/shared';
 import CategoryIcon from '@/components/common/CategoryIcon';
 import type { Category } from '@/services/categories.service';
 
@@ -8,6 +9,23 @@ export interface CategoryTreeNode {
   value: string;
   name: string;
   children?: CategoryTreeNode[];
+}
+
+/**
+ * Los grupos que valen para ese tipo de movimiento; sus subcategorias van con
+ * ellos. Transferencias y cambios no llevan categoria.
+ */
+export function categoriesFor(categories: Category[], type: string | undefined): Category[] {
+  if (type !== 'INCOME' && type !== 'EXPENSE') return [];
+  return categories.filter((c) => categoryFits(c.kind, type));
+}
+
+/** Los ids de un arbol, con sus subcategorias. */
+export function categoryIds(categories: Category[]): Set<string> {
+  const ids = new Set<string>();
+  const walk = (list: Category[]) => list.forEach((c) => (ids.add(c.id), walk(c.children ?? [])));
+  walk(categories);
+  return ids;
 }
 
 /**

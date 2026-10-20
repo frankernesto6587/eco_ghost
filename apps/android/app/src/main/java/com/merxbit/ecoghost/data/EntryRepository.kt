@@ -16,8 +16,14 @@ enum class EntryType(val label: String) { EXPENSE("Gasto"), INCOME("Ingreso"), T
 
 data class Category(val id: String, val name: String, val icon: String?, val color: String?, val parentName: String? = null)
 
-/** Una categoría raíz con sus hijas, para el selector "Todas". */
-data class CategoryGroup(val root: Category, val children: List<Category>)
+/**
+ * Una categoría raíz con sus hijas, para el selector "Todas". El grupo decide
+ * en qué movimientos sale (gasto, ingreso o los dos) y sus hijas van con él.
+ */
+data class CategoryGroup(val root: Category, val children: List<Category>, val kind: String = "BOTH") {
+    /** Transferencias y cambios no llevan categoría. */
+    fun fits(type: String) = (type == "EXPENSE" || type == "INCOME") && (kind == "BOTH" || kind == type)
+}
 
 /** Lo que necesita la hoja "Anotar" para abrirse. */
 data class EntryData(
@@ -28,6 +34,9 @@ data class EntryData(
     val preferredAccountId: String?,
 ) {
     val categories: Map<String, Category> = groups.flatMap { listOf(it.root) + it.children }.associateBy { it.id }
+
+    /** Solo los grupos que valen para ese tipo de movimiento ("Salario" no sale en un gasto). */
+    fun groupsFor(type: String): List<CategoryGroup> = groups.filter { it.fits(type) }
 }
 
 /** Lo que el usuario rellenó en la hoja. Importes en centavos. */
@@ -84,6 +93,7 @@ class EntryRepository @Inject constructor(
                     // Las hijas heredan icono y color de la raíz si no tienen
                     Category(it.id, it.name, it.icon ?: root.icon, it.color ?: root.color, root.name)
                 },
+                root.kind,
             )
         }
 

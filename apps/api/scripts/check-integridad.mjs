@@ -107,12 +107,12 @@ const mid = await balances();
 ok(mid['Efectivo USD'] === before['Efectivo USD'] - 20000 && mid['Efectivo MN'] === before['Efectivo MN'] + 7000000,
   'saldos reflejan el cambio editado', { antes: before, ahora: mid });
 
-// ── 5. Categoria en lote llega a las dos piernas; cuenta en lote no se permite en pares ──
+// ── 5. En pares no se cambia en lote ni la categoria (no llevan) ni la cuenta ──
 const cats = (await api('GET', '/categories')).body;
 const otros = cats.find((c) => c.name === 'Otros gastos');
 r = await api('PATCH', '/transactions/bulk', { ids: [ex.body.id], categoryId: otros.id });
-ok(r.status === 200, 'categoria en lote sobre un cambio', r.body);
-ok((await api('GET', `/transactions/${incId}`)).body.categoryId === otros.id, 'la pierna que entra tambien cambia de categoria');
+ok(r.status === 400, 'categoria en lote sobre un cambio → 400', r.body);
+ok((await api('GET', `/transactions/${incId}`)).body.categoryId === null, 'la pierna que entra sigue sin categoria');
 r = await api('PATCH', '/transactions/bulk', { ids: [ex.body.id], accountId: bandec.id });
 ok(r.status === 400, 'cambiar la cuenta de un cambio en lote → 400', r.body);
 

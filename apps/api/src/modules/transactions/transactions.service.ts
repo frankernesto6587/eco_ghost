@@ -4,6 +4,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { computeAccountBalance } from '../../common/account-balance.util';
 import { parseEntryDate } from '../../common/date-range.util';
 import { assertOrgRefs } from '../../common/org-refs.util';
+import { assertCategoryFits } from '../../common/category-kind.util';
 import { recomputeDebt } from '../../common/debt-balance.util';
 import { Actor, flowWhere, visibleWhere } from '../../common/tx-filters';
 import { assertOpenPeriod } from '../../common/period-lock.util';
@@ -99,6 +100,7 @@ export class TransactionsService {
       if (dto.debtId) {
         throw new BadRequestException('Transfers and exchanges cannot be linked to a debt');
       }
+      await assertCategoryFits(this.prisma, orgId, dto.categoryId, dto.type);
       const from = accounts.get(dto.accountId)!;
       const to = accounts.get(dto.toAccountId)!;
       this.assertPairCurrencies(dto.type, from, to);
@@ -114,7 +116,6 @@ export class TransactionsService {
         description: dto.description,
         type: dto.type,
         notes: dto.notes,
-        categoryId: dto.categoryId,
         projectId: dto.projectId,
         orgId,
         createdBy: userId,
@@ -152,6 +153,7 @@ export class TransactionsService {
     if (dto.toAccountId || dto.toAmount) {
       throw new BadRequestException('toAccountId and toAmount are only for TRANSFER and EXCHANGE');
     }
+    await assertCategoryFits(this.prisma, orgId, dto.categoryId, dto.type);
     if (dto.debtId) {
       const debt = await this.prisma.debt.findUniqueOrThrow({ where: { id: dto.debtId } });
       if (accounts.get(dto.accountId)!.currency !== debt.currency) {
@@ -258,8 +260,11 @@ export class TransactionsService {
       where.type = type.length === 1 ? (type[0] as any) : { in: type as any };
     }
     // `uncategorized` gana sobre `categoryId`: pedir ambos es contradictorio.
+    // Transferencias y cambios no llevan categoria: no son "sin categorizar".
     if (uncategorized) {
       where.categoryId = null;
+      const flows = (type?.length ? type : ['INCOME', 'EXPENSE']).filter((t) => t === 'INCOME' || t === 'EXPENSE');
+      where.type = { in: flows as TransactionType[] };
     } else if (categoryId?.length) {
       where.categoryId = categoryId.length === 1 ? categoryId[0] : { in: categoryId };
     }
@@ -412,6 +417,7 @@ export class TransactionsService {
     if (dto.debtId) {
       throw new BadRequestException('Transfers and exchanges cannot be linked to a debt');
     }
+    await assertCategoryFits(tx, orgId, dto.categoryId, out.type);
 
     const outAccountId = dto.accountId ?? out.accountId;
     const incAccountId = dto.toAccountId ?? inc.accountId;
@@ -453,6 +459,10 @@ export class TransactionsService {
       debtId: dto.debtId,
       tagIds: dto.tagIds,
     });
+    // Al pasar de gasto a ingreso, la categoria que ya tenia tambien tiene que valer.
+    if (dto.type !== undefined || dto.categoryId !== undefined) {
+      await assertCategoryFits(tx, orgId, dto.categoryId !== undefined ? dto.categoryId : t.categoryId, dto.type ?? t.type);
+    }
     // Un movimiento de deuda va siempre en la moneda de la deuda.
     if (debtId && (accountChanged || dto.debtId !== undefined)) {
       const debt = await tx.debt.findUniqueOrThrow({ where: { id: debtId } });
@@ -607,7 +617,7 @@ export class TransactionsService {
   /**
    * Cambia categoria y/o cuenta de varios movimientos.
    *
-   * La categoria se aplica a las dos piernas de un par. La cuenta no se cambia
+   * La categoria tiene que valer para todos (los pares no llevan). La cuenta no se cambia
    * en pares (seria rehacer el traspaso) y la nueva tiene que ser de la misma
    * moneda: si no, el importe pasaria a significar otra cosa.
    */
@@ -631,6 +641,9 @@ export class TransactionsService {
         throw new ForbiddenException('You can only change your own movements that are not approved yet');
       }
 
+      if (dto.categoryId !== undefined) {
+        for (const type of new Set(rows.map((r) => r.type))) await assertCategoryFits(tx, orgId, dto.categoryId, type);
+      }
       if (dto.accountId !== undefined) {
         const target = accounts.get(dto.accountId)!;
         if (rows.some((r) => isPair(r.type))) {
@@ -646,8 +659,7 @@ export class TransactionsService {
         n = (await tx.transaction.updateMany({ where: { ...where, id: { in: dto.ids } }, data: { accountId: dto.accountId } })).count;
       }
       if (dto.categoryId !== undefined) {
-        const ids = await this.withPairedIds(tx, orgId, dto.ids, where);
-        n = (await tx.transaction.updateMany({ where: { ...where, id: { in: [...ids] } }, data: { categoryId: dto.categoryId } })).count;
+        n = (await tx.transaction.updateMany({ where: { ...where, id: { in: dto.ids } }, data: { categoryId: dto.categoryId } })).count;
       }
       return n;
     });

@@ -48,6 +48,18 @@ class EntryRequestTest {
         assertEquals("#fa7c20", data.categories["mer"]?.color)
     }
 
+    @Test fun `cada tipo solo ofrece sus grupos`() {
+        val typed = EntryData(listOf(mn), EntryRepository.groups(listOf(
+            CategoryNodeDto("ing", "Ingresos", kind = "INCOME", children = listOf(CategoryNodeDto("sal", "Salario", parentId = "ing"))),
+            CategoryNodeDto("ali", "Alimentacion", kind = "EXPENSE"),
+            CategoryNodeDto("pre", "Prestamos", kind = "BOTH"),
+            CategoryNodeDto("vie", "De una API vieja"),
+        )), emptyMap(), "mn")
+        assertEquals(listOf("Alimentacion", "Prestamos", "De una API vieja"), typed.groupsFor("EXPENSE").map { it.root.name })
+        assertEquals(listOf("Ingresos", "Prestamos", "De una API vieja"), typed.groupsFor("INCOME").map { it.root.name })
+        assertEquals(emptyList<String>(), typed.groupsFor("TRANSFER").map { it.root.name })
+    }
+
     @Test fun `gasto sin descripcion usa la categoria`() {
         val r = EntryRepository.request(Draft(EntryType.EXPENSE, 640_000, "mn", categoryId = "mer", date = day), data)
         assertEquals("EXPENSE", r.type)

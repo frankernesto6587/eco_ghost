@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Drawer, Form, InputNumber, TreeSelect, DatePicker, Input, Button, Switch, Space } from 'antd';
 import dayjs from 'dayjs';
 import type { Budget } from '@ecoghost/shared';
-import { flattenCategories } from '@/lib/categoryTree';
+import { categoriesFor, flattenCategories } from '@/lib/categoryTree';
 import type { Category } from '@/services/categories.service';
 
 export interface BudgetFormValues {
@@ -99,7 +99,7 @@ export function BudgetDrawer({
             disabled={!!editing}
             treeNodeFilterProp="name"
             placeholder={t('budgets.allExpenses')}
-            treeData={flattenCategories(categories)}
+            treeData={flattenCategories(categoriesFor(categories, 'EXPENSE'))}
             styles={{ popup: { root: { maxHeight: 320, overflow: 'auto' } } }}
           />
         </Form.Item>

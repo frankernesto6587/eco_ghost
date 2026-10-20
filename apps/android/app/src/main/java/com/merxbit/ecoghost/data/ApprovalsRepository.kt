@@ -41,8 +41,8 @@ class ApprovalsRepository @Inject constructor(
             categoryId: String?,
             toAmount: String,
         ): EditRequest? {
-            val cents = AmountInput.cents(normalize(amount))
-            val toCents = AmountInput.cents(normalize(toAmount))
+            val cents = cents(amount)
+            val toCents = cents(toAmount)
             val e = EditRequest(
                 description = description.trim().takeIf { it.isNotEmpty() && it != item.description },
                 amount = cents.takeIf { it > 0 && it != item.from.amount },
@@ -59,6 +59,9 @@ class ApprovalsRepository @Inject constructor(
             val frac = cents % 100
             return if (frac == 0L) whole.toString() else "$whole,${frac.toString().padStart(2, '0')}"
         }
+
+        /** Lo tecleado en un campo de importe ("62,45" o "62.45"), en centavos. */
+        fun cents(text: String): Long = AmountInput.cents(normalize(text))
 
         private fun normalize(s: String) = s.trim().replace('.', ',').filter { it.isDigit() || it == ',' }
     }

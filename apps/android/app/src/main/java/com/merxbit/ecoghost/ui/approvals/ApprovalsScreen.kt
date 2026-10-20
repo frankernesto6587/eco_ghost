@@ -58,13 +58,16 @@ import com.merxbit.ecoghost.data.ApprovalsRepository
 import com.merxbit.ecoghost.data.Dates
 import com.merxbit.ecoghost.data.EntryData
 import com.merxbit.ecoghost.data.EntryRepository
+import com.merxbit.ecoghost.data.RateHints
 import com.merxbit.ecoghost.data.errorMessage
 import com.merxbit.ecoghost.data.net.ApprovalCountsDto
 import com.merxbit.ecoghost.data.net.ApprovalItemDto
 import com.merxbit.ecoghost.data.net.EditRequest
+import com.merxbit.ecoghost.data.net.RateSuggestionDto
 import com.merxbit.ecoghost.ui.common.AmountText
 import com.merxbit.ecoghost.ui.common.accountIcon
 import com.merxbit.ecoghost.ui.entry.EcoChip
+import com.merxbit.ecoghost.ui.entry.RateHintLines
 import com.merxbit.ecoghost.ui.theme.Eco
 import com.merxbit.ecoghost.ui.theme.EcoShape
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -89,7 +92,15 @@ class ApprovalsViewModel @Inject constructor(
     var error by mutableStateOf<String?>(null); private set
     /** Cuentas y categorias para corregir (se cargan al abrir). */
     var data by mutableStateOf<EntryData?>(null); private set
+    /** Tasa de elTOQUE del dia del cambio que se corrige. */
+    var rates by mutableStateOf<RateSuggestionDto?>(null); private set
     private var orgId: String? = null
+
+    fun loadRates(item: ApprovalItemDto) {
+        rates = null
+        if (item.kind != "EXCHANGE") return
+        viewModelScope.launch { rates = entry.rates(Dates.localDate(item.date)) }
+    }
 
     fun open(org: String, canApprove: Boolean) {
         if (orgId != org) { orgId = org; scope = if (canApprove) "review" else "mine" }
@@ -135,7 +146,7 @@ fun ApprovalsScreen(orgId: String, canApprove: Boolean, onBack: () -> Unit, onMe
         loading = vm.loading, busy = vm.busy, error = vm.error,
         onScope = vm::changeScope, onBack = onBack, onRetry = vm::refresh,
         onApprove = { item -> vm.act("Aprobado", onMessage) { approve(item.id, null) } },
-        onCorrect = { correcting = it },
+        onCorrect = { correcting = it; vm.loadRates(it) },
         onReject = { rejecting = it },
         onResubmit = { item -> vm.act("Reenviado", onMessage) { resubmit(item.id) } },
         onWithdraw = { withdrawing = it },
@@ -143,7 +154,7 @@ fun ApprovalsScreen(orgId: String, canApprove: Boolean, onBack: () -> Unit, onMe
 
     correcting?.let { item ->
         val review = vm.scope == "review"
-        CorrectSheet(item, vm.data, review, onDismiss = { correcting = null }) { edits ->
+        CorrectSheet(item, vm.data, vm.rates, review, onDismiss = { correcting = null }) { edits ->
             correcting = null
             if (review) vm.act(if (edits != null) "Aprobado con correcciones" else "Aprobado", onMessage) { approve(item.id, edits) }
             else vm.act("Enviado otra vez a revisión", onMessage) { edit(item.id, edits ?: EditRequest()) }
@@ -340,7 +351,7 @@ private fun Secondary(label: String, busy: Boolean, color: androidx.compose.ui.g
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-private fun CorrectSheet(item: ApprovalItemDto, data: EntryData?, review: Boolean, onDismiss: () -> Unit, onSubmit: (EditRequest?) -> Unit) {
+private fun CorrectSheet(item: ApprovalItemDto, data: EntryData?, rates: RateSuggestionDto?, review: Boolean, onDismiss: () -> Unit, onSubmit: (EditRequest?) -> Unit) {
     val c = Eco.colors
     var description by remember { mutableStateOf(item.description) }
     var amount by remember { mutableStateOf(ApprovalsRepository.centsText(item.from.amount)) }
@@ -372,6 +383,12 @@ private fun CorrectSheet(item: ApprovalItemDto, data: EntryData?, review: Boolea
                     singleLine = true, shape = EcoShape.field, colors = fieldColors,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 )
+                item.to?.let { to ->
+                    RateHints.exchange(
+                        item.from.currency, to.currency, rates,
+                        ApprovalsRepository.cents(amount), ApprovalsRepository.cents(toAmount), Dates.localDate(item.date),
+                    )?.let { hint -> RateHintLines(hint, to.currency) { toAmount = ApprovalsRepository.centsText(it) } }
+                }
             }
             // En un par no se cambian las cuentas aqui; en una deuda, solo por otra de la misma moneda.
             if (!pair && data != null) {

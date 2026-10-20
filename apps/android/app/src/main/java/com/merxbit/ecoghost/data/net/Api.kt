@@ -150,6 +150,13 @@ data class CategoryNodeDto(
 @Serializable
 data class ValuationStatusDto(val enabled: Boolean = false, val reportCurrency: String = "USD")
 
+/** Tasa que rige un dia (MN por unidad): la de ese dia o, si falta, la ultima anterior. */
+@Serializable
+data class SuggestedRateDto(val value: Double, val day: String, val source: String = "ELTOQUE")
+
+@Serializable
+data class RateSuggestionDto(val day: String, val rates: Map<String, SuggestedRateDto> = emptyMap())
+
 @Serializable
 data class NamedDto(val id: String, val name: String? = null)
 
@@ -253,6 +260,9 @@ interface EcoApi {
 
     @GET("valuation/status")
     suspend fun valuationStatus(): ValuationStatusDto
+
+    @GET("rates/suggest")
+    suspend fun rateSuggestion(@Query("day") day: String): RateSuggestionDto
 
     @GET("approvals")
     suspend fun approvals(@Query("scope") scope: String): ApprovalListDto

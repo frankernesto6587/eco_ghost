@@ -3,6 +3,7 @@ package com.merxbit.ecoghost.data
 import com.merxbit.ecoghost.data.net.CategoryNodeDto
 import com.merxbit.ecoghost.data.net.CreateTransactionRequest
 import com.merxbit.ecoghost.data.net.EcoApi
+import com.merxbit.ecoghost.data.net.RateSuggestionDto
 import com.merxbit.ecoghost.data.net.TransactionDto
 import com.merxbit.ecoghost.data.session.SessionStore
 import kotlinx.coroutines.async
@@ -70,6 +71,9 @@ class EntryRepository @Inject constructor(
         finance.notifyChanged()
         return saved.status
     }
+
+    /** La tasa de elTOQUE que rige un día, para sugerirla en un cambio (null si no se pudo). */
+    suspend fun rates(day: LocalDate): RateSuggestionDto? = runCatching { api.rateSuggestion(day.toString()) }.getOrNull()
 
     companion object {
         /** Las categorías de ajuste (Saldo inicial) no se eligen a mano. */

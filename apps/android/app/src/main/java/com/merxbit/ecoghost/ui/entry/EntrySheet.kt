@@ -69,6 +69,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.merxbit.ecoghost.data.AmountInput
+import com.merxbit.ecoghost.data.ApprovalsRepository
 import com.merxbit.ecoghost.data.Category
 import com.merxbit.ecoghost.data.Dates
 import com.merxbit.ecoghost.data.Draft
@@ -76,6 +77,9 @@ import com.merxbit.ecoghost.data.EntryData
 import com.merxbit.ecoghost.data.EntryRepository
 import com.merxbit.ecoghost.data.EntryType
 import com.merxbit.ecoghost.data.Money
+import com.merxbit.ecoghost.data.RateHint
+import com.merxbit.ecoghost.data.RateHints
+import com.merxbit.ecoghost.data.net.RateSuggestionDto
 import com.merxbit.ecoghost.data.errorMessage
 import com.merxbit.ecoghost.ui.common.accountIcon
 import com.merxbit.ecoghost.ui.common.categoryIcon
@@ -121,10 +125,13 @@ class EntryViewModel @Inject constructor(private val repo: EntryRepository) : Vi
     var error by mutableStateOf<String?>(null); private set
     var saved by mutableStateOf<String?>(null); private set
     var saving by mutableStateOf(false); private set
+    /** Tasa de elTOQUE del día del cambio, para sugerir lo que se recibe. */
+    var rates by mutableStateOf<RateSuggestionDto?>(null); private set
+    private var ratesDay: LocalDate? = null
 
     /** Cada apertura empieza de cero y recarga cuentas y categorías (pueden haber cambiado). */
     fun open(orgId: String) {
-        form = EntryForm(); error = null; saved = null; loadError = null
+        form = EntryForm(); error = null; saved = null; loadError = null; rates = null; ratesDay = null
         viewModelScope.launch {
             runCatching { repo.load(orgId) }
                 .onSuccess { data = it; form = form.copy(accountId = it.preferredAccountId) }
@@ -132,7 +139,18 @@ class EntryViewModel @Inject constructor(private val repo: EntryRepository) : Vi
         }
     }
 
-    fun change(f: EntryForm) { form = f; error = null }
+    fun change(f: EntryForm) { form = f; error = null; loadRates() }
+
+    /** Solo en un cambio de moneda, y una vez por fecha. */
+    private fun loadRates() {
+        val accounts = data?.accounts ?: return
+        val from = accounts.firstOrNull { it.id == form.accountId } ?: return
+        val to = accounts.firstOrNull { it.id == form.toAccountId } ?: return
+        if (form.type != EntryType.TRANSFER || from.currency == to.currency || ratesDay == form.date) return
+        val day = form.date
+        ratesDay = day; rates = null
+        viewModelScope.launch { repo.rates(day).let { if (ratesDay == day) rates = it } }
+    }
 
     fun key(k: Char) {
         form = if (form.typingTo) form.copy(toAmount = AmountInput.press(form.toAmount, k))
@@ -185,7 +203,7 @@ fun EntrySheet(orgId: String, onDismiss: () -> Unit, onSaved: (String) -> Unit, 
                 CircularProgressIndicator(color = c.accent)
             }
             else -> EntryContent(
-                vm.form, data, vm.saving, vm.error, vm.saved,
+                vm.form, data, vm.saving, vm.error, vm.saved, vm.rates,
                 onChange = vm::change, onKey = vm::key, onClose = onDismiss,
                 onSave = { again -> vm.save(orgId, again) { msg -> onSaved(msg); onDismiss() } },
             )
@@ -202,6 +220,7 @@ fun EntryContent(
     saving: Boolean,
     error: String?,
     saved: String?,
+    rates: RateSuggestionDto?,
     onChange: (EntryForm) -> Unit,
     onKey: (Char) -> Unit,
     onClose: () -> Unit,
@@ -246,9 +265,12 @@ fun EntryContent(
                     onChange(form.copy(typingTo = true))
                 }
                 val a = AmountInput.cents(form.amount); val b = AmountInput.cents(form.toAmount)
-                if (a > 0 && b > 0) {
+                val hint = RateHints.exchange(from!!.currency, to.currency, rates, a, b, form.date)
+                if (hint != null) {
+                    RateHintLines(hint, to.currency) { onChange(form.copy(toAmount = ApprovalsRepository.centsText(it), typingTo = false)) }
+                } else if (a > 0 && b > 0) {
                     Text(
-                        "tasa ${Money.format((b * 100) / a)} ${to.currency}/${from!!.currency}",
+                        "tasa ${Money.format((b * 100) / a)} ${to.currency}/${from.currency}",
                         style = MaterialTheme.typography.bodySmall, color = c.muted,
                         textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth(),
                     )
@@ -472,6 +494,19 @@ private fun CategoryPicker(data: EntryData, selected: String?, onDismiss: () -> 
                     }
                 }
             }
+        }
+    }
+}
+
+/** La tasa de elTOQUE bajo "Recibes", cómo queda la del cambio y "Usar". También en Aprobaciones. */
+@Composable
+fun RateHintLines(hint: RateHint, currency: String, onUse: (Long) -> Unit) {
+    val c = Eco.colors
+    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(hint.market, style = MaterialTheme.typography.bodySmall, color = c.muted, textAlign = TextAlign.Center)
+        hint.mine?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = c.muted, textAlign = TextAlign.Center) }
+        hint.suggested?.let { v ->
+            TextButton({ onUse(v) }) { Text("Usar: ${Money.format(v, currency)}", color = c.accent, style = MaterialTheme.typography.labelLarge) }
         }
     }
 }

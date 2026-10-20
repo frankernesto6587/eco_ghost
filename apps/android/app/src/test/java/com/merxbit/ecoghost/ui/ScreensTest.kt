@@ -25,6 +25,8 @@ import com.merxbit.ecoghost.data.net.MineCountsDto
 import com.merxbit.ecoghost.data.net.NamedDto
 import com.merxbit.ecoghost.ui.approvals.ApprovalsContent
 import com.merxbit.ecoghost.data.net.OrgDto
+import com.merxbit.ecoghost.data.net.RateSuggestionDto
+import com.merxbit.ecoghost.data.net.SuggestedRateDto
 import com.merxbit.ecoghost.ui.entry.EntryContent
 import com.merxbit.ecoghost.ui.entry.EntryForm
 import com.merxbit.ecoghost.ui.home.HomeContent
@@ -93,9 +95,11 @@ class ScreensTest {
         preferredAccountId = "2",
     )
 
+    private val rates = RateSuggestionDto("$today", mapOf("USD" to SuggestedRateDto(390.0, "$today"), "MLC" to SuggestedRateDto(250.0, "$today")))
+
     @Composable
-    private fun entry(form: EntryForm, error: String? = null) =
-        EntryContent(form, entryData, false, error, null, {}, {}, {}, {})
+    private fun entry(form: EntryForm, error: String? = null, rates: RateSuggestionDto? = null) =
+        EntryContent(form, entryData, false, error, null, rates, {}, {}, {}, {})
 
     private val now = "${today}T16:00:00.000Z"
     private val bandeja = listOf(
@@ -131,6 +135,9 @@ class ScreensTest {
     }
     @Test fun anotarCambioOscuro() = shot("anotar-cambio-oscuro", ThemeMode.DARK) {
         entry(EntryForm(type = EntryType.TRANSFER, amount = "100", toAmount = "38000", typingTo = true, accountId = "4", toAccountId = "2"))
+    }
+    @Test fun anotarCambioTasaClaro() = shot("anotar-cambio-tasa-claro", ThemeMode.LIGHT) {
+        entry(EntryForm(type = EntryType.TRANSFER, amount = "100", toAmount = "38000", typingTo = true, accountId = "4", toAccountId = "2"), rates = rates)
     }
     @Test fun anotarVacioOscuro() = shot("anotar-vacio-oscuro", ThemeMode.DARK) {
         entry(EntryForm(accountId = "2"), error = "Escribe el importe")

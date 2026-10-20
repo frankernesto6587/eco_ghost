@@ -14,28 +14,36 @@ export class DashboardService {
   ) {}
 
   /**
-   * El mismo resumen en la moneda de estadisticas (USD por defecto), con los
-   * gastos en MN valorados por FIFO. null si la organizacion no lo tiene activo.
+   * El mismo resumen en la moneda de estadisticas (USD por defecto), como la
+   * NIC 21: los gastos en MN a la tasa de mercado de su dia y, aparte, la
+   * diferencia de cambio contra lo que costaron por FIFO (por cambio y por
+   * retener). El neto incluye esa diferencia, asi que cuadra con el coste real.
+   * null si la organizacion no lo tiene activo.
    */
   private async report(orgId: string, from: Date, to: Date) {
     const cfg = await this.valuation.ensureFresh(orgId);
     if (!cfg.valuationEnabled) return null;
     const inRange = { orgId, date: { gte: from, lt: to } };
     const [flows, fx, incomplete, estimates, patrimony] = await Promise.all([
-      this.prisma.transaction.groupBy({ by: ['type'], where: flowWhere(inRange), _sum: { reportAmount: true } }),
-      this.prisma.transaction.aggregate({ where: { ...inRange, ...COUNTED, fxResult: { not: 0 } }, _sum: { fxResult: true } }),
-      this.prisma.transaction.count({ where: flowWhere({ ...inRange, reportAmount: null }) }),
+      this.prisma.transaction.groupBy({ by: ['type'], where: flowWhere(inRange), _sum: { marketAmount: true } }),
+      this.prisma.transaction.aggregate({
+        where: { ...inRange, ...COUNTED, fxResult: { not: 0 } },
+        _sum: { fxResult: true, fxExchange: true, fxHolding: true },
+      }),
+      this.prisma.transaction.count({ where: flowWhere({ ...inRange, marketAmount: null }) }),
       this.prisma.transaction.count({ where: flowWhere({ ...inRange, valuationStatus: 'ESTIMATE' }) }),
       this.valuation.patrimony(orgId),
     ]);
-    const sum = (t: string) => flows.find((f) => f.type === t)?._sum.reportAmount ?? 0;
+    const sum = (t: string) => flows.find((f) => f.type === t)?._sum.marketAmount ?? 0;
+    const fxResult = fx._sum.fxResult ?? 0;
     return {
       currency: cfg.reportCurrency,
       monthIncome: sum('INCOME'),
       monthExpense: sum('EXPENSE'),
-      net: sum('INCOME') - sum('EXPENSE'),
-      /** Resultado cambiario de vender MN (u otra moneda) en el rango */
-      fxResult: fx._sum.fxResult ?? 0,
+      fxResult,
+      fxExchange: fx._sum.fxExchange ?? 0,
+      fxHolding: fx._sum.fxHolding ?? 0,
+      net: sum('INCOME') - sum('EXPENSE') + fxResult,
       /** Movimientos del rango sin valorar (falta una tasa): los totales no los incluyen */
       incomplete,
       estimates,

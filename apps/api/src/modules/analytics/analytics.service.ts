@@ -8,7 +8,7 @@ import type {
   TopCategoriesWidget,
 } from '@ecoghost/shared';
 import { PrismaService } from '../../prisma/prisma.service';
-import { flowSql, flowWhere } from '../../common/tx-filters';
+import { COUNTED, countedSql, flowSql, flowWhere } from '../../common/tx-filters';
 import { ValuationService } from '../valuation/valuation.service';
 import {
   APP_TZ,
@@ -54,8 +54,9 @@ export class AnalyticsService {
 
   /**
    * Que se suma y de que cuentas. NATIVE: los importes de las cuentas de una
-   * moneda. REPORT: todas las cuentas, con su valor en la moneda de
-   * estadisticas (FIFO); lo que no se pudo valorar (falta una tasa) no suma.
+   * moneda. REPORT: todas las cuentas, a la tasa de mercado de su dia en la
+   * moneda de estadisticas (NIC 21; la diferencia con el coste FIFO va aparte,
+   * en `fxTotals`); lo que no se pudo valorar (falta una tasa) no suma.
    */
   private async scope(orgId: string, q: { currency: string; accountId?: string[]; basis?: 'NATIVE' | 'REPORT' }) {
     if (q.basis !== 'REPORT') {
@@ -67,13 +68,13 @@ export class AnalyticsService {
       where: { orgId, ...(q.accountId?.length ? { id: { in: q.accountId } } : {}) },
       select: { id: true },
     });
-    return { accountIds: accounts.map((a) => a.id), currency: cfg.reportCurrency, field: 'reportAmount' as const };
+    return { accountIds: accounts.map((a) => a.id), currency: cfg.reportCurrency, field: 'marketAmount' as const };
   }
 
   /** Filas de groupBy con `_sum` del campo elegido, como si fuera `amount`. */
   private static asAmount(
-    rows: { categoryId: string | null; type: TransactionType; _sum: { amount?: number | null; reportAmount?: number | null }; _count?: { _all: number } }[],
-    field: 'amount' | 'reportAmount',
+    rows: { categoryId: string | null; type: TransactionType; _sum: { amount?: number | null; marketAmount?: number | null }; _count?: { _all: number } }[],
+    field: 'amount' | 'marketAmount',
   ) {
     return rows.map((r) => ({ ...r, _sum: { amount: r._sum[field] ?? 0 } }));
   }
@@ -115,6 +116,20 @@ export class AnalyticsService {
     to: Date,
   ): Prisma.TransactionWhereInput {
     return flowWhere({ orgId, accountId: { in: accountIds }, date: { gte: from, lt: to } });
+  }
+
+  /**
+   * Diferencias de cambio de un rango (solo REPORT): la linea que, sumada a
+   * ingresos y gastos a mercado, da el neto al coste real. Cuentan todos los
+   * movimientos aprobados que la tengan: gastos, ventas de moneda y los cambios
+   * que cubrieron deficits.
+   */
+  private async fxTotals(orgId: string, accountIds: string[], from: Date, to: Date) {
+    const r = await this.prisma.transaction.aggregate({
+      where: { orgId, ...COUNTED, accountId: { in: accountIds }, date: { gte: from, lt: to }, fxResult: { not: 0 } },
+      _sum: { fxResult: true, fxExchange: true, fxHolding: true },
+    });
+    return { total: r._sum.fxResult ?? 0, exchange: r._sum.fxExchange ?? 0, holding: r._sum.fxHolding ?? 0 };
   }
 
   // ─── Rollup del arbol de categorias ───────────────────────────────
@@ -286,12 +301,12 @@ export class AnalyticsService {
         where: {
           ...this.flowWhere(orgId, accountIds, r.from, r.to),
           type: TransactionType.EXPENSE,
-          ...(field === 'reportAmount' && { reportAmount: { not: null } }),
+          ...(field === 'marketAmount' && { marketAmount: { not: null } }),
         },
         orderBy: { [field]: 'desc' },
         take: topLimit,
         select: {
-          id: true, date: true, description: true, amount: true, reportAmount: true, type: true,
+          id: true, date: true, description: true, amount: true, marketAmount: true, type: true,
           category: { select: { id: true, name: true, color: true } },
           account: { select: { id: true, name: true, currency: true } },
         },
@@ -300,6 +315,15 @@ export class AnalyticsService {
 
     const cur = AnalyticsService.splitRows(AnalyticsService.asAmount(curRows, field));
     const prev = AnalyticsService.splitRows(AnalyticsService.asAmount(prevRows, field));
+    const [fx, prevFx] =
+      field === 'marketAmount'
+        ? await Promise.all([
+            this.fxTotals(orgId, accountIds, r.from, r.to),
+            this.fxTotals(orgId, accountIds, r.prevFrom, r.prevTo),
+          ])
+        : [null, null];
+    const net = cur.incomeTotal - cur.expenseTotal + (fx?.total ?? 0);
+    const previousNet = prev.incomeTotal - prev.expenseTotal + (prevFx?.total ?? 0);
 
     const expenseByCategory = this.buildRollup(
       categories, cur.expense, AnalyticsService.flatten(prev.expense), cur.expenseTotal,
@@ -317,15 +341,16 @@ export class AnalyticsService {
       totals: {
         income: cur.incomeTotal,
         expense: cur.expenseTotal,
-        net: cur.incomeTotal - cur.expenseTotal,
+        net,
         previousIncome: prev.incomeTotal,
         previousExpense: prev.expenseTotal,
-        previousNet: prev.incomeTotal - prev.expenseTotal,
+        previousNet,
         expenseDelta: cur.expenseTotal - prev.expenseTotal,
         expenseDeltaPct: pct(cur.expenseTotal, prev.expenseTotal),
         incomeDelta: cur.incomeTotal - prev.incomeTotal,
         incomeDeltaPct: pct(cur.incomeTotal, prev.incomeTotal),
         transactionCount: cur.txCount,
+        ...(fx && { fx: { ...fx, previousTotal: prevFx!.total } }),
       },
       expenseByCategory,
       incomeByCategory,
@@ -339,7 +364,7 @@ export class AnalyticsService {
         id: t.id,
         date: t.date.toISOString(),
         description: t.description,
-        amount: field === 'reportAmount' ? t.reportAmount ?? 0 : t.amount,
+        amount: field === 'marketAmount' ? t.marketAmount ?? 0 : t.amount,
         type: t.type,
         category: t.category,
         account: t.account,
@@ -463,6 +488,27 @@ export class AnalyticsService {
       ORDER BY 1
     `);
 
+    // REPORT: la diferencia de cambio de cada mes entra en su neto.
+    const fxRows =
+      field === 'marketAmount'
+        ? await this.prisma.$queryRaw<{ month: string; total: bigint }[]>(Prisma.sql`
+            SELECT to_char(
+                     date_trunc('month', (t."date" AT TIME ZONE 'UTC') AT TIME ZONE ${APP_TZ}),
+                     'YYYY-MM'
+                   )                                  AS month,
+                   COALESCE(SUM(t."fxResult"), 0)::bigint AS total
+            FROM "transactions" t
+            WHERE t."orgId" = ${orgId}
+              AND ${countedSql('t')}
+              AND t."fxResult" <> 0
+              AND t."accountId" IN (${Prisma.join(accountIds)})
+              AND t."date" >= ${from}
+              AND t."date" < ${to}
+            GROUP BY 1
+          `)
+        : [];
+    const fxByMonth = new Map(fxRows.map((x) => [x.month, Number(x.total)]));
+
     const byMonth = new Map(zero.map((p) => [p.month, { ...p }]));
     for (const row of rows) {
       const point = byMonth.get(row.month);
@@ -474,13 +520,14 @@ export class AnalyticsService {
 
     const points = monthKeys.map((m) => {
       const p = byMonth.get(m)!;
-      return { ...p, net: p.income - p.expense };
+      const fx = fxByMonth.get(m) ?? 0;
+      return { ...p, net: p.income - p.expense + fx, ...(field === 'marketAmount' && { fx }) };
     });
 
     const n = points.length || 1;
     const sum = points.reduce(
-      (acc, p) => ({ income: acc.income + p.income, expense: acc.expense + p.expense }),
-      { income: 0, expense: 0 },
+      (acc, p) => ({ income: acc.income + p.income, expense: acc.expense + p.expense, net: acc.net + p.net }),
+      { income: 0, expense: 0, net: 0 },
     );
 
     return {
@@ -489,7 +536,7 @@ export class AnalyticsService {
       averages: {
         income: Math.round(sum.income / n),
         expense: Math.round(sum.expense / n),
-        net: Math.round((sum.income - sum.expense) / n),
+        net: Math.round(sum.net / n),
       },
     };
   }

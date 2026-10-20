@@ -12,6 +12,8 @@ interface Props {
   previousRange: { from: string; to: string };
   tone?: 'pos' | 'neg' | 'neutral';
   vsLabel: string;
+  /** Una linea mas debajo (p. ej. las dos partes de la diferencia de cambio). */
+  note?: string;
 }
 
 export function StatDeltaCard({
@@ -24,6 +26,7 @@ export function StatDeltaCard({
   previousRange,
   tone = 'neutral',
   vsLabel,
+  note,
 }: Props) {
   const dotClass = tone === 'pos' ? s.cardDotPos : tone === 'neg' ? s.cardDotNeg : s.cardDot;
 
@@ -55,6 +58,7 @@ export function StatDeltaCard({
           {formatCurrency(previousAmount, currency)}
         </span>
       </div>
+      {note && <div className={s.statPrev} style={{ marginTop: 6 }}>{note}</div>}
     </article>
   );
 }

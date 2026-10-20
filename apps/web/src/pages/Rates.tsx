@@ -18,7 +18,8 @@ const num = (v: number) => new Intl.NumberFormat('es-ES', { maximumFractionDigit
  *
  * Las tasas llegan solas de elTOQUE cada dia a las 7:30; aqui se ven, se
  * corrigen a mano y se ponen las que falten (sin ellas, lo que entro en MN
- * ese dia queda sin valorar). Cerrar un mes congela sus numeros.
+ * ese dia queda sin valorar y los gastos de ese dia se valoran a mercado con
+ * la tasa anterior, como estimados). Cerrar un mes congela sus numeros.
  */
 export default function RatesPage() {
   const { message } = App.useApp();
@@ -104,7 +105,7 @@ export default function RatesPage() {
           type="error"
           showIcon
           style={{ marginBottom: 16 }}
-          message={`Faltan ${missing.length} tasas: lo que entró en esa moneda esos días queda sin valorar`}
+          message={`Faltan ${missing.length} tasas: lo que entró en esa moneda esos días queda sin valorar, y los gastos, estimados con la tasa anterior`}
           description={
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
               {missing.slice(0, 30).map((m) => (

@@ -128,15 +128,15 @@ model TelegramLinkToken {
 // ─── Organizations & Members ─────────────────────────────────────────
 
 model Organization {
-  id           String   @id @default(cuid())
-  name         String
-  slug         String   @unique
-  plan         Plan     @default(FREE)
-  baseCurrency String   @default("USD")
-  inviteToken    String   @unique @default(uuid())
-  telegramChatId   BigInt?
-  defaultAccountId String?
-  defaultAccount   Account? @relation("DefaultAccount", fields: [defaultAccountId], references: [id], onDelete: SetNull)
+  id                   String    @id @default(cuid())
+  name                 String
+  slug                 String    @unique
+  plan                 Plan      @default(FREE)
+  baseCurrency         String    @default("USD")
+  inviteToken          String    @unique @default(uuid())
+  telegramChatId       BigInt?
+  defaultAccountId     String?
+  defaultAccount       Account?  @relation("DefaultAccount", fields: [defaultAccountId], references: [id], onDelete: SetNull)
   /// Moneda de las estadisticas principales (los gastos en MN se valoran en ella por FIFO).
   reportCurrency       String    @default("USD")
   valuationEnabled     Boolean   @default(false)
@@ -147,8 +147,8 @@ model Organization {
   valuationIssues      Json?
   /// Ultimo mes cerrado ('YYYY-MM'): ahi no se anota ni se cambia nada y sus valores quedan congelados.
   closedThrough        String?
-  createdAt        DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
   members       OrgMember[]
   accounts      Account[]
@@ -170,11 +170,11 @@ model Organization {
 }
 
 model OrgMember {
-  id       String   @id @default(cuid())
-  role     Role     @default(VIEWER)
-  joinedAt DateTime @default(now())
+  id                String   @id @default(cuid())
+  role              Role     @default(VIEWER)
+  joinedAt          DateTime @default(now())
   /// Lo que anota entra aprobado sin pasar por un admin...
-  autoApprove       Boolean @default(false)
+  autoApprove       Boolean  @default(false)
   /// ...hasta estos topes por moneda, en centavos: {"USD": 5000, "MN": 2000000}.
   /// Una moneda sin tope espera aprobacion; sin ningun tope, todo entra solo.
   autoApproveLimits Json?
@@ -200,10 +200,10 @@ model Account {
   icon     String?
   isActive Boolean     @default(true)
 
-  orgId        String
-  org          Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  transactions Transaction[]
-  cashCounts   CashCount[]
+  orgId          String
+  org            Organization   @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  transactions   Transaction[]
+  cashCounts     CashCount[]
   defaultForOrgs Organization[] @relation("DefaultAccount")
 
   @@index([orgId])
@@ -250,11 +250,17 @@ model Transaction {
   /// Lo que envio el autor, si el admin lo corrigio antes de aprobar.
   originalSnapshot Json?
 
-  /// Valor en la moneda de estadisticas (centavos), lo calcula el motor FIFO.
+  /// Coste FIFO en la moneda de estadisticas (centavos), lo calcula el motor.
   reportAmount    Int?
+  /// A la tasa de mercado de su dia (centavos): lo que suman las estadisticas.
+  marketAmount    Int?
   valuationStatus ValuationStatus?
-  /// Resultado cambiario realizado (centavos de la moneda de estadisticas).
+  /// Diferencia de cambio (a favor > 0) = fxExchange + fxHolding. En un gasto, mercado - coste.
   fxResult        Int?
+  /// Parte por cambiar a una tasa distinta del mercado de ese dia.
+  fxExchange      Int?
+  /// Parte por tener la moneda mientras el mercado se movia.
+  fxHolding       Int?
 
   tags        TransactionTag[]
   attachments Attachment[]
@@ -274,16 +280,16 @@ model Transaction {
 }
 
 model Category {
-  id       String  @id @default(cuid())
-  name     String
-  icon     String?
-  color    String?
+  id           String     @id @default(cuid())
+  name         String
+  icon         String?
+  color        String?
   /// Categoria de ajuste (saldos iniciales, correcciones): mueve saldo pero no
   /// es ingreso ni gasto, asi que queda fuera del flujo en Analisis.
-  isAdjustment Boolean @default(false)
-  parentId String?
-  parent   Category?  @relation("CategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
-  children Category[] @relation("CategoryTree")
+  isAdjustment Boolean    @default(false)
+  parentId     String?
+  parent       Category?  @relation("CategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children     Category[] @relation("CategoryTree")
 
   orgId        String
   org          Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
@@ -296,21 +302,21 @@ model Category {
 }
 
 model Debt {
-  id          String     @id @default(cuid())
-  personName  String
-  description String
-  totalAmount Int
-  paidAmount  Int        @default(0)
-  type        DebtType
-  status      DebtStatus @default(PENDING)
+  id             String            @id @default(cuid())
+  personName     String
+  description    String
+  totalAmount    Int
+  paidAmount     Int               @default(0)
+  type           DebtType
+  status         DebtStatus        @default(PENDING)
   /// Moneda de la deuda: el movimiento inicial y todos los pagos van en ella.
-  currency    String
-  dueDate     DateTime?
-  createdBy   String?
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  currency       String
+  dueDate        DateTime?
+  createdBy      String?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
   /// Borrado suave: la deuda y sus movimientos se apartan juntos.
-  deletedAt   DateTime?
+  deletedAt      DateTime?
   /// Una deuda nueva de quien no puede aprobar espera como su movimiento inicial.
   approvalStatus TransactionStatus @default(APPROVED)
 
@@ -398,8 +404,8 @@ model Budget {
 /// Tasa de referencia diaria de elTOQUE (via eltoke.merxbit.com): MN por 1 unidad.
 /// Comun a todas las organizaciones.
 model ReferenceRate {
-  day       String   // 'YYYY-MM-DD' en hora de Cuba
-  currency  String   // USD, EUR, MLC, USDT
+  day       String // 'YYYY-MM-DD' en hora de Cuba
+  currency  String // USD, EUR, MLC, USDT
   mnPerUnit Decimal  @db.Decimal(16, 6)
   source    String   @default("ELTOQUE")
   fetchedAt DateTime @default(now())
@@ -427,18 +433,21 @@ model RateOverride {
 
 /// Lote FIFO de una moneda (lo calcula el motor; se reconstruye entero).
 model FxLot {
-  id                  String  @id @default(cuid())
-  seq                 Int
-  currency            String
-  sourceTxId          String
-  day                 String
+  id                    String  @id @default(cuid())
+  seq                   Int
+  currency              String
+  sourceTxId            String
+  day                   String
   /// EXCHANGE (cambio con tasa real), REFERENCE (entrada a la tasa del dia), CARRY (cambio entre monedas de bolsa)
-  origin              String
-  qty                 Int
-  costMicros          BigInt?
-  estimated           Boolean @default(false)
-  remainingQty        Int
-  remainingCostMicros BigInt?
+  origin                String
+  qty                   Int
+  costMicros            BigInt?
+  estimated             Boolean @default(false)
+  remainingQty          Int
+  remainingCostMicros   BigInt?
+  /// Lo que valia el lote a mercado el dia que entro.
+  marketMicros          BigInt?
+  remainingMarketMicros BigInt?
 
   orgId String
   org   Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
@@ -455,6 +464,8 @@ model FxAllocation {
   lotSeq       Int?
   qty          Int
   costMicros   BigInt?
+  /// A mercado del dia en que entro el lote (en un deficit sin cubrir, del dia del gasto).
+  marketMicros BigInt?
   /// LOT, DEFICIT (estimado, sin cubrir) o DEFICIT_SETTLED (cubierto por un lote posterior)
   kind         String
 
@@ -504,7 +515,7 @@ model Tag {
   color String?
 
   orgId        String
-  org          Organization   @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  org          Organization     @relation(fields: [orgId], references: [id], onDelete: Cascade)
   transactions TransactionTag[]
 
   createdAt DateTime @default(now())
@@ -518,7 +529,7 @@ model TransactionTag {
   transactionId String
   transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
   tagId         String
-  tag           Tag @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  tag           Tag         @relation(fields: [tagId], references: [id], onDelete: Cascade)
 
   @@id([transactionId, tagId])
   // La PK compuesta no sirve para buscar por tag
@@ -546,7 +557,7 @@ model Attachment {
 // ─── Audit Logs ─────────────────────────────────────────────────────
 
 model AuditLog {
-  id       String  @id @default(cuid())
+  id       String @id @default(cuid())
   action   String
   entity   String
   entityId String

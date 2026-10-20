@@ -31,6 +31,19 @@ const rates = (table: Record<string, Record<string, number>>): RateFn => (day, c
   return r === undefined ? null : { mn: M(r), estimated: false };
 };
 const noRates: RateFn = () => null;
+/** La misma tasa todos los dias, para todas las monedas. */
+const flat = (r: number): RateFn => () => ({ mn: M(r), estimated: false });
+/** Como `rates`, y con `lenient` la ultima anterior (lo que hace el servicio). */
+const ratesLenient = (table: Record<string, Record<string, number>>): RateFn => (day, c, lenient) => {
+  const exact = table[day]?.[c];
+  if (exact !== undefined) return { mn: M(exact), estimated: false };
+  if (!lenient) return null;
+  const prev = Object.keys(table).filter((d) => d < day && table[d][c] !== undefined).sort().pop();
+  return prev ? { mn: M(table[prev][c]), estimated: true } : null;
+};
+const v = (reportAmount: number | null, marketAmount: number | null, status: string, fxExchange = 0, fxHolding = 0) => ({
+  reportAmount, marketAmount, status, fxResult: fxExchange + fxHolding, fxExchange, fxHolding,
+});
 
 const remainingCost = (r: ReturnType<typeof valuate>, cur: string) =>
   microsToCents(r.lots.filter((l) => l.currency === cur).reduce((s, l) => s + (l.remainingCostMicros ?? 0n), 0n));
@@ -43,9 +56,10 @@ describe('FIFO por cambios', () => {
   const g2 = expense('2026-10-20', 'MN', mn(500_000));
 
   it('gastos valorados a la tasa de los cambios, el mas viejo primero', () => {
-    const r = valuate([lot1, g1, lot2, g2], noRates, 'USD');
-    expect(r.tx.get(g1.id)).toEqual({ reportAmount: 33333, status: 'EXACT', fxResult: 0 });
-    expect(r.tx.get(g2.id)).toEqual({ reportAmount: 81818, status: 'EXACT', fxResult: 0 });
+    const r = valuate([lot1, g1, lot2, g2], flat(600), 'USD');
+    expect(r.tx.get(g1.id)).toEqual(v(33333, 33333, 'EXACT'));
+    // Con el mercado a 600, el cambio a 660 salio 15,15 mejor: a mercado 833,33, costo 818,18.
+    expect(r.tx.get(g2.id)).toEqual(v(81818, 83333, 'EXACT', 1515, 0));
     expect(r.tx.get(lot1.id)?.reportAmount).toBe(usd(1000));
     expect(r.tx.get(lot1.incId!)?.reportAmount).toBe(usd(1000));
     // Quedan 230 000 MN del segundo cambio: 348,48 USD. Todo suma 1 500.
@@ -81,7 +95,7 @@ describe('FIFO por cambios', () => {
   it('vender MN por USD da resultado cambiario', () => {
     const sale = exchange('2026-10-25', 'MN', mn(230_000), 'USD', usd(330));
     const r = valuate([lot1, g1, lot2, g2, sale], noRates, 'USD');
-    expect(r.tx.get(sale.id)).toEqual({ reportAmount: 34848, status: 'EXACT', fxResult: -1848 });
+    expect(r.tx.get(sale.id)).toMatchObject({ reportAmount: 34848, status: 'EXACT', fxResult: -1848 });
     expect(r.tx.get(sale.incId!)?.reportAmount).toBe(usd(330));
     expect(r.lots.every((l) => l.remainingQty === 0)).toBe(true);
   });
@@ -106,11 +120,14 @@ describe('bolsa en negativo', () => {
   it('se estima a la tasa del dia y la valora el siguiente cambio', () => {
     const g = expense('2026-10-01', 'MN', mn(100_000));
     const before = valuate([g], rates({ '2026-10-01': { USD: 620 } }), 'USD');
-    expect(before.tx.get(g.id)).toEqual({ reportAmount: 16129, status: 'ESTIMATE', fxResult: 0 });
+    expect(before.tx.get(g.id)).toEqual(v(16129, 16129, 'ESTIMATE'));
 
     const lot = exchange('2026-10-03', 'USD', usd(300), 'MN', mn(198_000));
-    const after = valuate([g, lot], rates({ '2026-10-01': { USD: 620 } }), 'USD');
-    expect(after.tx.get(g.id)).toEqual({ reportAmount: 15152, status: 'EXACT', fxResult: 0 });
+    const after = valuate([g, lot], rates({ '2026-10-01': { USD: 620 }, '2026-10-03': { USD: 650 } }), 'USD');
+    // Costo 151,52 (el cambio a 660), a mercado del dia 161,29: 9,77 a favor por
+    // gastar antes de cambiar. 2,33 por cambiar a 660 con el mercado a 650, 7,44
+    // porque el mercado subio de 620 a 650 entre el gasto y el cambio.
+    expect(after.tx.get(g.id)).toEqual(v(15152, 16129, 'EXACT', 233, 744));
     expect(remainingCost(after, 'MN')).toBe(14848);
     expect(after.openDeficits.size).toBe(0);
   });
@@ -129,17 +146,24 @@ describe('cierre de mes', () => {
     const lot = exchange('2026-10-03', 'USD', usd(300), 'MN', mn(198_000));
     const r = valuate([g, lot], rates({ '2026-09-28': { USD: 620 } }), 'USD', '2026-09');
     // El gasto de septiembre queda en 161,29 estimado aunque octubre lo cubra a 660
-    expect(r.tx.get(g.id)).toEqual({ reportAmount: 16129, status: 'ESTIMATE', fxResult: 0 });
+    expect(r.tx.get(g.id)).toEqual(v(16129, 16129, 'ESTIMATE'));
     // 161,290323 estimados - 151,515152 reales = 9,78 a favor, en el cambio de octubre
     expect(r.tx.get(lot.id)?.fxResult).toBe(978);
     expect(r.mismatch.size).toBe(0);
+  });
+
+  it('con la tasa del dia del cambio, esa diferencia se parte en cambio y retener', () => {
+    const g = expense('2026-09-28', 'MN', mn(100_000));
+    const lot = exchange('2026-10-03', 'USD', usd(300), 'MN', mn(198_000));
+    const r = valuate([g, lot], rates({ '2026-09-28': { USD: 620 }, '2026-10-03': { USD: 650 } }), 'USD', '2026-09');
+    expect(r.tx.get(lot.id)).toMatchObject({ fxResult: 978, fxExchange: 233, fxHolding: 745 });
   });
 
   it('sin cierre, el mismo caso se revalora al cubrirse', () => {
     const g = expense('2026-09-28', 'MN', mn(100_000));
     const lot = exchange('2026-10-03', 'USD', usd(300), 'MN', mn(198_000));
     const r = valuate([g, lot], rates({ '2026-09-28': { USD: 620 } }), 'USD');
-    expect(r.tx.get(g.id)).toEqual({ reportAmount: 15152, status: 'EXACT', fxResult: 0 });
+    expect(r.tx.get(g.id)).toMatchObject({ reportAmount: 15152, marketAmount: 16129, status: 'EXACT', fxResult: 977 });
   });
 });
 
@@ -148,7 +172,7 @@ describe('entradas que no vienen de un cambio', () => {
     const ini = income('2026-10-01', 'MN', mn(81_000));
     const g = expense('2026-10-02', 'MN', mn(40_500));
     const r = valuate([ini, g], rates({ '2026-10-01': { USD: 810 } }), 'USD');
-    expect(r.tx.get(ini.id)).toEqual({ reportAmount: usd(100), status: 'EXACT', fxResult: 0 });
+    expect(r.tx.get(ini.id)).toEqual(v(usd(100), usd(100), 'EXACT'));
     expect(r.tx.get(g.id)?.reportAmount).toBe(usd(50));
   });
 
@@ -157,7 +181,7 @@ describe('entradas que no vienen de un cambio', () => {
     const g = expense('2026-10-02', 'MN', mn(1000));
     const r = valuate([ini, g], noRates, 'USD');
     expect(r.tx.get(ini.id)?.status).toBe('MISSING_RATE');
-    expect(r.tx.get(g.id)).toEqual({ reportAmount: null, status: 'MISSING_RATE', fxResult: 0 });
+    expect(r.tx.get(g.id)).toEqual(v(null, null, 'MISSING_RATE'));
     expect(r.missingRates.map((m) => m.currency)).toContain('USD');
   });
 
@@ -183,6 +207,54 @@ describe('entradas que no vienen de un cambio', () => {
   });
 });
 
+describe('diferencias de cambio (NIC 21)', () => {
+  // El ejemplo que se le mostro a Frank: cambia a 600 con el mercado a 610 y
+  // gasta 19 dias despues, con el mercado a 650.
+  const lot = exchange('2026-10-01', 'USD', usd(1000), 'MN', mn(600_000));
+  const table = { '2026-10-01': { USD: 610 }, '2026-10-20': { USD: 650 } };
+
+  it('el gasto va a mercado del dia y la diferencia se parte en cambio y retener', () => {
+    const g = expense('2026-10-20', 'MN', mn(60_000));
+    const r = valuate([lot, g], rates(table), 'USD');
+    // Costo 100,00 = mercado 92,31 + 1,64 por cambiar a 600 (no a 610) + 6,05 por retener (610 → 650)
+    expect(r.tx.get(g.id)).toEqual(v(10000, 9231, 'EXACT', -164, -605));
+  });
+
+  it('vender MN: por cambio suma lo recibido contra el mercado del dia', () => {
+    const sale = exchange('2026-10-20', 'MN', mn(65_000), 'USD', usd(100));
+    const r = valuate([lot, sale], rates(table), 'USD');
+    // 65 000 MN costaron 108,33; a 650 valen 100,00 y se vendieron a 100,00
+    expect(r.tx.get(sale.id)).toEqual(v(10833, 10000, 'EXACT', -178, -655));
+    expect(r.tx.get(sale.incId!)).toEqual(v(usd(100), usd(100), 'EXACT'));
+  });
+
+  it('si falta la tasa del dia, a mercado usa la anterior, estimada, y la pide', () => {
+    const g = expense('2026-10-05', 'MN', mn(61_000));
+    const r = valuate([lot, g], ratesLenient(table), 'USD');
+    expect(r.tx.get(g.id)).toEqual(v(10167, 10000, 'ESTIMATE', -167, 0));
+    expect(r.missingRates).toEqual([{ day: '2026-10-05', currency: 'USD' }]);
+  });
+
+  it('sin ninguna tasa para el mercado queda sin valorar, aunque se sepa el costo', () => {
+    const g = expense('2026-10-05', 'MN', mn(60_000));
+    const r = valuate([lot, g], noRates, 'USD');
+    expect(r.tx.get(g.id)).toEqual(v(10000, null, 'MISSING_RATE'));
+  });
+
+  it('MN que entro por una venta solo tiene parte por retener', () => {
+    const ini = income('2026-10-01', 'MN', mn(61_000));
+    const g = expense('2026-10-20', 'MN', mn(61_000));
+    const r = valuate([ini, g], rates(table), 'USD');
+    // Entro a 610 (100,00) y se gasto a 650 (93,85)
+    expect(r.tx.get(g.id)).toEqual(v(10000, 9385, 'EXACT', 0, -615));
+  });
+
+  it('en USD no hay diferencia', () => {
+    const g = expense('2026-10-20', 'USD', usd(40));
+    expect(valuate([g], noRates, 'USD').tx.get(g.id)).toEqual(v(usd(40), usd(40), 'EXACT'));
+  });
+});
+
 describe('conservacion del coste con secuencias al azar', () => {
   it('lo asignado mas lo que queda es lo que costaron los lotes, y la bolsa cuadra con los saldos', () => {
     let seed = 7;
@@ -198,11 +270,24 @@ describe('conservacion del coste con secuencias al azar', () => {
         else if (x < 0.85) evs.push(exchange(d, 'MN', mn(1000 + Math.floor(rnd() * 50_000)), 'USD', usd(1 + Math.floor(rnd() * 80))));
         else evs.push(transfer(d, 'MN', mn(1000)));
       }
-      const r = valuate(evs, () => ({ mn: M(700), estimated: false }), 'USD');
+      const day0 = Date.parse('2026-10-01');
+      const rate: RateFn = (d) => ({ mn: M(600 + (Date.parse(d) - day0) / 86_400_000 * 3), estimated: false });
+      const r = valuate(evs, rate, 'USD');
       const lotCost = r.lots.reduce((s, l) => s + (l.costMicros ?? 0n), 0n);
       const settled = r.allocations.filter((a) => a.kind !== 'DEFICIT').reduce((s, a) => s + (a.costMicros ?? 0n), 0n);
       const left = r.lots.reduce((s, l) => s + (l.remainingCostMicros ?? 0n), 0n);
       expect(settled + left).toBe(lotCost);
+      // Lo mismo con el valor a mercado de los lotes
+      const lotMarket = r.lots.reduce((s, l) => s + (l.marketMicros ?? 0n), 0n);
+      const settledMarket = r.allocations.filter((a) => a.kind !== 'DEFICIT').reduce((s, a) => s + (a.marketMicros ?? 0n), 0n);
+      const leftMarket = r.lots.reduce((s, l) => s + (l.remainingMarketMicros ?? 0n), 0n);
+      expect(settledMarket + leftMarket).toBe(lotMarket);
+      // En cada gasto: costo = mercado - diferencia de cambio, y la diferencia son sus dos partes
+      for (const e of evs.filter((x) => x.type === 'EXPENSE')) {
+        const t = r.tx.get(e.id)!;
+        expect(t.fxExchange + t.fxHolding).toBe(t.fxResult);
+        expect(t.marketAmount! - t.fxResult).toBe(t.reportAmount);
+      }
       expect(r.mismatch.size).toBe(0);
     }
   });

@@ -15,6 +15,7 @@ import type { Dayjs } from 'dayjs';
 const { RangePicker } = DatePicker;
 import { TopExpensesCard } from '@/components/dashboard/TopExpensesCard';
 import s from './Dashboard.module.css';
+import { reportMoney, signedMoney } from '@/hooks/useValuation';
 
 /** Shape of a transaction coming from the API overview endpoint. */
 interface RecentTransaction {
@@ -810,35 +811,39 @@ export default function DashboardPage() {
   );
 }
 
-/** Importe en la moneda de estadisticas, con centavos: "1 151,52 USD". */
-const reportMoney = (cents: number, currency: string) =>
-  `${new Intl.NumberFormat('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(cents / 100)} ${currency}`;
-
 /**
- * El rango en una sola moneda: los gastos en MN valorados a la tasa real de
- * los cambios (FIFO) y el patrimonio a lo que costo y a la tasa de hoy.
+ * El rango en una sola moneda, como la NIC 21: los gastos en MN a la tasa de
+ * mercado de su dia y, aparte, la diferencia de cambio contra lo que costaron
+ * por FIFO (por cambio y por retener). El neto la incluye, asi que cuadra con
+ * el coste real. El patrimonio, a lo que costo y a la tasa de hoy.
  */
 function ReportStrip({ report, onRates }: { report: NonNullable<DashboardOverview['report']>; onRates: () => void }) {
   const cur = report.currency;
   const pat = report.patrimony;
+  const tone = (c: number) => (c < 0 ? 'var(--eco-neg)' : c > 0 ? 'var(--eco-pos)' : undefined);
+  const parts = (exchange: number | null, holding: number | null) =>
+    exchange === null || holding === null ? null : `por cambio ${signedMoney(exchange, cur)} · por retener ${signedMoney(holding, cur)}`;
   return (
     <section className={s.reportGrid}>
       <article className={s.card}>
         <div className={s.cardLabel}><span className={s.cardDot} />gastos en {cur}</div>
         <div className={s.reportNum}>{reportMoney(report.monthExpense, cur)}</div>
         <div className={s.reportSub}>
-          ingresos {reportMoney(report.monthIncome, cur)}
+          a mercado del día · ingresos {reportMoney(report.monthIncome, cur)}
           {report.estimates > 0 && ` · ${report.estimates} estimados`}
         </div>
       </article>
       <article className={s.card}>
-        <div className={s.cardLabel}><span className={s.cardDot} />neto en {cur}</div>
-        <div className={s.reportNum} style={{ color: report.net < 0 ? 'var(--eco-neg)' : 'var(--eco-pos)' }}>
-          {report.net > 0 ? '+' : ''}{reportMoney(report.net, cur)}
-        </div>
+        <div className={s.cardLabel}><span className={s.cardDot} />diferencias de cambio</div>
+        <div className={s.reportNum} style={{ color: tone(report.fxResult) }}>{signedMoney(report.fxResult, cur)}</div>
         <div className={s.reportSub}>
-          {report.fxResult !== 0 ? `resultado cambiario ${report.fxResult > 0 ? '+' : ''}${reportMoney(report.fxResult, cur)}` : 'sin ventas de moneda'}
+          {report.fxResult === 0 && report.fxExchange === 0 ? 'lo gastado costó lo mismo que a mercado' : parts(report.fxExchange, report.fxHolding)}
         </div>
+      </article>
+      <article className={s.card}>
+        <div className={s.cardLabel}><span className={s.cardDot} />neto en {cur}</div>
+        <div className={s.reportNum} style={{ color: tone(report.net) }}>{signedMoney(report.net, cur)}</div>
+        <div className={s.reportSub}>ingresos − gastos ± diferencias de cambio</div>
       </article>
       <article className={s.card}>
         <div className={s.cardLabel}><span className={s.cardDot} />patrimonio en {cur}</div>
@@ -846,8 +851,11 @@ function ReportStrip({ report, onRates }: { report: NonNullable<DashboardOvervie
         <div className={s.reportSub}>
           {pat.atToday === null
             ? 'a costo · falta la tasa de hoy'
-            : `a tasa de hoy ${reportMoney(pat.atToday, cur)}${pat.unrealized ? ` (${pat.unrealized > 0 ? '+' : ''}${reportMoney(pat.unrealized, cur)})` : ''}`}
+            : `a tasa de hoy ${reportMoney(pat.atToday, cur)}${pat.unrealized ? ` (${signedMoney(pat.unrealized, cur)})` : ''}`}
         </div>
+        {!!pat.unrealized && parts(pat.unrealizedExchange, pat.unrealizedHolding) && (
+          <div className={s.reportSub}>sin realizar: {parts(pat.unrealizedExchange, pat.unrealizedHolding)}</div>
+        )}
       </article>
       {report.incomplete > 0 && (
         <article className={s.card} style={{ cursor: 'pointer' }} onClick={onRates}>

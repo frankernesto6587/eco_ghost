@@ -10,6 +10,11 @@ import { rateMicros } from './rates.service';
 
 const MN = 'MN';
 const PAIR: TransactionType[] = ['TRANSFER', 'EXCHANGE'];
+/** Sube cuando cambian las reglas del motor: entra en la huella y fuerza el recalculo. */
+const ENGINE_VERSION = 2;
+
+/** Cuantas unidades (centavos) por 1 de la moneda de estadisticas, con 6 decimales. */
+const perUnit = (qty: number, micros: bigint | null) => (micros ? Number(roundDiv(BigInt(qty) * 10_000n * 1_000_000n, micros)) / 1e6 : null);
 
 /** Lo que el motor deja pendiente, guardado en la organizacion. */
 interface Issues {
@@ -53,7 +58,7 @@ export class ValuationService {
       this.prisma.$queryRaw<{ n: bigint; m: Date | null }[]>`SELECT count(*) AS n, max("updatedAt") AS m FROM "rate_overrides" WHERE "orgId" = ${orgId}`,
     ]);
     // El dia de hoy entra porque "hoy" y "ayer" usan la ultima tasa como estimada.
-    return [reportCurrency, closedThrough ?? '', tx.n, tx.m?.getTime(), rates.n, rates.m?.getTime(), overrides.n, overrides.m?.getTime(), dayKey(new Date())].join('|');
+    return [ENGINE_VERSION, reportCurrency, closedThrough ?? '', tx.n, tx.m?.getTime(), rates.n, rates.m?.getTime(), overrides.n, overrides.m?.getTime(), dayKey(new Date())].join('|');
   }
 
   /** Recalculo completo de una organizacion, con un bloqueo para que no corran dos a la vez. */
@@ -71,15 +76,19 @@ export class ValuationService {
         const r = valuate(events, rate, reportCurrency, current.closedThrough);
 
         // Lo que no esta aprobado o se borro deja de tener valor.
-        await db.$executeRaw`UPDATE "transactions" SET "reportAmount" = NULL, "valuationStatus" = NULL, "fxResult" = NULL
-          WHERE "orgId" = ${orgId} AND ("reportAmount" IS NOT NULL OR "valuationStatus" IS NOT NULL OR "fxResult" IS NOT NULL)`;
+        await db.$executeRaw`UPDATE "transactions"
+          SET "reportAmount" = NULL, "marketAmount" = NULL, "valuationStatus" = NULL, "fxResult" = NULL, "fxExchange" = NULL, "fxHolding" = NULL
+          WHERE "orgId" = ${orgId} AND ("reportAmount" IS NOT NULL OR "marketAmount" IS NOT NULL OR "valuationStatus" IS NOT NULL OR "fxResult" IS NOT NULL)`;
         const rows = [...r.tx.entries()];
         for (let i = 0; i < rows.length; i += 500) {
           const chunk = rows.slice(i, i + 500);
           // SQL a mano para no tocar updatedAt (si no, la huella cambiaria sola).
           await db.$executeRaw`UPDATE "transactions" AS t SET
-              "reportAmount" = v.ra, "valuationStatus" = v.vs::"ValuationStatus", "fxResult" = v.fx
-            FROM (VALUES ${Prisma.join(chunk.map(([id, v]) => Prisma.sql`(${id}, ${v.reportAmount}::int, ${v.status}, ${v.fxResult}::int)`))}) AS v(id, ra, vs, fx)
+              "reportAmount" = v.ra, "marketAmount" = v.ma, "valuationStatus" = v.vs::"ValuationStatus",
+              "fxResult" = v.fx, "fxExchange" = v.fe, "fxHolding" = v.fh
+            FROM (VALUES ${Prisma.join(
+              chunk.map(([id, v]) => Prisma.sql`(${id}, ${v.reportAmount}::int, ${v.marketAmount}::int, ${v.status}, ${v.fxResult}::int, ${v.fxExchange}::int, ${v.fxHolding}::int)`),
+            )}) AS v(id, ra, ma, vs, fx, fe, fh)
             WHERE t."id" = v.id`;
         }
 
@@ -140,7 +149,8 @@ export class ValuationService {
   /**
    * Tasa de un dia: la corregida a mano, si no la de elTOQUE. Si falta, solo
    * hoy y ayer usan la ultima conocida (marcada como estimada: elTOQUE publica
-   * a las 7:00); para dias anteriores queda "falta tasa" y la tiene que poner un admin.
+   * a las 7:00); para dias anteriores queda "falta tasa" y la tiene que poner un
+   * admin. `lenient` (valor a mercado de un gasto): la ultima conocida, sea del dia que sea.
    */
   private async rateFn(db: Prisma.TransactionClient, orgId: string): Promise<RateFn> {
     const [reference, overrides] = await Promise.all([
@@ -158,11 +168,11 @@ export class ValuationService {
     for (const list of daysByCurrency.values()) list.sort();
     const yesterday = dayjs(dayKey(new Date())).subtract(1, 'day').format('YYYY-MM-DD');
 
-    return (day, currency) => {
+    return (day, currency, lenient) => {
       if (currency === MN) return { mn: 1_000_000n, estimated: false };
       const exact = table.get(`${day}|${currency}`);
       if (exact !== undefined) return { mn: exact, estimated: false };
-      if (day < yesterday) return null;
+      if (day < yesterday && !lenient) return null;
       const days = daysByCurrency.get(currency) ?? [];
       const last = [...days].reverse().find((d) => d < day);
       return last ? { mn: table.get(`${last}|${currency}`)!, estimated: true } : null;
@@ -245,7 +255,10 @@ export class ValuationService {
   /**
    * Patrimonio en la moneda de estadisticas: lo de esa moneda tal cual, y cada
    * otra moneda a lo que costo (los lotes que quedan, que son los cambios mas
-   * nuevos) y a la tasa de hoy. La diferencia es la devaluacion.
+   * nuevos) y a la tasa de hoy. La diferencia es la diferencia de cambio aun no
+   * realizada, partida como la de los gastos: por cambio (lo que costaron los
+   * lotes contra su mercado del dia en que entraron) y por retener (ese mercado
+   * contra el de hoy).
    */
   async patrimony(orgId: string) {
     const cfg = await this.ensureFresh(orgId);
@@ -264,36 +277,53 @@ export class ValuationService {
     const today = dayKey(new Date());
     const mnR = rate(today, R)?.mn ?? null;
     const rows = [...byCurrency.entries()].filter(([, q]) => q !== 0).map(([currency, qty]) => {
-      if (currency === R) return { currency, qty, atCost: qty, atToday: qty, todayRate: null as number | null, estimated: false };
+      if (currency === R) return { currency, qty, atCost: qty, atEntry: qty, atToday: qty, todayRate: null as number | null, estimated: false };
       const own = lots.filter((l) => l.currency === currency);
-      const unknown = own.some((l) => l.remainingCostMicros === null);
       const deficit = issues.openDeficits?.[currency];
-      const costMicros = own.reduce((s, l) => s + (l.remainingCostMicros ?? 0n), 0n) - BigInt(deficit?.estMicros ?? 0);
+      const deficitUnknown = !!deficit && deficit.estMicros === null;
+      // Lo que falta (deficit) resta, valorado a mercado del dia del gasto.
+      const total = (k: 'remainingCostMicros' | 'remainingMarketMicros') =>
+        deficitUnknown || own.some((l) => l[k] === null)
+          ? null
+          : microsToCents(own.reduce((s, l) => s + (l[k] ?? 0n), 0n) - BigInt(deficit?.estMicros ?? 0));
       const rc = rate(today, currency);
       const atToday = rc && mnR ? microsToCents(roundDiv(BigInt(qty) * 10_000n * rc.mn, mnR)) : null;
       return {
         currency,
         qty,
-        atCost: unknown || (deficit && deficit.estMicros === null) ? null : microsToCents(costMicros),
+        atCost: total('remainingCostMicros'),
+        atEntry: total('remainingMarketMicros'),
         atToday,
         todayRate: rc ? Number(rc.mn) / 1e6 : null,
         estimated: !!deficit || own.some((l) => l.estimated) || !!rc?.estimated,
       };
     });
-    const sum = (k: 'atCost' | 'atToday') => (rows.some((r) => r[k] === null) ? null : rows.reduce((s, r) => s + (r[k] as number), 0));
+    const sum = (k: 'atCost' | 'atEntry' | 'atToday') => (rows.some((r) => r[k] === null) ? null : rows.reduce((s, r) => s + (r[k] as number), 0));
     const atCost = sum('atCost');
+    const atEntry = sum('atEntry');
     const atToday = sum('atToday');
+    const unrealized = atCost !== null && atToday !== null ? atToday - atCost : null;
+    const unrealizedExchange = atCost !== null && atEntry !== null ? atEntry - atCost : null;
     return {
       reportCurrency: R,
-      currencies: rows,
-      totals: { atCost, atToday, unrealized: atCost !== null && atToday !== null ? atToday - atCost : null },
+      currencies: rows.map(({ atEntry: _, ...r }) => r),
+      totals: {
+        atCost,
+        atToday,
+        unrealized,
+        unrealizedExchange,
+        unrealizedHolding: unrealized !== null && unrealizedExchange !== null ? unrealized - unrealizedExchange : null,
+      },
     };
   }
 
   /** De que lotes salio el valor de un movimiento (para explicar una cifra). */
   async breakdown(orgId: string, txId: string) {
     await this.ensureFresh(orgId);
-    const tx = await this.prisma.transaction.findFirst({ where: { id: txId, orgId }, select: { id: true, linkedTransactionId: true, reportAmount: true, valuationStatus: true, fxResult: true } });
+    const tx = await this.prisma.transaction.findFirst({
+      where: { id: txId, orgId },
+      select: { id: true, linkedTransactionId: true, reportAmount: true, marketAmount: true, valuationStatus: true, fxResult: true, fxExchange: true, fxHolding: true },
+    });
     if (!tx) throw new NotFoundException('Transaction not found');
     // Las asignaciones van a la pierna que sale; si piden la que entra, buscar la otra.
     const head = tx.linkedTransactionId ? tx.id : (await this.prisma.transaction.findFirst({ where: { linkedTransactionId: tx.id }, select: { id: true } }))?.id ?? tx.id;
@@ -306,8 +336,11 @@ export class ValuationService {
     return {
       id: tx.id,
       reportAmount: tx.reportAmount,
+      marketAmount: tx.marketAmount,
       status: tx.valuationStatus,
       fxResult: tx.fxResult,
+      fxExchange: tx.fxExchange,
+      fxHolding: tx.fxHolding,
       parts: allocations.map((a) => {
         const lot = lots.find((l) => l.seq === a.lotSeq);
         const src = lot && sources.find((s) => s.id === lot.sourceTxId);
@@ -316,7 +349,17 @@ export class ValuationService {
           currency: a.currency,
           qty: a.qty,
           cost: a.costMicros === null ? null : microsToCents(a.costMicros),
-          lot: lot ? { origin: lot.origin, day: lot.day, description: src?.description ?? null, rate: lot.costMicros ? Number(BigInt(lot.qty) * 10_000n * 1_000_000n / lot.costMicros) / 1e6 : null } : null,
+          market: a.marketMicros === null ? null : microsToCents(a.marketMicros),
+          lot: lot
+            ? {
+                origin: lot.origin,
+                day: lot.day,
+                description: src?.description ?? null,
+                /** Unidades por 1 de la moneda de estadisticas: la del cambio y la del mercado ese dia */
+                rate: perUnit(lot.qty, lot.costMicros),
+                marketRate: perUnit(lot.qty, lot.marketMicros),
+              }
+            : null,
         };
       }),
     };

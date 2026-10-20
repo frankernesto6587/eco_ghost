@@ -166,7 +166,7 @@ export default function TransactionsPage() {
   const valuation = useValuationStatus().data;
   const approx = (tx: Transaction) =>
     valuation?.enabled && tx.account.currency !== valuation.reportCurrency && tx.type !== 'TRANSFER'
-      ? approxReport(tx.reportAmount, valuation.reportCurrency, tx.valuationStatus)
+      ? approxReport(tx.marketAmount, valuation.reportCurrency, tx.valuationStatus)
       : null;
   const isMobile = useIsMobile();
   const [form] = Form.useForm<TransactionFormValues>();

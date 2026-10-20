@@ -16,6 +16,15 @@
  * - Vender esa moneda por la de estadisticas da "resultado cambiario".
  * - Los traspasos entre cuentas de la misma moneda no tocan la bolsa.
  *
+ * Diferencias de cambio (como la NIC 21, Fase 2c): cada gasto vale ademas lo
+ * que costaria a la tasa de mercado de su dia (`marketAmount`, lo que suman
+ * las estadisticas), y la diferencia con su coste FIFO queda en la misma
+ * linea, partida en dos:
+ * - por cambio: el lote se consiguio mejor o peor que el mercado de su dia;
+ * - por retener: el mercado se movio entre que entro la moneda y se gasto.
+ * Coste = mercado - diferencia de cambio, al centavo. A mercado, si falta la
+ * tasa del dia se usa la ultima anterior (estimada) y se pide igual.
+ *
  * Unidades: importes en centavos de su moneda; costes en micros (10^-6) de la
  * moneda de estadisticas, como BigInt, para que el coste se conserve exacto.
  * Las tasas son MN por 1 unidad, tambien en micros (810 MN = 810_000_000n).
@@ -42,8 +51,11 @@ export interface EngineEvent {
   orphanIncoming?: boolean;
 }
 
-/** Tasa de un dia: MN por 1 unidad en micros. `estimated`: es la ultima conocida, no la del dia. */
-export type RateFn = (day: string, currency: string) => { mn: bigint; estimated: boolean } | null;
+/**
+ * Tasa de un dia: MN por 1 unidad en micros. `estimated`: es la ultima conocida, no la del dia.
+ * Con `lenient`, si ese dia no hay tasa devuelve la ultima anterior (para valorar a mercado).
+ */
+export type RateFn = (day: string, currency: string, lenient?: boolean) => { mn: bigint; estimated: boolean } | null;
 
 export interface LotOut {
   seq: number;
@@ -56,6 +68,9 @@ export interface LotOut {
   estimated: boolean;
   remainingQty: number;
   remainingCostMicros: bigint | null;
+  /** Lo que valia el lote a mercado el dia que entro (para partir la diferencia de cambio). */
+  marketMicros: bigint | null;
+  remainingMarketMicros: bigint | null;
 }
 
 export interface AllocationOut {
@@ -64,14 +79,24 @@ export interface AllocationOut {
   lotSeq: number | null;
   qty: number;
   costMicros: bigint | null;
+  /** A mercado del dia en que entro el lote (en un deficit sin cubrir, del dia del gasto). */
+  marketMicros: bigint | null;
   kind: 'LOT' | 'DEFICIT' | 'DEFICIT_SETTLED';
 }
 
+/** Importes en centavos de la moneda de estadisticas. */
 export interface TxValuation {
+  /** Coste FIFO: lo que costaron de verdad los lotes de donde salio. */
   reportAmount: number | null;
+  /** A la tasa de mercado de su dia: lo que suman las estadisticas. */
+  marketAmount: number | null;
   status: ValuationStatus;
-  /** Resultado cambiario realizado, en centavos de la moneda de estadisticas. */
+  /** Diferencia de cambio (a favor > 0) = fxExchange + fxHolding. En un gasto, mercado - coste. */
   fxResult: number;
+  /** Por cambiar a una tasa distinta del mercado de ese dia. */
+  fxExchange: number;
+  /** Por tener la moneda mientras el mercado se movia. */
+  fxHolding: number;
 }
 
 export interface EngineResult {
@@ -119,6 +144,9 @@ interface Consumer {
   deficitQty: number;
   deficitEst: bigint;
   deficitUnknown: boolean;
+  /** Lo consumido de lotes, a mercado del dia de cada lote. */
+  lotMarket: bigint;
+  lotMarketUnknown: boolean;
 }
 
 /**
@@ -138,14 +166,19 @@ export function valuate(events: EngineEvent[], rate: RateFn, reportCurrency: str
   const allLots: Lot[] = [];
   const allocations: AllocationOut[] = [];
   const consumers = new Map<string, Consumer>();
-  const fx = new Map<string, bigint>();
+  /** Diferencias que van a quien trajo un lote: total y la parte "por cambio". */
+  const fxTotal = new Map<string, bigint>();
+  const fxEx = new Map<string, bigint>();
   const tx = new Map<string, TxValuation>();
   const missing = new Map<string, { day: string; currency: string }>();
   const balance = new Map<string, number>();
   let seq = 0;
 
   const addBalance = (c: string, d: number) => c !== R && balance.set(c, (balance.get(c) ?? 0) + d);
-  const addFx = (id: string, m: bigint) => fx.set(id, (fx.get(id) ?? 0n) + m);
+  const addFx = (id: string, total: bigint, exchange: bigint) => {
+    fxTotal.set(id, (fxTotal.get(id) ?? 0n) + total);
+    fxEx.set(id, (fxEx.get(id) ?? 0n) + exchange);
+  };
 
   /** MN por unidad de una moneda en un dia (MN = 1). */
   const mnOf = (day: string, c: string) => (c === MN ? { mn: 1_000_000n, estimated: false } : rate(day, c));
@@ -163,16 +196,47 @@ export function valuate(events: EngineEvent[], rate: RateFn, reportCurrency: str
     return { micros: roundDiv(BigInt(qty) * MICROS_PER_CENT * rc.mn, rr.mn), estimated: rc.estimated || rr.estimated };
   };
 
-  /** Parte proporcional del coste que queda en un lote. */
-  const slice = (lot: Lot, take: number): bigint | null => {
-    if (lot.remainingCostMicros === null) return null;
-    if (take === lot.remainingQty) return lot.remainingCostMicros;
-    return roundDiv(lot.remainingCostMicros * BigInt(take), BigInt(lot.remainingQty));
+  /** MN por unidad a mercado: si falta la del dia, se pide y se usa la ultima anterior (estimada). */
+  const mnMarket = (day: string, c: string) => {
+    const exact = mnOf(day, c);
+    if (exact) return exact;
+    missing.set(`${day}|${c}`, { day, currency: c });
+    const prev = rate(day, c, true);
+    return prev ? { mn: prev.mn, estimated: true } : null;
+  };
+
+  /** Valor a mercado de `qty` centavos de `c` ese dia. */
+  const marketAt = (qty: number, c: string, day: string): { micros: bigint; estimated: boolean } | null => {
+    if (c === R) return { micros: BigInt(qty) * MICROS_PER_CENT, estimated: false };
+    const rc = mnMarket(day, c);
+    const rr = mnMarket(day, R);
+    if (!rc || !rr) return null;
+    return { micros: roundDiv(BigInt(qty) * MICROS_PER_CENT * rc.mn, rr.mn), estimated: rc.estimated || rr.estimated };
+  };
+
+  /** Parte proporcional de lo que queda en un lote. */
+  const part = (rest: bigint | null, restQty: number, take: number): bigint | null => {
+    if (rest === null) return null;
+    if (take === restQty) return rest;
+    return roundDiv(rest * BigInt(take), BigInt(restQty));
+  };
+
+  /** Saca `take` de un lote: su parte del coste y del valor a mercado. */
+  const draw = (lot: Lot, take: number) => {
+    const cost = part(lot.remainingCostMicros, lot.remainingQty, take);
+    const market = part(lot.remainingMarketMicros, lot.remainingQty, take);
+    lot.remainingQty -= take;
+    if (cost !== null && lot.remainingCostMicros !== null) lot.remainingCostMicros -= cost;
+    if (market !== null && lot.remainingMarketMicros !== null) lot.remainingMarketMicros -= market;
+    return { cost, market };
   };
 
   const consumerOf = (id: string) => {
     let s = consumers.get(id);
-    if (!s) consumers.set(id, (s = { known: 0n, unknown: false, estimated: false, deficitQty: 0, deficitEst: 0n, deficitUnknown: false }));
+    if (!s) {
+      s = { known: 0n, unknown: false, estimated: false, deficitQty: 0, deficitEst: 0n, deficitUnknown: false, lotMarket: 0n, lotMarketUnknown: false };
+      consumers.set(id, s);
+    }
     return s;
   };
 
@@ -184,12 +248,12 @@ export function valuate(events: EngineEvent[], rate: RateFn, reportCurrency: str
     while (need > 0 && p.lots.length) {
       const lot = p.lots[0];
       const take = Math.min(need, lot.remainingQty);
-      const cost = slice(lot, take);
-      lot.remainingQty -= take;
-      if (cost !== null && lot.remainingCostMicros !== null) lot.remainingCostMicros -= cost;
-      allocations.push({ consumerTxId: consumerId, currency: c, lotSeq: lot.seq, qty: take, costMicros: cost, kind: 'LOT' });
+      const { cost, market } = draw(lot, take);
+      allocations.push({ consumerTxId: consumerId, currency: c, lotSeq: lot.seq, qty: take, costMicros: cost, marketMicros: market, kind: 'LOT' });
       if (cost === null) s.unknown = true;
       else s.known += cost;
+      if (market === null) s.lotMarketUnknown = true;
+      else s.lotMarket += market;
       if (lot.estimated) s.estimated = true;
       if (lot.remainingQty === 0) p.lots.shift();
       need -= take;
@@ -197,7 +261,7 @@ export function valuate(events: EngineEvent[], rate: RateFn, reportCurrency: str
     if (need > 0) {
       const est = valueAt(need, c, day);
       p.deficits.push({ consumerId, day, qty: need, estMicros: est?.micros ?? null, estimated: est?.estimated ?? false, terminal });
-      allocations.push({ consumerTxId: consumerId, currency: c, lotSeq: null, qty: need, costMicros: est?.micros ?? null, kind: 'DEFICIT' });
+      allocations.push({ consumerTxId: consumerId, currency: c, lotSeq: null, qty: need, costMicros: est?.micros ?? null, marketMicros: est?.micros ?? null, kind: 'DEFICIT' });
       s.deficitQty += need;
       if (est) s.deficitEst += est.micros;
       else s.deficitUnknown = true;
@@ -206,16 +270,16 @@ export function valuate(events: EngineEvent[], rate: RateFn, reportCurrency: str
   };
 
   /** Mete un lote: primero cubre deficits pendientes (el siguiente lote valora lo que falto). */
-  const addLot = (lot: Omit<Lot, 'seq' | 'remainingQty' | 'remainingCostMicros'>) => {
+  const addLot = (lot: Omit<Lot, 'seq' | 'remainingQty' | 'remainingCostMicros' | 'remainingMarketMicros'>) => {
     const p = pool(lot.currency);
-    const l: Lot = { ...lot, seq: ++seq, remainingQty: lot.qty, remainingCostMicros: lot.costMicros };
+    const l: Lot = { ...lot, seq: ++seq, remainingQty: lot.qty, remainingCostMicros: lot.costMicros, remainingMarketMicros: lot.marketMicros };
     allLots.push(l);
     while (p.deficits.length && l.remainingQty > 0) {
       const d = p.deficits[0];
       const take = Math.min(d.qty, l.remainingQty);
-      const cost = slice(l, take);
-      const estPart = d.estMicros === null ? null : take === d.qty ? d.estMicros : roundDiv(d.estMicros * BigInt(take), BigInt(d.qty));
-      allocations.push({ consumerTxId: d.consumerId, currency: l.currency, lotSeq: l.seq, qty: take, costMicros: cost, kind: 'DEFICIT_SETTLED' });
+      const estPart = part(d.estMicros, d.qty, take);
+      const { cost, market } = draw(l, take);
+      allocations.push({ consumerTxId: d.consumerId, currency: l.currency, lotSeq: l.seq, qty: take, costMicros: cost, marketMicros: market, kind: 'DEFICIT_SETTLED' });
       // Si el gasto es de un mes cerrado y el lote no, el gasto queda como estaba.
       const frozen = closed(d.day) && !closed(l.day);
       if (d.terminal && !frozen) {
@@ -224,18 +288,18 @@ export function valuate(events: EngineEvent[], rate: RateFn, reportCurrency: str
         if (estPart !== null) s.deficitEst -= estPart;
         if (cost === null) s.unknown = true;
         else s.known += cost;
+        if (market === null) s.lotMarketUnknown = true;
+        else s.lotMarket += market;
         if (l.estimated) s.estimated = true;
       } else if (estPart !== null && cost !== null) {
         // Un cambio entre dos monedas de bolsa (o un gasto de un mes cerrado) ya
-        // tiene su valor estimado; la diferencia con el coste real queda como
-        // resultado cambiario de quien trajo el lote.
-        addFx(l.sourceTxId, estPart - cost);
+        // tiene su valor estimado (a mercado del dia del gasto); la diferencia
+        // con el coste real es diferencia de cambio de quien trajo el lote.
+        addFx(l.sourceTxId, estPart - cost, market === null ? 0n : market - cost);
       }
       d.qty -= take;
       if (d.estMicros !== null && estPart !== null) d.estMicros -= estPart;
       if (d.qty === 0) p.deficits.shift();
-      l.remainingQty -= take;
-      if (cost !== null && l.remainingCostMicros !== null) l.remainingCostMicros -= cost;
     }
     if (l.remainingQty > 0) p.lots.push(l);
   };
@@ -248,10 +312,16 @@ export function valuate(events: EngineEvent[], rate: RateFn, reportCurrency: str
   // Un deficit congelado por cierre sigue contando en `deficitQty` del gasto
   // (queda estimado), pero sale de la bolsa al cubrirse.
 
+  /** Lo consumido a mercado del dia de cada lote (lo que falto, al del gasto). */
+  const lotMarketOf = (s: Consumer) => (s.lotMarketUnknown || s.deficitUnknown ? null : s.lotMarket + s.deficitEst);
+  const worst = (a: ValuationStatus, b: ValuationStatus): ValuationStatus =>
+    a === 'MISSING_RATE' || b === 'MISSING_RATE' ? 'MISSING_RATE' : a === 'ESTIMATE' || b === 'ESTIMATE' ? 'ESTIMATE' : 'EXACT';
+
   // Lo que hay que resolver al final (cuando ya se sabe que deficits se cubrieron).
   const finals: (() => void)[] = [];
   const set = (id: string, v: TxValuation) => tx.set(id, v);
-  const exact = (cents: number): TxValuation => ({ reportAmount: cents, status: 'EXACT', fxResult: 0 });
+  const exact = (cents: number): TxValuation => ({ reportAmount: cents, marketAmount: cents, status: 'EXACT', fxResult: 0, fxExchange: 0, fxHolding: 0 });
+  const unvalued = (status: ValuationStatus, reportAmount: number | null = null): TxValuation => ({ reportAmount, marketAmount: null, status, fxResult: 0, fxExchange: 0, fxHolding: 0 });
 
   const ordered = [...events].sort((a, b) =>
     a.sortKey[0] - b.sortKey[0] || a.sortKey[1] - b.sortKey[1] || (a.sortKey[2] < b.sortKey[2] ? -1 : a.sortKey[2] > b.sortKey[2] ? 1 : 0),
@@ -271,30 +341,46 @@ export function valuate(events: EngineEvent[], rate: RateFn, reportCurrency: str
 
       if (A === R) {
         // Compra de B con la moneda de estadisticas: lote con la tasa real.
-        addLot({ currency: B, sourceTxId: e.id, day: e.day, origin: 'EXCHANGE', qty: b, costMicros: BigInt(a) * MICROS_PER_CENT, estimated: false });
+        addLot({
+          currency: B, sourceTxId: e.id, day: e.day, origin: 'EXCHANGE', qty: b, costMicros: BigInt(a) * MICROS_PER_CENT,
+          marketMicros: marketAt(b, B, e.day)?.micros ?? null, estimated: false,
+        });
         set(e.id, exact(a));
         if (e.incId) set(e.incId, exact(a));
       } else if (B === R) {
         // Venta de A: consume lotes y da resultado cambiario.
         const s = consume(A, a, e.id, e.day, true);
         finals.push(() => {
-          const basis = basisOf(s);
-          const received = BigInt(b) * MICROS_PER_CENT;
-          set(e.id, {
-            reportAmount: basis.micros === null ? null : microsToCents(basis.micros),
-            status: basis.status,
-            fxResult: basis.micros === null ? 0 : microsToCents(received - basis.micros),
-          });
           if (e.incId) set(e.incId, exact(b));
+          const basis = basisOf(s);
+          if (basis.micros === null) return set(e.id, unvalued(basis.status));
+          const cost = microsToCents(basis.micros);
+          const market = marketAt(a, A, e.day);
+          const lm = lotMarketOf(s);
+          const total = b - cost;
+          // Por cambio: lo que valian los lotes contra lo que costaron, y lo
+          // recibido contra el mercado del dia de la venta.
+          const fxExchange = market === null || lm === null ? total : microsToCents(lm - basis.micros + BigInt(b) * MICROS_PER_CENT - market.micros);
+          set(e.id, {
+            reportAmount: cost,
+            marketAmount: market && microsToCents(market.micros),
+            status: basis.status,
+            fxResult: total,
+            fxExchange,
+            fxHolding: total - fxExchange,
+          });
         });
       } else {
         // Entre dos monedas de bolsa: el coste de lo que sale pasa al lote nuevo.
         const s = consume(A, a, e.id, e.day, false);
         const basis = basisOf(s);
-        addLot({ currency: B, sourceTxId: e.id, day: e.day, origin: 'CARRY', qty: b, costMicros: basis.micros, estimated: basis.status !== 'EXACT' });
-        const v = { reportAmount: basis.micros === null ? null : microsToCents(basis.micros), status: basis.status };
-        set(e.id, { ...v, fxResult: 0 });
-        if (e.incId) set(e.incId, { ...v, fxResult: 0 });
+        addLot({
+          currency: B, sourceTxId: e.id, day: e.day, origin: 'CARRY', qty: b, costMicros: basis.micros,
+          marketMicros: marketAt(b, B, e.day)?.micros ?? null, estimated: basis.status !== 'EXACT',
+        });
+        const v = (): TxValuation => (basis.micros === null ? unvalued(basis.status) : { ...exact(microsToCents(basis.micros)), status: basis.status });
+        set(e.id, v());
+        if (e.incId) set(e.incId, v());
       }
       continue;
     }
@@ -312,23 +398,47 @@ export function valuate(events: EngineEvent[], rate: RateFn, reportCurrency: str
     if (isIn) {
       // Entrada que no viene de un cambio: lote a la tasa de referencia del dia.
       const v = valueAt(e.amount, c, e.day);
-      addLot({ currency: c, sourceTxId: e.id, day: e.day, origin: 'REFERENCE', qty: e.amount, costMicros: v?.micros ?? null, estimated: v?.estimated ?? false });
-      set(e.id, v ? { reportAmount: microsToCents(v.micros), status: v.estimated ? 'ESTIMATE' : 'EXACT', fxResult: 0 } : { reportAmount: null, status: 'MISSING_RATE', fxResult: 0 });
+      addLot({
+        currency: c, sourceTxId: e.id, day: e.day, origin: 'REFERENCE', qty: e.amount, costMicros: v?.micros ?? null,
+        marketMicros: v?.micros ?? null, estimated: v?.estimated ?? false,
+      });
+      set(e.id, v ? { ...exact(microsToCents(v.micros)), status: v.estimated ? 'ESTIMATE' : 'EXACT' } : unvalued('MISSING_RATE'));
     } else {
       const s = consume(c, e.amount, e.id, e.day, true);
       finals.push(() => {
+        // Coste FIFO, valor a mercado del dia y, entre los dos, la diferencia de cambio.
         const basis = basisOf(s);
-        set(e.id, { reportAmount: basis.micros === null ? null : microsToCents(basis.micros), status: basis.status, fxResult: 0 });
+        const market = marketAt(e.amount, c, e.day);
+        if (basis.micros === null || market === null) {
+          return set(e.id, unvalued('MISSING_RATE', basis.micros === null ? null : microsToCents(basis.micros)));
+        }
+        const cost = microsToCents(basis.micros);
+        const value = microsToCents(market.micros);
+        const lm = lotMarketOf(s);
+        const fxExchange = lm === null ? 0 : microsToCents(lm - basis.micros);
+        set(e.id, {
+          reportAmount: cost,
+          marketAmount: value,
+          status: worst(basis.status, market.estimated ? 'ESTIMATE' : 'EXACT'),
+          fxResult: value - cost,
+          fxExchange,
+          fxHolding: value - cost - fxExchange,
+        });
       });
     }
   }
 
   for (const f of finals) f();
-  // Diferencias de deficits cubiertos tras un cambio entre monedas de bolsa:
-  // resultado cambiario de quien trajo el lote que los cubrio.
-  for (const [id, m] of fx) {
+  // Diferencias de deficits cubiertos tras un cambio entre monedas de bolsa
+  // (o de un mes cerrado): van a quien trajo el lote que los cubrio.
+  for (const [id, total] of fxTotal) {
     const v = tx.get(id);
-    if (v) v.fxResult += microsToCents(m);
+    if (!v) continue;
+    const t = microsToCents(total);
+    const ex = microsToCents(fxEx.get(id) ?? 0n);
+    v.fxResult += t;
+    v.fxExchange += ex;
+    v.fxHolding += t - ex;
   }
 
   const openDeficits = new Map<string, { qty: number; estMicros: bigint | null }>();

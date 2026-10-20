@@ -1,7 +1,7 @@
 # EcoGhost — Aprobaciones y estadísticas en USD (FIFO)
 
 > Estado: **ACEPTADO** (2026-10-20). Decisiones tomadas con Frank en una ronda de 23 preguntas.
-> Avance: Fase 0 y Fase 1 en producción (PR #6, #7). Fase 2 hecha y en el entorno de pruebas (rama `s7/valuacion`).
+> Avance: Fases 0, 1 y 2 en producción (PR #6, #7, #8). Fase 2c (diferencias de cambio) hecha y en el entorno de pruebas (rama `s7/diferencias-cambio`; app 0.5.0 en `s6/android-aprobaciones`).
 > Valores tomados por defecto en la Fase 2: las piernas huérfanas de cambios viejos se valoran como entradas a la tasa del día; la cuenta USDT de Home sigue en moneda USD (1:1) hasta que haya una herramienta para cambiarla.
 
 ## Contexto
@@ -203,6 +203,40 @@ Al salir del modo plan se escriben en `docs/plans/2026-10-20-aprobaciones-y-usd.
 - Aviso al admin de tasas que faltan.
 - Tarjetas de Patrimonio. En Análisis, el chip "Todo en USD" y la línea "Resultado cambiario".
 - En Android, los totales de Inicio en ≈ USD.
+
+## Fase 2c — Diferencias de cambio como la NIC 21 (rama `s7/diferencias-cambio`, migración `5_diferencias_cambio`)
+Idea de Frank (2026-10-20): por cada gasto en otra moneda, comparar la tasa a la que se cambió con la de elTOQUE, para saber cuánto se gana o se pierde por retener MN.
+
+**Decisiones de Frank**
+- Se compara contra la tasa del **lote FIFO** de donde salió el MN, no contra la del último cambio, para que todo cuadre al centavo con los USD que salieron.
+- La diferencia se parte en dos:
+  - **por cambio**: el lote contra el mercado del día en que entró. Vale 0 en el MN que entró por ventas o saldo inicial.
+  - **por retener**: el mercado de ese día contra el del día del gasto.
+- **Panel al estilo NIC 21:** los gastos se ven a mercado del día, y cada gasto genera su línea de diferencia de cambio. En palabras de Frank: "al final cuadra más porque por cada gasto se genera una línea para compensar pérdida o ganancia". El neto incluye esa línea.
+
+**Modelo**
+- En `transactions`: `marketAmount`, `fxExchange` y `fxHolding`. `fxResult` = `fxExchange` + `fxHolding`.
+- En un gasto: `reportAmount` (costo FIFO) = `marketAmount` − `fxResult`.
+- En `fx_lots`: `marketMicros` y `remainingMarketMicros`. En `fx_allocations`: `marketMicros`.
+- `ENGINE_VERSION` entra en la huella, así que un cambio de reglas fuerza el recálculo.
+
+**Reglas**
+- **Venta de MN por USD:** "por cambio" suma lo recibido contra el mercado del día.
+- **Déficit de un mes cerrado, o de un cambio entre monedas de bolsa:** al cubrirse, su diferencia va a quien trajo el lote, partida igual.
+- **Valor a mercado de un día sin tasa** (valor por defecto, no preguntado): se usa la última tasa anterior, marcada como estimada, y el día queda en "tasas que faltan". Si no hay ninguna tasa anterior, el gasto queda sin valorar.
+- **Patrimonio:** lo no realizado (a tasa de hoy − a costo) también se parte en por cambio y por retener.
+- **Presupuestos en USD** (valor por defecto): suman a mercado, igual que el análisis.
+
+**Clientes**
+- **Panel:** tarjeta "Diferencias de cambio". Debajo del patrimonio, "sin realizar: por cambio · por retener".
+- **Análisis "Todo en USD":** cuarta tarjeta con la diferencia de cambio. El neto y la tendencia la incluyen.
+- **Detalle del movimiento:** a mercado, costo real y diferencia, con las dos partes. Debajo, de qué cambios salió, con su tasa y la del mercado de ese día.
+- **App 0.5.0:** "Gastos a mercado" y la línea de diferencias de cambio en Inicio. El "≈ USD" de cada movimiento es su valor a mercado.
+
+**Verificación**
+- `fifo-engine.spec.ts` (24 tests) incluye el ejemplo de Frank: 60 000 MN cambiados a 600 (mercado a 610) y gastados con el mercado a 650. Resultado: 100,00 = 92,31 a mercado + 1,64 por cambio + 6,05 por retener.
+- La prueba con secuencias al azar comprueba en cada gasto que costo = mercado − diferencia y que la diferencia es la suma de sus dos partes.
+- `check-valuacion.mjs` usa tasas puestas a mano y comprueba que el neto a mercado más las diferencias es igual al neto a costo FIFO (3 848,49).
 
 ## Archivos críticos
 - `apps/api/src/prisma/schema.prisma` y las migraciones nuevas.

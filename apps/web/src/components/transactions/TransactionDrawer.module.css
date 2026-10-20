@@ -211,6 +211,67 @@
   word-break: break-word;
 }
 
+/* ═══════ EN LA MONEDA DE ESTADISTICAS ═══════ */
+.fx {
+  margin-top: 20px;
+  padding: 14px 16px;
+  background: var(--eco-surface2);
+  border: 1px solid var(--eco-line-soft);
+  border-radius: 8px;
+}
+
+.fxTitle {
+  font-family: 'Geist Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  color: var(--eco-fg4);
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.fxRows {
+  margin: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.fxRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+}
+
+.fxRow dt {
+  color: var(--eco-fg2);
+}
+
+.fxRow dd {
+  margin: 0;
+  font-family: 'Geist Mono', monospace;
+  font-variant-numeric: tabular-nums;
+  color: var(--eco-fg);
+}
+
+.fxSub {
+  font-size: 12px;
+  padding-left: 12px;
+}
+
+.fxSub dt {
+  color: var(--eco-fg3);
+}
+
+.fxParts {
+  margin: 10px 0 0;
+  padding: 10px 0 0 16px;
+  border-top: 1px dashed var(--eco-line);
+  font-size: 12px;
+  color: var(--eco-fg3);
+  display: grid;
+  gap: 4px;
+}
+
 /* ═══════ FOOTER ═══════ */
 .footer {
   display: flex;

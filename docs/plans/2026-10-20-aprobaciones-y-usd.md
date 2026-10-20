@@ -1,6 +1,8 @@
 # EcoGhost — Aprobaciones y estadísticas en USD (FIFO)
 
 > Estado: **ACEPTADO** (2026-10-20). Decisiones tomadas con Frank en una ronda de 23 preguntas.
+> Avance: Fase 0 y Fase 1 en producción (PR #6, #7). Fase 2 hecha y en el entorno de pruebas (rama `s7/valuacion`).
+> Valores tomados por defecto en la Fase 2: las piernas huérfanas de cambios viejos se valoran como entradas a la tasa del día; la cuenta USDT de Home sigue en moneda USD (1:1) hasta que haya una herramienta para cambiarla.
 
 ## Contexto
 Frank quiere cambiar dos lógicas de fondo antes de seguir con más pantallas:

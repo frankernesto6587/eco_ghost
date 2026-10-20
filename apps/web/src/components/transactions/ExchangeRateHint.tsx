@@ -15,8 +15,10 @@ const cents = (v: number) => new Intl.NumberFormat('es-ES', { minimumFractionDig
  */
 export function ExchangeRateHint({ form, accounts }: { form: FormInstance; accounts: { id: string; currency: string }[] }) {
   const orgId = useAuthStore((s) => s.currentOrg?.id);
-  const from = accounts.find((a) => a.id === Form.useWatch('accountId', form))?.currency;
-  const to = accounts.find((a) => a.id === Form.useWatch('toAccountId', form))?.currency;
+  const fromId: string | undefined = Form.useWatch('accountId', form);
+  const toId: string | undefined = Form.useWatch('toAccountId', form);
+  const from = accounts.find((a) => a.id === fromId)?.currency;
+  const to = accounts.find((a) => a.id === toId)?.currency;
   const amount: number | null | undefined = Form.useWatch('amount', form);
   const toAmount: number | null | undefined = Form.useWatch('toAmount', form);
   const date: Dayjs | undefined = Form.useWatch('date', form);

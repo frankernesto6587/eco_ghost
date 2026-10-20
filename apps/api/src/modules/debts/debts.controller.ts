@@ -54,7 +54,7 @@ export class DebtsController {
   }
 
   @Delete(':id')
-  @Roles(Role.OWNER, Role.ADMIN, Role.ACCOUNTANT)
+  @Roles(Role.OWNER, Role.ADMIN)
   remove(@OrgId() orgId: string, @Param('id') id: string) {
     return this.debtsService.remove(orgId, id);
   }

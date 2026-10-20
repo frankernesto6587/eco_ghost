@@ -1,7 +1,11 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma, TransactionType } from '@prisma/client';
+import { Prisma, Transaction, TransactionType } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { computeAccountBalance } from '../../common/account-balance.util';
+import { parseEntryDate } from '../../common/date-range.util';
+import { assertOrgRefs } from '../../common/org-refs.util';
+import { recomputeDebt } from '../../common/debt-balance.util';
+import { flowWhere } from '../../common/tx-filters';
 import { TelegramService } from '../telegram/telegram.service';
 import { AuditService } from '../audit/audit.service';
 import {
@@ -18,9 +22,28 @@ const TRANSACTION_INCLUDE = {
   project: true,
   debt: true,
   tags: { include: { tag: true } },
-};
+  // La otra pierna de un traspaso o cambio: sin ella el cliente no puede
+  // mostrar ni editar el destino.
+  linkedTransaction: { include: { account: true } },
+  linkedBy: { include: { account: true } },
+} satisfies Prisma.TransactionInclude;
 
 const ALLOWED_SORT_FIELDS = ['date', 'description', 'createdAt', 'amount'];
+
+const PAIR_TYPES: TransactionType[] = ['TRANSFER', 'EXCHANGE'];
+const isPair = (type: TransactionType) => PAIR_TYPES.includes(type);
+
+/** Campos que se copian igual en las dos piernas de un par. */
+const SHARED_FIELDS = ['date', 'description', 'notes', 'categoryId', 'projectId'] as const;
+
+/**
+ * Las dos piernas de un traspaso o cambio. La que sale tiene
+ * `linkedTransactionId` apuntando a la que entra.
+ */
+interface Pair {
+  out: Transaction;
+  inc: Transaction;
+}
 
 @Injectable()
 export class TransactionsService {
@@ -30,177 +53,78 @@ export class TransactionsService {
     private readonly audit: AuditService,
   ) {}
 
-  async create(orgId: string, userId: string, dto: CreateTransactionDto) {
-    // TRANSFER requires a destination account
-    if (dto.type === 'TRANSFER') {
-      if (!dto.toAccountId) {
-        throw new BadRequestException('toAccountId is required for TRANSFER transactions');
-      }
-      if (dto.toAccountId === dto.accountId) {
-        throw new BadRequestException('Source and destination accounts must be different');
-      }
-
-      // Create both sides atomically
-      // Outgoing holds the FK (linkedTransactionId) pointing to incoming
-      const [outgoing] = await this.prisma.$transaction(async (tx) => {
-        // 1. Create the incoming side (destination account) first
-        const inc = await tx.transaction.create({
-          data: {
-            date: new Date(dto.date),
-            description: dto.description,
-            amount: dto.amount,
-            type: 'TRANSFER',
-            notes: dto.notes,
-            categoryId: dto.categoryId,
-            accountId: dto.toAccountId!,
-            projectId: dto.projectId,
-            orgId,
-            createdBy: userId,
-            ...(dto.tagIds?.length && {
-              tags: {
-                create: dto.tagIds.map((tagId) => ({ tagId })),
-              },
-            }),
-          },
-        });
-
-        // 2. Create the outgoing side (source account), linked to incoming
-        const out = await tx.transaction.create({
-          data: {
-            date: new Date(dto.date),
-            description: dto.description,
-            amount: dto.amount,
-            type: 'TRANSFER',
-            notes: dto.notes,
-            categoryId: dto.categoryId,
-            accountId: dto.accountId,
-            projectId: dto.projectId,
-            linkedTransactionId: inc.id,
-            orgId,
-            createdBy: userId,
-            ...(dto.tagIds?.length && {
-              tags: {
-                create: dto.tagIds.map((tagId) => ({ tagId })),
-              },
-            }),
-          },
-        });
-
-        return [out, inc];
-      });
-
-      // Return the outgoing transaction with relations
-      const result = await this.prisma.transaction.findUniqueOrThrow({
-        where: { id: outgoing.id },
-        include: {
-          ...TRANSACTION_INCLUDE,
-          linkedTransaction: { include: { account: true } },
-        },
-      });
-
-      // Compute balances of both accounts for notification
-      const [srcBalance, dstBalance] = await Promise.all([
-        computeAccountBalance(this.prisma, dto.accountId, orgId),
-        computeAccountBalance(this.prisma, dto.toAccountId!, orgId),
-      ]);
-      const dstAccount = result.linkedTransaction?.account;
-      const fmt = (n: number) => (n / 100).toFixed(2);
-      const noteLine = dto.notes ? `\n📝 Nota          : ${dto.notes}` : '';
-      this.telegram.notify(orgId, `🔄 *Transferencia*\n━━━━━━━━━━━━━━━━━━\n📋 Descripcion : ${dto.description}\n💰 Monto          : ${fmt(dto.amount)} ${result.account.currency}\n🏦 Origen         : ${result.account.name}\n💵 Saldo           : ${fmt(srcBalance)} ${result.account.currency}\n🏦 Destino       : ${dstAccount?.name ?? '?'}\n💵 Saldo           : ${fmt(dstBalance)} ${dstAccount?.currency ?? ''}${noteLine}\n━━━━━━━━━━━━━━━━━━`);
-
-      this.audit.log({
-        action: 'CREATE',
-        entity: 'Transaction',
-        entityId: outgoing.id,
-        metadata: { type: 'TRANSFER' },
-        userId,
-        orgId,
-      });
-
-      return result;
+  /**
+   * Un TRANSFER mueve dinero entre cuentas de la misma moneda; un EXCHANGE,
+   * entre monedas distintas. Mezclarlos rompe los saldos por moneda y, mas
+   * adelante, la valoracion de los cambios.
+   */
+  private assertPairCurrencies(type: TransactionType, from: { currency: string }, to: { currency: string }) {
+    if (type === 'TRANSFER' && from.currency !== to.currency) {
+      throw new BadRequestException('A transfer must be between accounts of the same currency; use an exchange');
     }
+    if (type === 'EXCHANGE' && from.currency === to.currency) {
+      throw new BadRequestException('An exchange must be between accounts of different currencies; use a transfer');
+    }
+  }
 
-    // EXCHANGE requires destination account + destination amount
-    if (dto.type === 'EXCHANGE') {
+  async create(orgId: string, userId: string, dto: CreateTransactionDto) {
+    const accounts = await assertOrgRefs(this.prisma, orgId, {
+      accountIds: [dto.accountId, dto.toAccountId],
+      categoryId: dto.categoryId,
+      projectId: dto.projectId,
+      debtId: dto.debtId,
+      tagIds: dto.tagIds,
+    });
+    const date = parseEntryDate(dto.date);
+    const tags = dto.tagIds?.length ? { tags: { create: dto.tagIds.map((tagId) => ({ tagId })) } } : {};
+
+    if (isPair(dto.type)) {
       if (!dto.toAccountId) {
-        throw new BadRequestException('toAccountId is required for EXCHANGE transactions');
+        throw new BadRequestException(`toAccountId is required for ${dto.type} transactions`);
       }
-      if (!dto.toAmount) {
+      if (dto.type === 'EXCHANGE' && !dto.toAmount) {
         throw new BadRequestException('toAmount is required for EXCHANGE transactions');
       }
       if (dto.toAccountId === dto.accountId) {
         throw new BadRequestException('Source and destination accounts must be different');
       }
+      if (dto.debtId) {
+        throw new BadRequestException('Transfers and exchanges cannot be linked to a debt');
+      }
+      this.assertPairCurrencies(dto.type, accounts.get(dto.accountId)!, accounts.get(dto.toAccountId)!);
 
-      const [outgoing] = await this.prisma.$transaction(async (tx) => {
-        // 1. Incoming side (destination) with destination amount
+      const shared = {
+        date,
+        description: dto.description,
+        type: dto.type,
+        notes: dto.notes,
+        categoryId: dto.categoryId,
+        projectId: dto.projectId,
+        orgId,
+        createdBy: userId,
+        ...tags,
+      };
+      // Primero la que entra (destino) y luego la que sale, enlazada a ella.
+      const outgoing = await this.prisma.$transaction(async (tx) => {
         const inc = await tx.transaction.create({
-          data: {
-            date: new Date(dto.date),
-            description: dto.description,
-            amount: dto.toAmount!,
-            type: 'EXCHANGE',
-            notes: dto.notes,
-            categoryId: dto.categoryId,
-            accountId: dto.toAccountId!,
-            projectId: dto.projectId,
-            orgId,
-            createdBy: userId,
-            ...(dto.tagIds?.length && {
-              tags: {
-                create: dto.tagIds.map((tagId) => ({ tagId })),
-              },
-            }),
-          },
+          data: { ...shared, accountId: dto.toAccountId!, amount: dto.type === 'EXCHANGE' ? dto.toAmount! : dto.amount },
         });
-
-        // 2. Outgoing side (source) with source amount, linked to incoming
-        const out = await tx.transaction.create({
-          data: {
-            date: new Date(dto.date),
-            description: dto.description,
-            amount: dto.amount,
-            type: 'EXCHANGE',
-            notes: dto.notes,
-            categoryId: dto.categoryId,
-            accountId: dto.accountId,
-            projectId: dto.projectId,
-            linkedTransactionId: inc.id,
-            orgId,
-            createdBy: userId,
-            ...(dto.tagIds?.length && {
-              tags: {
-                create: dto.tagIds.map((tagId) => ({ tagId })),
-              },
-            }),
-          },
+        return tx.transaction.create({
+          data: { ...shared, accountId: dto.accountId, amount: dto.amount, linkedTransactionId: inc.id },
         });
-
-        return [out, inc];
       });
 
       const result = await this.prisma.transaction.findUniqueOrThrow({
         where: { id: outgoing.id },
-        include: {
-          ...TRANSACTION_INCLUDE,
-          linkedTransaction: { include: { account: true } },
-        },
+        include: TRANSACTION_INCLUDE,
       });
-
-      const [srcBalance, dstBalance] = await Promise.all([
-        computeAccountBalance(this.prisma, dto.accountId, orgId),
-        computeAccountBalance(this.prisma, dto.toAccountId!, orgId),
-      ]);
-      const dstAccount = result.linkedTransaction?.account;
-      const fmt = (n: number) => (n / 100).toFixed(2);
-      const noteLine = dto.notes ? `\n📝 Nota          : ${dto.notes}` : '';
-      this.telegram.notify(orgId, `💱 *Cambio de divisa*\n━━━━━━━━━━━━━━━━━━\n📋 Descripcion : ${dto.description}\n🏦 Origen         : ${result.account.name}\n💰 Monto          : ${fmt(dto.amount)} ${result.account.currency}\n💵 Saldo           : ${fmt(srcBalance)} ${result.account.currency}\n🏦 Destino       : ${dstAccount?.name ?? '?'}\n💰 Monto          : ${fmt(dto.toAmount)} ${dstAccount?.currency ?? ''}\n💵 Saldo           : ${fmt(dstBalance)} ${dstAccount?.currency ?? ''}${noteLine}\n━━━━━━━━━━━━━━━━━━`);
+      this.notifyPair(orgId, dto, result);
 
       this.audit.log({
         action: 'CREATE',
         entity: 'Transaction',
         entityId: outgoing.id,
-        metadata: { type: 'EXCHANGE' },
+        metadata: { type: dto.type },
         userId,
         orgId,
       });
@@ -208,10 +132,20 @@ export class TransactionsService {
       return result;
     }
 
-    // INCOME / EXPENSE — simple create
+    if (dto.toAccountId || dto.toAmount) {
+      throw new BadRequestException('toAccountId and toAmount are only for TRANSFER and EXCHANGE');
+    }
+    if (dto.debtId) {
+      const debt = await this.prisma.debt.findUniqueOrThrow({ where: { id: dto.debtId } });
+      if (accounts.get(dto.accountId)!.currency !== debt.currency) {
+        throw new BadRequestException(`This debt is in ${debt.currency}; the account must be in the same currency`);
+      }
+    }
+
+    // INCOME / EXPENSE
     const tx = await this.prisma.transaction.create({
       data: {
-        date: new Date(dto.date),
+        date,
         description: dto.description,
         amount: dto.amount,
         type: dto.type,
@@ -222,14 +156,11 @@ export class TransactionsService {
         debtId: dto.debtId,
         orgId,
         createdBy: userId,
-        ...(dto.tagIds?.length && {
-          tags: {
-            create: dto.tagIds.map((tagId) => ({ tagId })),
-          },
-        }),
+        ...tags,
       },
       include: TRANSACTION_INCLUDE,
     });
+    if (dto.debtId) await recomputeDebt(this.prisma, dto.debtId);
 
     const icon = dto.type === 'INCOME' ? '💵' : '💸';
     const label = dto.type === 'INCOME' ? 'Ingreso' : 'Gasto';
@@ -249,6 +180,26 @@ export class TransactionsService {
     });
 
     return tx;
+  }
+
+  private async notifyPair(
+    orgId: string,
+    dto: CreateTransactionDto,
+    result: Prisma.TransactionGetPayload<{ include: typeof TRANSACTION_INCLUDE }>,
+  ) {
+    const [srcBalance, dstBalance] = await Promise.all([
+      computeAccountBalance(this.prisma, dto.accountId, orgId),
+      computeAccountBalance(this.prisma, dto.toAccountId!, orgId),
+    ]);
+    const src = result.account;
+    const dst = result.linkedTransaction?.account;
+    const fmt = (n: number) => (n / 100).toFixed(2);
+    const noteLine = dto.notes ? `\n📝 Nota          : ${dto.notes}` : '';
+    if (dto.type === 'TRANSFER') {
+      this.telegram.notify(orgId, `🔄 *Transferencia*\n━━━━━━━━━━━━━━━━━━\n📋 Descripcion : ${dto.description}\n💰 Monto          : ${fmt(dto.amount)} ${src.currency}\n🏦 Origen         : ${src.name}\n💵 Saldo           : ${fmt(srcBalance)} ${src.currency}\n🏦 Destino       : ${dst?.name ?? '?'}\n💵 Saldo           : ${fmt(dstBalance)} ${dst?.currency ?? ''}${noteLine}\n━━━━━━━━━━━━━━━━━━`);
+    } else {
+      this.telegram.notify(orgId, `💱 *Cambio de divisa*\n━━━━━━━━━━━━━━━━━━\n📋 Descripcion : ${dto.description}\n🏦 Origen         : ${src.name}\n💰 Monto          : ${fmt(dto.amount)} ${src.currency}\n💵 Saldo           : ${fmt(srcBalance)} ${src.currency}\n🏦 Destino       : ${dst?.name ?? '?'}\n💰 Monto          : ${fmt(dto.toAmount!)} ${dst?.currency ?? ''}\n💵 Saldo           : ${fmt(dstBalance)} ${dst?.currency ?? ''}${noteLine}\n━━━━━━━━━━━━━━━━━━`);
+    }
   }
 
   /**
@@ -338,6 +289,40 @@ export class TransactionsService {
     return transaction;
   }
 
+  /** Las dos piernas de un par a partir de cualquiera de ellas. */
+  private async findPair(db: Prisma.TransactionClient, t: Transaction, where: Prisma.TransactionWhereInput = {}): Promise<Pair | null> {
+    if (t.linkedTransactionId) {
+      const inc = await db.transaction.findFirst({ where: { id: t.linkedTransactionId, ...where } });
+      return inc ? { out: t, inc } : null;
+    }
+    const out = await db.transaction.findFirst({ where: { linkedTransactionId: t.id, ...where } });
+    return out ? { out, inc: t } : null;
+  }
+
+  /** Ids de las piernas hermanas de los pares incluidos en `ids`. */
+  private async withPairedIds(db: Prisma.TransactionClient, orgId: string, ids: string[], where: Prisma.TransactionWhereInput) {
+    const rows = await db.transaction.findMany({
+      where: { orgId, ...where, OR: [{ id: { in: ids } }, { linkedTransactionId: { in: ids } }] },
+      select: { id: true, linkedTransactionId: true, type: true },
+    });
+    const all = new Set(ids);
+    for (const r of rows) {
+      if (!isPair(r.type)) continue;
+      all.add(r.id);
+      if (r.linkedTransactionId) all.add(r.linkedTransactionId);
+    }
+    return all;
+  }
+
+  /**
+   * Edita un movimiento.
+   *
+   * En un traspaso o cambio se edita el par completo, se haya abierto desde la
+   * pierna que sea: `accountId`/`amount` son siempre los de la que sale y
+   * `toAccountId`/`toAmount` los de la que entra. Antes solo se tocaba la pierna
+   * pulsada y el par quedaba descuadrado (otro importe, otra fecha), y
+   * `toAccountId`/`toAmount` se ignoraban en silencio.
+   */
   async update(orgId: string, id: string, userId: string, dto: UpdateTransactionDto) {
     const transaction = await this.prisma.transaction.findFirst({
       where: { id, orgId, deletedAt: null },
@@ -347,42 +332,125 @@ export class TransactionsService {
       throw new NotFoundException(`Transaction with id ${id} not found`);
     }
 
-    const { tagIds, ...data } = dto;
+    const { tagIds } = dto;
+    const result = await this.prisma.$transaction(async (tx) => {
+      const before = isPair(transaction.type) ? await this.findPair(tx, transaction, { deletedAt: null }) : null;
 
-    const result = await this.prisma.transaction.update({
-      where: { id },
-      data: {
-        ...(data.date !== undefined && { date: new Date(data.date) }),
-        ...(data.description !== undefined && { description: data.description }),
-        ...(data.amount !== undefined && { amount: data.amount }),
-        ...(data.type !== undefined && { type: data.type }),
-        ...(data.notes !== undefined && { notes: data.notes }),
-        ...(data.categoryId !== undefined && { categoryId: data.categoryId }),
-        ...(data.accountId !== undefined && { accountId: data.accountId }),
-        ...(data.projectId !== undefined && { projectId: data.projectId }),
-        ...(data.debtId !== undefined && { debtId: data.debtId }),
-        ...(tagIds !== undefined && {
-          tags: {
-            deleteMany: {},
-            ...(tagIds.length && {
-              create: tagIds.map((tagId) => ({ tagId })),
-            }),
-          },
-        }),
-      },
-      include: TRANSACTION_INCLUDE,
-    });
+      if (isPair(transaction.type)) {
+        if (!before) throw new BadRequestException('This transfer has lost its other side; delete it and enter it again');
+        await this.updatePair(tx, orgId, before, dto);
+      } else {
+        await this.updateSingle(tx, orgId, transaction, dto);
+      }
 
-    this.audit.log({
-      action: 'UPDATE',
-      entity: 'Transaction',
-      entityId: id,
-      changes: data as unknown as Prisma.InputJsonValue,
-      userId,
-      orgId,
+      const out = before?.out ?? transaction;
+      const after = await tx.transaction.findUniqueOrThrow({ where: { id: out.id }, include: TRANSACTION_INCLUDE });
+
+      this.audit.log({
+        action: 'UPDATE',
+        entity: 'Transaction',
+        entityId: out.id,
+        changes: {
+          before: snapshot(out, before?.inc),
+          after: snapshot(after, after.linkedTransaction ?? undefined),
+          ...(tagIds !== undefined && { tagIds }),
+        } as Prisma.InputJsonValue,
+        userId,
+        orgId,
+      });
+      return after;
     });
 
     return result;
+  }
+
+  private async updatePair(tx: Prisma.TransactionClient, orgId: string, { out, inc }: Pair, dto: UpdateTransactionDto) {
+    if (dto.type !== undefined && dto.type !== out.type) {
+      throw new BadRequestException('The type of a transfer or exchange cannot be changed; delete it and enter it again');
+    }
+    if (dto.debtId) {
+      throw new BadRequestException('Transfers and exchanges cannot be linked to a debt');
+    }
+
+    const outAccountId = dto.accountId ?? out.accountId;
+    const incAccountId = dto.toAccountId ?? inc.accountId;
+    if (outAccountId === incAccountId) {
+      throw new BadRequestException('Source and destination accounts must be different');
+    }
+    // Solo las cuentas que cambian tienen que estar activas.
+    const changed = [outAccountId, incAccountId].filter((a, i) => a !== [out.accountId, inc.accountId][i]);
+    await assertOrgRefs(tx, orgId, { accountIds: changed, categoryId: dto.categoryId, projectId: dto.projectId, tagIds: dto.tagIds });
+    const accounts = await tx.account.findMany({ where: { id: { in: [outAccountId, incAccountId] } } });
+    const byId = new Map(accounts.map((a) => [a.id, a]));
+    this.assertPairCurrencies(out.type, byId.get(outAccountId)!, byId.get(incAccountId)!);
+
+    const outAmount = dto.amount ?? out.amount;
+    const incAmount = out.type === 'TRANSFER' ? outAmount : (dto.toAmount ?? inc.amount);
+
+    const shared = this.sharedData(dto);
+    await tx.transaction.update({ where: { id: out.id }, data: { ...shared, accountId: outAccountId, amount: outAmount } });
+    await tx.transaction.update({ where: { id: inc.id }, data: { ...shared, accountId: incAccountId, amount: incAmount } });
+  }
+
+  private async updateSingle(tx: Prisma.TransactionClient, orgId: string, t: Transaction, dto: UpdateTransactionDto) {
+    if (dto.type !== undefined && dto.type !== t.type && !(['INCOME', 'EXPENSE'] as TransactionType[]).includes(dto.type)) {
+      throw new BadRequestException('An income or expense cannot become a transfer or exchange; delete it and enter it again');
+    }
+    if (dto.toAccountId || dto.toAmount) {
+      throw new BadRequestException('toAccountId and toAmount are only for TRANSFER and EXCHANGE');
+    }
+    const debtId = dto.debtId !== undefined ? dto.debtId : t.debtId;
+    if (t.debtId && dto.type !== undefined && dto.type !== t.type) {
+      throw new BadRequestException('The type of a debt movement cannot be changed');
+    }
+
+    const accountChanged = dto.accountId !== undefined && dto.accountId !== t.accountId;
+    const accounts = await assertOrgRefs(tx, orgId, {
+      accountIds: accountChanged ? [dto.accountId] : [],
+      categoryId: dto.categoryId,
+      projectId: dto.projectId,
+      debtId: dto.debtId,
+      tagIds: dto.tagIds,
+    });
+    // Un movimiento de deuda va siempre en la moneda de la deuda.
+    if (debtId && (accountChanged || dto.debtId !== undefined)) {
+      const debt = await tx.debt.findUniqueOrThrow({ where: { id: debtId } });
+      const account = accounts.get(dto.accountId ?? '') ?? (await tx.account.findUniqueOrThrow({ where: { id: t.accountId } }));
+      if (account.currency !== debt.currency) {
+        throw new BadRequestException(`This debt is in ${debt.currency}; the account must be in the same currency`);
+      }
+    }
+
+    await tx.transaction.update({
+      where: { id: t.id },
+      data: {
+        ...this.sharedData(dto),
+        ...(dto.amount !== undefined && { amount: dto.amount }),
+        ...(dto.type !== undefined && { type: dto.type }),
+        ...(dto.accountId !== undefined && { accountId: dto.accountId }),
+        ...(dto.debtId !== undefined && { debtId: dto.debtId }),
+      },
+    });
+
+    for (const id of new Set([t.debtId, debtId])) {
+      if (id) await recomputeDebt(tx, id);
+    }
+  }
+
+  /** Lo que se escribe igual en una o en las dos piernas. */
+  private sharedData(dto: UpdateTransactionDto): Prisma.TransactionUncheckedUpdateInput {
+    const data: Prisma.TransactionUncheckedUpdateInput = {};
+    for (const f of SHARED_FIELDS) {
+      if (dto[f] === undefined) continue;
+      (data as any)[f] = f === 'date' ? parseEntryDate(dto.date!) : dto[f];
+    }
+    if (dto.tagIds !== undefined) {
+      data.tags = {
+        deleteMany: {},
+        ...(dto.tagIds.length && { create: dto.tagIds.map((tagId) => ({ tagId })) }),
+      };
+    }
+    return data;
   }
 
   async remove(orgId: string, id: string, userId: string, reason: string) {
@@ -398,17 +466,10 @@ export class TransactionsService {
     const now = new Date();
 
     // If TRANSFER/EXCHANGE, soft-delete both linked transactions
-    if (['TRANSFER', 'EXCHANGE'].includes(transaction.type)) {
-      let pairedId = transaction.linkedTransactionId;
-      if (!pairedId) {
-        const linkedBy = await this.prisma.transaction.findFirst({
-          where: { linkedTransactionId: id, deletedAt: null },
-          select: { id: true },
-        });
-        pairedId = linkedBy?.id ?? null;
-      }
-
-      if (pairedId) {
+    if (isPair(transaction.type)) {
+      const pair = await this.findPair(this.prisma, transaction, { deletedAt: null });
+      if (pair) {
+        const pairedId = pair.out.id === id ? pair.inc.id : pair.out.id;
         await this.prisma.transaction.updateMany({
           where: { id: { in: [id, pairedId] } },
           data: { deletedAt: now, deleteReason: reason },
@@ -431,6 +492,7 @@ export class TransactionsService {
       where: { id },
       data: { deletedAt: now, deleteReason: reason },
     });
+    if (transaction.debtId) await recomputeDebt(this.prisma, transaction.debtId);
 
     const balance = await computeAccountBalance(this.prisma, transaction.accountId, orgId);
     const fmt = (n: number) => (n / 100).toFixed(2);
@@ -460,17 +522,10 @@ export class TransactionsService {
     }
 
     // If TRANSFER/EXCHANGE, restore both linked transactions
-    if (['TRANSFER', 'EXCHANGE'].includes(transaction.type)) {
-      let pairedId = transaction.linkedTransactionId;
-      if (!pairedId) {
-        const linkedBy = await this.prisma.transaction.findFirst({
-          where: { linkedTransactionId: id },
-          select: { id: true },
-        });
-        pairedId = linkedBy?.id ?? null;
-      }
-
-      if (pairedId) {
+    if (isPair(transaction.type)) {
+      const pair = await this.findPair(this.prisma, transaction);
+      if (pair) {
+        const pairedId = pair.out.id === id ? pair.inc.id : pair.out.id;
         await this.prisma.transaction.updateMany({
           where: { id: { in: [id, pairedId] } },
           data: { deletedAt: null, deleteReason: null },
@@ -493,6 +548,7 @@ export class TransactionsService {
       where: { id },
       data: { deletedAt: null, deleteReason: null },
     });
+    if (transaction.debtId) await recomputeDebt(this.prisma, transaction.debtId);
 
     this.audit.log({
       action: 'RESTORE',
@@ -505,23 +561,46 @@ export class TransactionsService {
     return result;
   }
 
+  /**
+   * Cambia categoria y/o cuenta de varios movimientos.
+   *
+   * La categoria se aplica a las dos piernas de un par. La cuenta no se cambia
+   * en pares (seria rehacer el traspaso) y la nueva tiene que ser de la misma
+   * moneda: si no, el importe pasaria a significar otra cosa.
+   */
   async bulkUpdate(orgId: string, userId: string, dto: BulkUpdateDto) {
-    const data: Prisma.TransactionUncheckedUpdateManyInput = {};
+    const where = { orgId, deletedAt: null } as const;
 
-    if (dto.categoryId !== undefined) {
-      data.categoryId = dto.categoryId;
-    }
-    if (dto.accountId !== undefined) {
-      data.accountId = dto.accountId;
-    }
+    const count = await this.prisma.$transaction(async (tx) => {
+      const accounts = await assertOrgRefs(tx, orgId, {
+        accountIds: dto.accountId !== undefined ? [dto.accountId] : [],
+        categoryId: dto.categoryId,
+      });
 
-    const result = await this.prisma.transaction.updateMany({
-      where: {
-        id: { in: dto.ids },
-        orgId,
-        deletedAt: null,
-      },
-      data,
+      const rows = await tx.transaction.findMany({
+        where: { ...where, id: { in: dto.ids } },
+        select: { id: true, type: true, debtId: true, account: { select: { currency: true } } },
+      });
+
+      if (dto.accountId !== undefined) {
+        const target = accounts.get(dto.accountId)!;
+        if (rows.some((r) => isPair(r.type))) {
+          throw new BadRequestException('The account of a transfer or exchange cannot be changed in bulk');
+        }
+        if (rows.some((r) => r.account.currency !== target.currency)) {
+          throw new BadRequestException(`Only movements in ${target.currency} can be moved to this account`);
+        }
+      }
+
+      let n = 0;
+      if (dto.accountId !== undefined) {
+        n = (await tx.transaction.updateMany({ where: { ...where, id: { in: dto.ids } }, data: { accountId: dto.accountId } })).count;
+      }
+      if (dto.categoryId !== undefined) {
+        const ids = await this.withPairedIds(tx, orgId, dto.ids, where);
+        n = (await tx.transaction.updateMany({ where: { ...where, id: { in: [...ids] } }, data: { categoryId: dto.categoryId } })).count;
+      }
+      return n;
     });
 
     for (const id of dto.ids) {
@@ -535,49 +614,25 @@ export class TransactionsService {
       });
     }
 
-    return { count: result.count };
+    return { count };
   }
 
   async bulkDelete(orgId: string, userId: string, dto: BulkDeleteDto) {
     const now = new Date();
+    const where = { orgId, deletedAt: null } as const;
 
-    // Find all transactions to check for linked (transfer/exchange) pairs
-    const transactions = await this.prisma.transaction.findMany({
-      where: {
-        id: { in: dto.ids },
-        orgId,
-        deletedAt: null,
-      },
-      select: { id: true, type: true, linkedTransactionId: true },
+    const allIds = await this.withPairedIds(this.prisma, orgId, dto.ids, where);
+    const debtIds = await this.prisma.transaction.findMany({
+      where: { ...where, id: { in: [...allIds] }, debtId: { not: null } },
+      select: { debtId: true },
+      distinct: ['debtId'],
     });
-
-    // Collect all IDs including linked pairs
-    const allIds = new Set<string>(dto.ids);
-
-    for (const tx of transactions) {
-      if (['TRANSFER', 'EXCHANGE'].includes(tx.type)) {
-        if (tx.linkedTransactionId) {
-          allIds.add(tx.linkedTransactionId);
-        } else {
-          const linkedBy = await this.prisma.transaction.findFirst({
-            where: { linkedTransactionId: tx.id, deletedAt: null },
-            select: { id: true },
-          });
-          if (linkedBy) {
-            allIds.add(linkedBy.id);
-          }
-        }
-      }
-    }
 
     const result = await this.prisma.transaction.updateMany({
-      where: {
-        id: { in: Array.from(allIds) },
-        orgId,
-        deletedAt: null,
-      },
+      where: { ...where, id: { in: Array.from(allIds) } },
       data: { deletedAt: now, deleteReason: dto.reason },
     });
+    for (const { debtId } of debtIds) await recomputeDebt(this.prisma, debtId!);
 
     for (const id of allIds) {
       this.audit.log({
@@ -598,15 +653,17 @@ export class TransactionsService {
 
     // Solo INCOME/EXPENSE son flujo, pero hay que INTERSECAR con el filtro de tipo
     // del usuario en vez de pisarlo: si filtro a INCOME, el resumen no debe
-    // devolverle tambien los gastos.
+    // devolverle tambien los gastos. Mismas reglas que el panel y Analisis
+    // (sin deudas ni ajustes), salvo en la papelera, donde no hay flujo que filtrar.
     const flowTypes: TransactionType[] = [TransactionType.INCOME, TransactionType.EXPENSE];
     const selected = query.type?.length
       ? flowTypes.filter((t) => query.type!.includes(t))
       : flowTypes;
+    const filter = { ...where, type: { in: selected } };
 
     const transactions = selected.length
       ? await this.prisma.transaction.findMany({
-          where: { ...where, type: { in: selected } },
+          where: query.deleted ? filter : flowWhere(filter),
           include: { account: { select: { currency: true } } },
         })
       : [];
@@ -631,5 +688,20 @@ export class TransactionsService {
 
     return { income, expense, balance };
   }
+}
 
+/** Lo que se guarda en el historial antes y despues de editar. */
+function snapshot(out: Transaction, inc?: Transaction) {
+  return {
+    date: out.date,
+    description: out.description,
+    amount: out.amount,
+    type: out.type,
+    accountId: out.accountId,
+    categoryId: out.categoryId,
+    projectId: out.projectId,
+    debtId: out.debtId,
+    notes: out.notes,
+    ...(inc && { toAccountId: inc.accountId, toAmount: inc.amount }),
+  };
 }

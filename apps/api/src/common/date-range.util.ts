@@ -109,6 +109,20 @@ export function toDayLabel(input?: string | null, tz: string = APP_TZ): string |
   return d.isValid() ? d.tz(tz).format(DAY) : undefined;
 }
 
+/**
+ * Fecha de un movimiento tal como llega del cliente.
+ *
+ * Un dia suelto ('YYYY-MM-DD', lo que manda la app Android) se guarda a las
+ * 12:00 en APP_TZ. Con `new Date('2026-10-20')` quedaba a medianoche UTC, que en
+ * La Habana es el 19 a las 20:00: cada movimiento caia un dia antes, y los del
+ * dia 1 en el mes anterior. El mediodia aguanta cualquier cambio de horario.
+ * Un instante completo (lo que manda la web) se respeta tal cual.
+ */
+export function parseEntryDate(input: string, tz: string = APP_TZ): Date {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(input)) return dayjs.tz(`${input} 12:00`, tz).toDate();
+  return new Date(input);
+}
+
 /** Clave de dia 'YYYY-MM-DD' de un instante, en la zona de la app. */
 export function dayKey(date: Date, tz: string = APP_TZ): string {
   return dayjs(date).tz(tz).format(DAY);

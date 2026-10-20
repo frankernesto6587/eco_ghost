@@ -78,7 +78,8 @@ function getInitials(name: string): string {
 
 export default function DebtsPage() {
   const { message } = App.useApp();
-  const { canWrite } = usePermissions();
+  // Borrar una deuda (y sus movimientos) es de propietario o admin, como borrar movimientos
+  const { canWrite, canEditTx } = usePermissions();
   const queryClient = useQueryClient();
 
   const [activeFilter, setActiveFilter] = useState<FilterTab>('ALL');
@@ -682,7 +683,7 @@ export default function DebtsPage() {
                           Editar
                         </button>
                       )}
-                      {canWrite && (
+                      {canEditTx && (
                         <button
                           onClick={(e) => { e.stopPropagation(); handleDelete(debt.id); }}
                           style={{
@@ -892,7 +893,8 @@ export default function DebtsPage() {
             rules={[{ required: true, message: 'Seleccione una cuenta' }]}
           >
             <Select placeholder="Seleccione la cuenta">
-              {accounts.map((acc) => (
+              {/* Los pagos van en la moneda de la deuda */}
+              {accounts.filter((acc) => !paymentDebt || acc.currency === paymentDebt.currency).map((acc) => (
                 <Select.Option key={acc.id} value={acc.id}>
                   {acc.name} ({acc.currency})
                 </Select.Option>

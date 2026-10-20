@@ -1,9 +1,13 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { DebtStatus, Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TelegramService } from '../telegram/telegram.service';
 import { CreateDebtDto, UpdateDebtDto, AddPaymentDto, DebtQueryDto } from './dto';
 import { computeAccountBalance } from '../../common/account-balance.util';
+import { parseEntryDate } from '../../common/date-range.util';
+import { assertOrgRefs } from '../../common/org-refs.util';
+import { debtInitialType, debtPaymentType, recomputeDebt } from '../../common/debt-balance.util';
+import { COUNTED } from '../../common/tx-filters';
 
 /** Nombre de la categoria de los movimientos de deudas. */
 const LOAN_CATEGORY = 'Prestamos';
@@ -41,13 +45,19 @@ export class DebtsService {
 
   async create(orgId: string, userId: string, dto: CreateDebtDto) {
     return this.prisma.$transaction(async (tx) => {
+      // La deuda va en la moneda de la cuenta con la que se abre.
+      const accounts = await assertOrgRefs(tx, orgId, { accountIds: [dto.accountId] });
+      const currency = accounts.get(dto.accountId)!.currency;
+
       const debt = await tx.debt.create({
         data: {
           personName: dto.personName,
           description: dto.description,
           totalAmount: dto.totalAmount,
           type: dto.type,
+          currency,
           dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
+          createdBy: userId,
           orgId,
         },
       });
@@ -55,14 +65,12 @@ export class DebtsService {
       // Create initial transaction linked to the debt.
       // RECEIVABLE = we lent money, so money goes OUT (EXPENSE).
       // PAYABLE = we borrowed money, so money comes IN (INCOME).
-      const transactionType = dto.type === 'RECEIVABLE' ? 'EXPENSE' : 'INCOME';
-
       await tx.transaction.create({
         data: {
-          date: new Date(),
+          date: dto.date ? parseEntryDate(dto.date) : new Date(),
           description: `Debt: ${dto.description}`,
           amount: dto.totalAmount,
-          type: transactionType,
+          type: debtInitialType(dto.type),
           accountId: dto.accountId,
           categoryId: await this.loanCategoryId(tx, orgId),
           debtId: debt.id,
@@ -71,10 +79,10 @@ export class DebtsService {
         },
       });
 
-      const account = await tx.account.findUnique({ where: { id: dto.accountId }, select: { name: true, currency: true } });
+      const account = accounts.get(dto.accountId);
       const balance = await computeAccountBalance(tx, dto.accountId, orgId);
       const fmt = (n: number) => (n / 100).toFixed(2);
-      const cur = account?.currency ?? '';
+      const cur = currency;
       this.telegram.notify(orgId, `📋 *Nueva deuda*\n━━━━━━━━━━━━━━━━━━\n👤 Persona       : ${debt.personName}\n📋 Descripcion : ${dto.description}\n💰 Monto          : ${fmt(dto.totalAmount)} ${cur}\n🔖 Tipo              : ${dto.type === 'RECEIVABLE' ? 'Por cobrar' : 'Por pagar'}\n🏦 Cuenta        : ${account?.name ?? '?'}\n💵 Saldo           : ${fmt(balance)} ${cur}\n━━━━━━━━━━━━━━━━━━`);
 
       return debt;
@@ -82,37 +90,23 @@ export class DebtsService {
   }
 
   async findAll(orgId: string, query: DebtQueryDto) {
-    const where: Prisma.DebtWhereInput = { orgId };
+    const where: Prisma.DebtWhereInput = { orgId, deletedAt: null };
 
     if (query.status) where.status = query.status;
     if (query.type) where.type = query.type;
 
-    const debts = await this.prisma.debt.findMany({
+    return this.prisma.debt.findMany({
       where,
       orderBy: { createdAt: 'desc' },
-      include: {
-        transactions: {
-          take: 1,
-          orderBy: { createdAt: 'asc' },
-          include: { account: { select: { currency: true } } },
-        },
-      },
-    });
-
-    return debts.map((debt) => {
-      const { transactions, ...rest } = debt;
-      return {
-        ...rest,
-        currency: transactions[0]?.account?.currency ?? 'USD',
-      };
     });
   }
 
   async findOne(orgId: string, id: string) {
     const debt = await this.prisma.debt.findFirst({
-      where: { id, orgId },
+      where: { id, orgId, deletedAt: null },
       include: {
         transactions: {
+          where: COUNTED,
           orderBy: { createdAt: 'desc' },
           include: { account: true },
         },
@@ -123,13 +117,12 @@ export class DebtsService {
       throw new NotFoundException(`Debt with id ${id} not found`);
     }
 
-    const currency = debt.transactions[0]?.account?.currency ?? 'USD';
-    return { ...debt, currency };
+    return debt;
   }
 
   async update(orgId: string, id: string, dto: UpdateDebtDto) {
     const debt = await this.prisma.debt.findFirst({
-      where: { id, orgId },
+      where: { id, orgId, deletedAt: null },
     });
 
     if (!debt) {
@@ -146,17 +139,29 @@ export class DebtsService {
     });
   }
 
+  /**
+   * Borrado suave de la deuda y de sus movimientos a la vez.
+   *
+   * Antes se borraba la deuda de verdad y sus movimientos se quedaban con
+   * `debtId` a null: el prestamo y los pagos pasaban a contar como gasto e
+   * ingreso normales en el panel, Analisis y presupuestos.
+   */
   async remove(orgId: string, id: string) {
     const debt = await this.prisma.debt.findFirst({
-      where: { id, orgId },
+      where: { id, orgId, deletedAt: null },
     });
 
     if (!debt) {
       throw new NotFoundException(`Debt with id ${id} not found`);
     }
 
-    const deleted = await this.prisma.debt.delete({
-      where: { id },
+    const now = new Date();
+    const deleted = await this.prisma.$transaction(async (tx) => {
+      await tx.transaction.updateMany({
+        where: { debtId: id, deletedAt: null },
+        data: { deletedAt: now, deleteReason: 'Deuda eliminada' },
+      });
+      return tx.debt.update({ where: { id }, data: { deletedAt: now } });
     });
 
     this.telegram.notify(orgId, `🗑 *Deuda eliminada*\n━━━━━━━━━━━━━━━━━━\n👤 Persona       : ${debt.personName}\n📋 Descripcion : ${debt.description}\n━━━━━━━━━━━━━━━━━━`);
@@ -171,7 +176,7 @@ export class DebtsService {
     dto: AddPaymentDto,
   ) {
     const debt = await this.prisma.debt.findFirst({
-      where: { id: debtId, orgId },
+      where: { id: debtId, orgId, deletedAt: null },
     });
 
     if (!debt) {
@@ -190,16 +195,22 @@ export class DebtsService {
     }
 
     return this.prisma.$transaction(async (tx) => {
+      // Los pagos van en la moneda de la deuda. Si alguien paga en otra, se
+      // anota primero el cambio de moneda y luego el pago.
+      const accounts = await assertOrgRefs(tx, orgId, { accountIds: [dto.accountId] });
+      const account = accounts.get(dto.accountId)!;
+      if (account.currency !== debt.currency) {
+        throw new BadRequestException(`This debt is in ${debt.currency}; pay it from an account in ${debt.currency}`);
+      }
+
       // RECEIVABLE debts: payments are INCOME (money coming in).
       // PAYABLE debts: payments are EXPENSE (money going out).
-      const transactionType = debt.type === 'RECEIVABLE' ? 'INCOME' : 'EXPENSE';
-
       const transaction = await tx.transaction.create({
         data: {
-          date: new Date(dto.date),
+          date: parseEntryDate(dto.date),
           description: dto.description || `Payment for debt: ${debt.description}`,
           amount: dto.amount,
-          type: transactionType,
+          type: debtPaymentType(debt.type),
           accountId: dto.accountId,
           categoryId: await this.loanCategoryId(tx, orgId),
           debtId,
@@ -208,23 +219,14 @@ export class DebtsService {
         },
       });
 
-      const newPaidAmount = debt.paidAmount + dto.amount;
-      const newStatus: DebtStatus = newPaidAmount >= debt.totalAmount ? 'PAID' : 'PARTIAL';
+      await recomputeDebt(tx, debtId);
+      const { paidAmount: newPaidAmount, status: newStatus } = await tx.debt.findUniqueOrThrow({ where: { id: debtId } });
 
-      await tx.debt.update({
-        where: { id: debtId },
-        data: {
-          paidAmount: newPaidAmount,
-          status: newStatus,
-        },
-      });
-
-      const account = await tx.account.findUnique({ where: { id: dto.accountId }, select: { name: true, currency: true } });
       const balance = await computeAccountBalance(tx, dto.accountId, orgId);
       const fmt = (n: number) => (n / 100).toFixed(2);
-      const cur = account?.currency ?? '';
+      const cur = debt.currency;
       const statusLabel = newStatus === 'PAID' ? '\n✅ Estado         : Pagada completa' : '';
-      this.telegram.notify(orgId, `💰 *Pago registrado*\n━━━━━━━━━━━━━━━━━━\n👤 Persona       : ${debt.personName}\n📋 Descripcion : ${debt.description}\n💰 Monto          : ${fmt(dto.amount)} ${cur}\n📊 Pagado        : ${fmt(newPaidAmount)} / ${fmt(debt.totalAmount)} ${cur}${statusLabel}\n🏦 Cuenta        : ${account?.name ?? '?'}\n💵 Saldo           : ${fmt(balance)} ${cur}\n━━━━━━━━━━━━━━━━━━`);
+      this.telegram.notify(orgId, `💰 *Pago registrado*\n━━━━━━━━━━━━━━━━━━\n👤 Persona       : ${debt.personName}\n📋 Descripcion : ${debt.description}\n💰 Monto          : ${fmt(dto.amount)} ${cur}\n📊 Pagado        : ${fmt(newPaidAmount)} / ${fmt(debt.totalAmount)} ${cur}${statusLabel}\n🏦 Cuenta        : ${account.name}\n💵 Saldo           : ${fmt(balance)} ${cur}\n━━━━━━━━━━━━━━━━━━`);
 
       return transaction;
     });

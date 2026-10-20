@@ -35,6 +35,11 @@ export class CreateDebtDto {
   @IsDateString()
   dueDate?: string;
 
+  @ApiPropertyOptional({ example: '2026-10-20', description: 'Date of the initial movement (default: now)' })
+  @IsOptional()
+  @IsDateString()
+  date?: string;
+
   @ApiProperty({ example: 'clxyz456', description: 'Account for initial transaction' })
   @IsString()
   @MinLength(1)

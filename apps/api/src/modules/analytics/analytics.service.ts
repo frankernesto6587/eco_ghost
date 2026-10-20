@@ -8,6 +8,7 @@ import type {
   TopCategoriesWidget,
 } from '@ecoghost/shared';
 import { PrismaService } from '../../prisma/prisma.service';
+import { flowSql, flowWhere } from '../../common/tx-filters';
 import {
   APP_TZ,
   resolveRange,
@@ -21,8 +22,6 @@ import {
   TopCategoriesQueryDto,
 } from './dto';
 
-/** Solo INCOME/EXPENSE son flujo. TRANSFER/EXCHANGE mueven dinero entre cuentas propias. */
-const FLOW_TYPES: TransactionType[] = [TransactionType.INCOME, TransactionType.EXPENSE];
 
 interface CategoryRow {
   id: string;
@@ -78,31 +77,14 @@ export class AnalyticsService {
     return accounts.map((a) => a.id);
   }
 
-  /**
-   * Prestar no es gastar y que te devuelvan no es ingresar: el dinero cambia de
-   * forma (efectivo <-> "alguien me debe"), no se consume. Los movimientos con
-   * `debtId` quedan fuera del flujo; siguen contando en los saldos y en la
-   * lista, y la pestaña de Deudas lleva su cuenta aparte.
-   */
+  /** Flujo (ver `flowWhere`) de esas cuentas en el rango [from, to). */
   private flowWhere(
     orgId: string,
     accountIds: string[],
     from: Date,
     to: Date,
   ): Prisma.TransactionWhereInput {
-    return {
-      orgId,
-      deletedAt: null,
-      debtId: null,
-      accountId: { in: accountIds },
-      type: { in: FLOW_TYPES },
-      date: { gte: from, lt: to },
-      // Las categorias de ajuste (saldos iniciales, correcciones) mueven saldo
-      // pero no son consumo ni renta. Se filtra por OR explicito y no con
-      // `notIn`: en SQL, `categoryId NOT IN (...)` descarta tambien las filas
-      // sin categoria, que si deben contar.
-      OR: [{ categoryId: null }, { category: { isAdjustment: false } }],
-    };
+    return flowWhere({ orgId, accountId: { in: accountIds }, date: { gte: from, lt: to } });
   }
 
   // ─── Rollup del arbol de categorias ───────────────────────────────
@@ -440,12 +422,7 @@ export class AnalyticsService {
              SUM(t."amount")::bigint AS total
       FROM "transactions" t
       WHERE t."orgId" = ${orgId}
-        AND t."deletedAt" IS NULL
-        AND t."debtId" IS NULL
-        AND NOT EXISTS (
-          SELECT 1 FROM "categories" cc
-          WHERE cc."id" = t."categoryId" AND cc."isAdjustment"
-        )
+        AND ${flowSql('t')}
         AND t."type" IN ('INCOME', 'EXPENSE')
         AND t."accountId" IN (${Prisma.join(accountIds)})
         AND t."date" >= ${from}
@@ -533,12 +510,7 @@ export class AnalyticsService {
                '\\s+', ' ', 'g') AS key
         FROM "transactions" t
         WHERE t."orgId" = ${orgId}
-          AND t."deletedAt" IS NULL
-          AND t."debtId" IS NULL
-          AND NOT EXISTS (
-            SELECT 1 FROM "categories" cc
-            WHERE cc."id" = t."categoryId" AND cc."isAdjustment"
-          )
+          AND ${flowSql('t')}
           AND t."type" = 'EXPENSE'
           AND t."accountId" IN (${Prisma.join(accountIds)})
           AND t."date" >= ${r.from}

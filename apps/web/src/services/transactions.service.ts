@@ -49,6 +49,18 @@ export interface Transaction {
   account: { id: string; name: string; currency: string; color?: string; icon?: string };
   project: unknown;
   debt: unknown;
+  /** En la pierna que sale de un traspaso o cambio: la que entra. */
+  linkedTransaction?: TransactionLeg | null;
+  /** En la pierna que entra: la que sale. */
+  linkedBy?: TransactionLeg | null;
+}
+
+/** La otra pierna de un traspaso o cambio, tal como la devuelve la API. */
+export interface TransactionLeg {
+  id: string;
+  amount: number;
+  accountId: string;
+  account: { id: string; name: string; currency: string };
 }
 
 export interface TransactionListResponse {

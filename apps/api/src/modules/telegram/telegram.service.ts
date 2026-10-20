@@ -1,6 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
+import { computeAccountBalance, computeAccountBalances } from '../../common/account-balance.util';
+import { APP_TZ, resolveRange } from '../../common/date-range.util';
+import { COUNTED, flowWhere } from '../../common/tx-filters';
 
 interface TelegramFrom {
   id: number;
@@ -35,6 +38,8 @@ interface TelegramUpdate {
 
 /** Pending expense waiting for confirmation or category */
 interface PendingExpense {
+  /** Cuando se pregunto: las elecciones a medio hacer caducan (ver PENDING_TTL_MS). */
+  createdAt: number;
   amount: number;
   description: string;
   orgId: string;
@@ -53,6 +58,28 @@ export class TelegramService {
 
   /** In-memory store for pending expenses: key = `${chatId}:${messageId}` */
   private pendingExpenses = new Map<string, PendingExpense>();
+
+  /**
+   * Las elecciones a medio hacer viven en memoria: se pierden al reiniciar (se
+   * acepta, duran segundos) y sin limpieza el mapa solo crecia.
+   */
+  private static readonly PENDING_TTL_MS = 15 * 60 * 1000;
+
+  private getPending(key: string): PendingExpense | undefined {
+    const pending = this.getPending(key);
+    if (pending && Date.now() - pending.createdAt > TelegramService.PENDING_TTL_MS) {
+      this.pendingExpenses.delete(key);
+      return undefined;
+    }
+    return pending;
+  }
+
+  private sweepPending() {
+    const now = Date.now();
+    for (const [key, p] of this.pendingExpenses) {
+      if (now - p.createdAt > TelegramService.PENDING_TTL_MS) this.pendingExpenses.delete(key);
+    }
+  }
 
   constructor(
     private readonly prisma: PrismaService,
@@ -212,7 +239,9 @@ export class TelegramService {
 
     if (confirmMsg) {
       const key = `${chatId}:${confirmMsg.message_id}`;
+      this.sweepPending();
       this.pendingExpenses.set(key, {
+        createdAt: Date.now(),
         amount: amount * 100, // Store in cents
         description,
         orgId: org.id,
@@ -248,7 +277,7 @@ export class TelegramService {
 
     // Expense confirmation
     if (data === 'exp_confirm') {
-      const pending = this.pendingExpenses.get(key);
+      const pending = this.getPending(key);
       if (!pending) {
         await this.answerCallbackQuery(cq.id, 'Operacion expirada');
         await this.deleteMessage(chatId, messageId);
@@ -271,7 +300,7 @@ export class TelegramService {
     // Parent category pagination
     if (data.startsWith('exp_ppage:')) {
       const page = parseInt(data.split(':')[1], 10);
-      const pending = this.pendingExpenses.get(key);
+      const pending = this.getPending(key);
       if (!pending) {
         await this.answerCallbackQuery(cq.id, 'Operacion expirada');
         await this.deleteMessage(chatId, messageId);
@@ -287,7 +316,7 @@ export class TelegramService {
       const parts = data.split(':');
       const parentId = parts[1];
       const page = parseInt(parts[2] ?? '0', 10);
-      const pending = this.pendingExpenses.get(key);
+      const pending = this.getPending(key);
       if (!pending) {
         await this.answerCallbackQuery(cq.id, 'Operacion expirada');
         await this.deleteMessage(chatId, messageId);
@@ -301,7 +330,7 @@ export class TelegramService {
     // Category selection (final)
     if (data.startsWith('exp_cat:')) {
       const categoryId = data.substring(8);
-      const pending = this.pendingExpenses.get(key);
+      const pending = this.getPending(key);
       if (!pending) {
         await this.answerCallbackQuery(cq.id, 'Operacion expirada');
         await this.deleteMessage(chatId, messageId);
@@ -316,7 +345,7 @@ export class TelegramService {
 
     // Back to parent categories
     if (data === 'exp_back') {
-      const pending = this.pendingExpenses.get(key);
+      const pending = this.getPending(key);
       if (!pending) {
         await this.answerCallbackQuery(cq.id, 'Operacion expirada');
         await this.deleteMessage(chatId, messageId);
@@ -355,7 +384,7 @@ export class TelegramService {
     // Sort parents by usage frequency of their children
     const counts = await this.prisma.transaction.groupBy({
       by: ['categoryId'],
-      where: { orgId: pending.orgId, type: 'EXPENSE', deletedAt: null, categoryId: { not: null } },
+      where: { orgId: pending.orgId, type: 'EXPENSE', ...COUNTED, categoryId: { not: null } },
       _count: { id: true },
     });
     const countMap = new Map<string, number>();
@@ -444,7 +473,7 @@ export class TelegramService {
     // Sort by usage frequency
     const counts = await this.prisma.transaction.groupBy({
       by: ['categoryId'],
-      where: { orgId: pending.orgId, type: 'EXPENSE', deletedAt: null, categoryId: { in: children.map(c => c.id) } },
+      where: { orgId: pending.orgId, type: 'EXPENSE', ...COUNTED, categoryId: { in: children.map(c => c.id) } },
       _count: { id: true },
     });
     const countMap = new Map<string, number>();
@@ -512,7 +541,7 @@ export class TelegramService {
     });
 
     // Compute new balance
-    const balance = await this.computeBalance(pending.accountId, pending.orgId);
+    const balance = await computeAccountBalance(this.prisma, pending.accountId, pending.orgId);
     const fmt = (n: number) => (n / 100).toFixed(2);
     const catLine = tx.category ? `\n📂 Categoria   : ${tx.category.name}` : '';
 
@@ -701,12 +730,8 @@ export class TelegramService {
       return;
     }
 
-    const balances = await Promise.all(
-      accounts.map(async (a) => ({
-        ...a,
-        balance: await this.computeBalance(a.id, org.id),
-      })),
-    );
+    const map = await computeAccountBalances(this.prisma, org.id, { accountIds: accounts.map((a) => a.id) });
+    const balances = accounts.map((a) => ({ ...a, balance: map.get(a.id) ?? 0 }));
 
     const lines = balances.map((a) =>
       `🏦 ${this.escape(a.name)}  :  ${this.formatAmount(a.balance, a.currency)}`,
@@ -721,17 +746,10 @@ export class TelegramService {
     const org = await this.findOrgByChatId(chatId);
     if (!org) return;
 
-    const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
-
+    // Mes en curso en APP_TZ y mismas reglas que el panel (sin deudas ni ajustes).
+    const range = resolveRange();
     const transactions = await this.prisma.transaction.findMany({
-      where: {
-        orgId: org.id,
-        type: { in: ['INCOME', 'EXPENSE'] },
-        date: { gte: startOfMonth, lte: endOfMonth },
-        deletedAt: null,
-      },
+      where: flowWhere({ orgId: org.id, date: { gte: range.from, lt: range.to } }),
       include: { account: { select: { currency: true } } },
     });
 
@@ -747,7 +765,7 @@ export class TelegramService {
       }
     }
 
-    const monthName = now.toLocaleString('es', { month: 'long' });
+    const monthName = range.from.toLocaleString('es', { month: 'long', timeZone: APP_TZ });
     let text = `📈 *Resumen de ${monthName}*\n━━━━━━━━━━━━━━━━━━\n`;
 
     const currencies = new Set([...Object.keys(income), ...Object.keys(expense)]);
@@ -775,7 +793,7 @@ export class TelegramService {
     if (!org) return;
 
     const debts = await this.prisma.debt.findMany({
-      where: { orgId: org.id, status: { in: ['PENDING', 'PARTIAL'] } },
+      where: { orgId: org.id, deletedAt: null, status: { in: ['PENDING', 'PARTIAL'] } },
       orderBy: { createdAt: 'desc' },
     });
 
@@ -793,7 +811,7 @@ export class TelegramService {
       text += '\n📥 *Por cobrar:*\n';
       for (const d of receivable) {
         const remaining = d.totalAmount - d.paidAmount;
-        text += `👤 ${this.escape(d.personName)}  :  $${(remaining / 100).toFixed(2)}\n`;
+        text += `👤 ${this.escape(d.personName)}  :  ${this.formatAmount(remaining, d.currency)}\n`;
       }
     }
 
@@ -801,7 +819,7 @@ export class TelegramService {
       text += '\n📤 *Por pagar:*\n';
       for (const d of payable) {
         const remaining = d.totalAmount - d.paidAmount;
-        text += `👤 ${this.escape(d.personName)}  :  $${(remaining / 100).toFixed(2)}\n`;
+        text += `👤 ${this.escape(d.personName)}  :  ${this.formatAmount(remaining, d.currency)}\n`;
       }
     }
     text += `━━━━━━━━━━━━━━━━━━`;
@@ -993,35 +1011,6 @@ export class TelegramService {
         text,
       }),
     });
-  }
-
-  private async computeBalance(accountId: string, orgId: string): Promise<number> {
-    const baseWhere = { accountId, orgId, deletedAt: null };
-
-    const rows = await this.prisma.transaction.groupBy({
-      by: ['type'],
-      where: { ...baseWhere, type: { in: ['INCOME', 'EXPENSE'] } },
-      _sum: { amount: true },
-    });
-    let balance = 0;
-    for (const row of rows) {
-      const amount = row._sum.amount ?? 0;
-      balance += row.type === 'INCOME' ? amount : -amount;
-    }
-
-    const [incoming, outgoing] = await Promise.all([
-      this.prisma.transaction.aggregate({
-        where: { ...baseWhere, type: { in: ['TRANSFER', 'EXCHANGE'] }, linkedTransactionId: null },
-        _sum: { amount: true },
-      }),
-      this.prisma.transaction.aggregate({
-        where: { ...baseWhere, type: { in: ['TRANSFER', 'EXCHANGE'] }, linkedTransactionId: { not: null } },
-        _sum: { amount: true },
-      }),
-    ]);
-    balance += (incoming._sum.amount ?? 0) - (outgoing._sum.amount ?? 0);
-
-    return balance;
   }
 
   private formatAmount(amount: number, currency: string): string {

@@ -2,6 +2,7 @@ import { ConflictException, Injectable, NotFoundException } from '@nestjs/common
 import { TransactionType } from '@prisma/client';
 import type { BudgetProgress, BudgetProgressItem, BudgetStatus } from '@ecoghost/shared';
 import { PrismaService } from '../../prisma/prisma.service';
+import { flowWhere } from '../../common/tx-filters';
 import { AuditService } from '../audit/audit.service';
 import { currentMonth, monthProgress, resolveMonth } from '../../common/date-range.util';
 import {
@@ -315,16 +316,13 @@ export class BudgetsService {
       this.categories(orgId),
       this.prisma.transaction.groupBy({
         by: ['categoryId'],
-        where: {
+        // Ni un prestamo ni un ajuste consumen presupuesto: no son gasto
+        where: flowWhere({
           orgId,
-          deletedAt: null,
-          // Ni un prestamo ni un ajuste consumen presupuesto: no son gasto
-          debtId: null,
-          OR: [{ categoryId: null }, { category: { isAdjustment: false } }],
           accountId: { in: accountIds },
           type: TransactionType.EXPENSE,
           date: { gte: range.from, lt: range.to },
-        },
+        }),
         _sum: { amount: true },
       }),
     ]);

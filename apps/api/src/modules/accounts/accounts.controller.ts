@@ -12,7 +12,7 @@ import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 import { AccountsService } from './accounts.service';
 import { CreateAccountDto, UpdateAccountDto } from './dto';
-import { OrgId, Roles } from '../../common/decorators';
+import { OrgId, Roles, CurrentUser, OrgRole } from '../../common/decorators';
 import { RolesGuard } from '../../common/guards';
 
 @ApiTags('accounts')
@@ -29,8 +29,8 @@ export class AccountsController {
   }
 
   @Get()
-  findAll(@OrgId() orgId: string) {
-    return this.accountsService.findAll(orgId);
+  findAll(@OrgId() orgId: string, @CurrentUser('id') userId: string, @OrgRole() role: Role) {
+    return this.accountsService.findAll(orgId, { userId, role });
   }
 
   @Get(':id')

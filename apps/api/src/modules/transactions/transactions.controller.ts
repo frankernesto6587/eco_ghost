@@ -20,7 +20,7 @@ import {
   BulkUpdateDto,
   BulkDeleteDto,
 } from './dto';
-import { CurrentUser, OrgId, Roles } from '../../common/decorators';
+import { CurrentUser, OrgId, OrgRole, Roles } from '../../common/decorators';
 import { RolesGuard } from '../../common/guards';
 
 @ApiTags('transactions')
@@ -41,13 +41,23 @@ export class TransactionsController {
   }
 
   @Get()
-  findAll(@OrgId() orgId: string, @Query() query: TransactionQueryDto) {
-    return this.transactionsService.findAll(orgId, query);
+  findAll(
+    @OrgId() orgId: string,
+    @CurrentUser('id') userId: string,
+    @OrgRole() role: Role,
+    @Query() query: TransactionQueryDto,
+  ) {
+    return this.transactionsService.findAll(orgId, query, { userId, role });
   }
 
   @Get('summary')
-  getSummary(@OrgId() orgId: string, @Query() query: TransactionQueryDto) {
-    return this.transactionsService.getSummary(orgId, query);
+  getSummary(
+    @OrgId() orgId: string,
+    @CurrentUser('id') userId: string,
+    @OrgRole() role: Role,
+    @Query() query: TransactionQueryDto,
+  ) {
+    return this.transactionsService.getSummary(orgId, query, { userId, role });
   }
 
   @Patch('bulk')
@@ -55,9 +65,10 @@ export class TransactionsController {
   bulkUpdate(
     @OrgId() orgId: string,
     @CurrentUser('id') userId: string,
+    @OrgRole() role: Role,
     @Body() dto: BulkUpdateDto,
   ) {
-    return this.transactionsService.bulkUpdate(orgId, userId, dto);
+    return this.transactionsService.bulkUpdate(orgId, userId, role, dto);
   }
 
   @Post('bulk/delete')
@@ -71,8 +82,13 @@ export class TransactionsController {
   }
 
   @Get(':id')
-  findOne(@OrgId() orgId: string, @Param('id') id: string) {
-    return this.transactionsService.findOne(orgId, id);
+  findOne(
+    @OrgId() orgId: string,
+    @CurrentUser('id') userId: string,
+    @OrgRole() role: Role,
+    @Param('id') id: string,
+  ) {
+    return this.transactionsService.findOne(orgId, id, { userId, role });
   }
 
   @Patch(':id')

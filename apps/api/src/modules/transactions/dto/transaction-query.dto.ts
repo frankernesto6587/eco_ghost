@@ -8,8 +8,10 @@ import {
   Max,
   Min,
   IsArray,
+  IsEnum,
 } from 'class-validator';
 import { Type, Transform } from 'class-transformer';
+import { TransactionStatus } from '@prisma/client';
 
 export class TransactionQueryDto {
   @ApiPropertyOptional({ example: '2026-01-01' })
@@ -36,6 +38,15 @@ export class TransactionQueryDto {
   @IsArray()
   @IsString({ each: true })
   type?: string[];
+
+  @ApiPropertyOptional({
+    description: 'Comma-separated: PENDING,APPROVED,REJECTED. Por defecto APPROVED,PENDING (lo que el rol puede ver).',
+  })
+  @IsOptional()
+  @Transform(({ value }) => typeof value === 'string' ? value.split(',').filter(Boolean) : value)
+  @IsArray()
+  @IsEnum(TransactionStatus, { each: true })
+  status?: TransactionStatus[];
 
   @ApiPropertyOptional({ description: 'Comma-separated category IDs' })
   @IsOptional()

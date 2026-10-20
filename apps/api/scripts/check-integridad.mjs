@@ -46,7 +46,9 @@ const api = s.casa;
 // ── 0. Mismos numeros que el codigo anterior ─────────────────────────────
 if (REF) {
   const ref = (await session(REF)).casa;
-  const strip = (o) => JSON.parse(JSON.stringify(o, (k, v) => (['recentTransactions', 'linkedTransaction', 'linkedBy'].includes(k) ? undefined : v)));
+  // Campos que el codigo anterior no tenia (aprobaciones): no son numeros que comparar.
+  const NEW = ['recentTransactions', 'linkedTransaction', 'linkedBy', 'pendingDelta', 'pendingCount', 'pending'];
+  const strip = (o) => JSON.parse(JSON.stringify(o, (k, v) => (NEW.includes(k) ? undefined : v)));
   for (const path of [
     '/accounts',
     '/dashboard/overview',

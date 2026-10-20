@@ -2,13 +2,14 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { resolveRange, dayKey, dayLabels, toDayLabel } from '../../common/date-range.util';
 import { computeAccountBalances } from '../../common/account-balance.util';
-import { COUNTED, flowWhere } from '../../common/tx-filters';
+import { Role, TransactionStatus } from '@prisma/client';
+import { Actor, ENTRY_HEAD, canApprove, flowWhere, visibleWhere } from '../../common/tx-filters';
 
 @Injectable()
 export class DashboardService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getOverview(orgId: string, from?: string, to?: string) {
+  async getOverview(orgId: string, actor: Actor, from?: string, to?: string) {
     const now = new Date();
     // Fronteras del rango en APP_TZ. `rangeEnd` es EXCLUSIVO: se compara con `lt`.
     const range = resolveRange(toDayLabel(from), toDayLabel(to));
@@ -52,6 +53,7 @@ export class DashboardService {
       where: {
         orgId,
         deletedAt: null,
+        approvalStatus: TransactionStatus.APPROVED,
         status: { in: ['PENDING', 'PARTIAL'] },
       },
     });
@@ -120,7 +122,8 @@ export class DashboardService {
 
     // Recent transactions (last 10)
     const recentTransactions = await this.prisma.transaction.findMany({
-      where: { orgId, ...COUNTED },
+      // Lo pendiente que el usuario puede ver sale tambien, marcado por su estado.
+      where: { orgId, deletedAt: null, AND: [visibleWhere(actor)] },
       orderBy: { createdAt: 'desc' },
       take: 10,
       include: {
@@ -144,7 +147,8 @@ export class DashboardService {
       where: {
         orgId,
         accountId: { in: accountIds },
-        ...COUNTED,
+        deletedAt: null,
+        status: TransactionStatus.APPROVED,
         date: { gte: startOfMonth, lt: rangeEnd },
       },
       select: { date: true, amount: true, type: true, accountId: true, linkedTransactionId: true },
@@ -193,7 +197,18 @@ export class DashboardService {
       dailyBalance.push({ date: key, balances: { ...running } });
     }
 
+    // Aprobaciones: cuantas esperan revision (para quien aprueba) y como van
+    // las propias (para quien anota).
+    const entries = (status: TransactionStatus, extra = {}) =>
+      this.prisma.transaction.count({ where: { orgId, deletedAt: null, status, ...ENTRY_HEAD, ...extra } });
+    const [toReview, minePending, mineRejected] = await Promise.all([
+      canApprove(actor.role) ? entries(TransactionStatus.PENDING) : 0,
+      actor.role === Role.VIEWER ? 0 : entries(TransactionStatus.PENDING, { createdBy: actor.userId }),
+      actor.role === Role.VIEWER ? 0 : entries(TransactionStatus.REJECTED, { createdBy: actor.userId }),
+    ]);
+
     return {
+      pending: { toReview, mine: { pending: minePending, rejected: mineRejected } },
       totalBalance,
       rangeBalance,
       balance30dAgo,

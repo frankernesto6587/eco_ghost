@@ -3,14 +3,15 @@ import {
   NotFoundException,
   ConflictException,
   ForbiddenException,
+  BadRequestException,
 } from '@nestjs/common';
-import { Organization, Role } from '@prisma/client';
+import { Organization, Prisma, Role } from '@prisma/client';
 import slugify from 'slugify';
 import { v4 as uuidv4 } from 'uuid';
-import { DEFAULT_CATEGORIES } from '@ecoghost/shared';
+import { CURRENCY_CODES, DEFAULT_CATEGORIES } from '@ecoghost/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TelegramService } from '../telegram/telegram.service';
-import { CreateOrgDto, UpdateOrgDto, UpdateRoleDto } from './dto';
+import { CreateOrgDto, UpdateMemberApprovalDto, UpdateOrgDto, UpdateRoleDto } from './dto';
 
 /**
  * Shape an organization for API responses:
@@ -287,6 +288,49 @@ export class OrganizationsService {
     });
 
     this.telegram.notify(orgId, `🔄 *Rol actualizado*\n${updated.user.name ?? updated.user.email}: ${dto.role}`);
+
+    return updated;
+  }
+
+  /**
+   * Autoconfirmar de un contador: si lo que anota entra aprobado y hasta que
+   * tope por moneda. Solo aplica a contadores (propietario y admin entran
+   * siempre directo; el visualizador no anota). Queda en el historial.
+   */
+  async updateMemberApproval(orgId: string, memberId: string, actorId: string, dto: UpdateMemberApprovalDto) {
+    const member = await this.prisma.orgMember.findFirst({ where: { id: memberId, orgId } });
+    if (!member) {
+      throw new NotFoundException(`Member with ID "${memberId}" not found in this organization`);
+    }
+    if (member.role !== Role.ACCOUNTANT) {
+      throw new BadRequestException('Auto-approval only applies to accountants');
+    }
+
+    const limits = dto.autoApproveLimits ?? null;
+    for (const [currency, cap] of Object.entries(limits ?? {})) {
+      if (!CURRENCY_CODES.includes(currency)) throw new BadRequestException(`Unknown currency ${currency}`);
+      if (!Number.isInteger(cap) || cap <= 0) throw new BadRequestException(`The cap for ${currency} must be a positive amount in cents`);
+    }
+
+    const updated = await this.prisma.orgMember.update({
+      where: { id: memberId },
+      data: { autoApprove: dto.autoApprove, autoApproveLimits: limits && Object.keys(limits).length ? limits : Prisma.DbNull },
+      include: { user: { select: { id: true, email: true, name: true, avatarUrl: true } } },
+    });
+
+    await this.prisma.auditLog.create({
+      data: {
+        action: 'UPDATE_APPROVAL',
+        entity: 'OrgMember',
+        entityId: memberId,
+        changes: {
+          before: { autoApprove: member.autoApprove, autoApproveLimits: member.autoApproveLimits },
+          after: { autoApprove: updated.autoApprove, autoApproveLimits: updated.autoApproveLimits },
+        } as Prisma.InputJsonValue,
+        userId: actorId,
+        orgId,
+      },
+    });
 
     return updated;
   }

@@ -13,7 +13,7 @@ import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 import { DebtsService } from './debts.service';
 import { CreateDebtDto, UpdateDebtDto, AddPaymentDto, DebtQueryDto } from './dto';
-import { CurrentUser, OrgId, Roles } from '../../common/decorators';
+import { CurrentUser, OrgId, OrgRole, Roles } from '../../common/decorators';
 import { RolesGuard } from '../../common/guards';
 
 @ApiTags('debts')
@@ -34,13 +34,23 @@ export class DebtsController {
   }
 
   @Get()
-  findAll(@OrgId() orgId: string, @Query() query: DebtQueryDto) {
-    return this.debtsService.findAll(orgId, query);
+  findAll(
+    @OrgId() orgId: string,
+    @CurrentUser('id') userId: string,
+    @OrgRole() role: Role,
+    @Query() query: DebtQueryDto,
+  ) {
+    return this.debtsService.findAll(orgId, query, { userId, role });
   }
 
   @Get(':id')
-  findOne(@OrgId() orgId: string, @Param('id') id: string) {
-    return this.debtsService.findOne(orgId, id);
+  findOne(
+    @OrgId() orgId: string,
+    @CurrentUser('id') userId: string,
+    @OrgRole() role: Role,
+    @Param('id') id: string,
+  ) {
+    return this.debtsService.findOne(orgId, id, { userId, role });
   }
 
   @Patch(':id')

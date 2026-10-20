@@ -57,6 +57,9 @@ export const WRITE_ROLES: Role[] = [Role.OWNER, Role.ADMIN, Role.ACCOUNTANT];
 /** Roles that can edit, delete or restore saved transactions */
 export const TX_EDIT_ROLES: Role[] = [Role.OWNER, Role.ADMIN];
 
+/** Quien aprueba o rechaza lo que anotan los demas. */
+export const APPROVE_ROLES: Role[] = [Role.OWNER, Role.ADMIN];
+
 /** Roles that can delete budgets */
 export const BUDGET_DELETE_ROLES: Role[] = [Role.OWNER, Role.ADMIN];
 

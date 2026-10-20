@@ -43,8 +43,8 @@ data class Movement(
     val viaTelegram: Boolean = false,
     /** PENDING o REJECTED: se ve, pero no cuenta en los saldos. */
     val status: String = "APPROVED",
-    /** Valor en la moneda de estadisticas, si esta activa (null: sin valorar). */
-    val reportAmount: Long? = null,
+    /** A mercado del dia en la moneda de estadisticas, si esta activa (null: sin valorar). */
+    val marketAmount: Long? = null,
     val valuationStatus: String? = null,
 )
 
@@ -130,7 +130,7 @@ class FinanceRepository @Inject constructor(private val api: EcoApi) {
                         toCurrency = to?.account?.currency,
                         viaTelegram = t.source == "telegram",
                         status = t.status,
-                        reportAmount = t.reportAmount,
+                        marketAmount = t.marketAmount,
                         valuationStatus = t.valuationStatus,
                     )
                 }

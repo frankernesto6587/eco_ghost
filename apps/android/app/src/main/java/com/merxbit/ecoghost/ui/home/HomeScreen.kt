@@ -269,7 +269,11 @@ private fun Month(home: Home) {
     }
 }
 
-/** El mes y el patrimonio en la moneda de estadisticas (gastos en MN valorados por FIFO). */
+/**
+ * El mes y el patrimonio en la moneda de estadisticas, como la NIC 21: gastos
+ * a mercado del dia y, aparte, la diferencia de cambio contra su coste FIFO
+ * (por cambio y por retener). El neto la incluye.
+ */
 @Composable
 private fun ReportCard(r: com.merxbit.ecoghost.data.net.ReportDto) {
     val c = Eco.colors
@@ -278,7 +282,7 @@ private fun ReportCard(r: com.merxbit.ecoghost.data.net.ReportDto) {
             Text("Este mes en ${r.currency}", style = MaterialTheme.typography.titleSmall)
             Row {
                 Column(Modifier.weight(1f)) {
-                    Text("Gastos", style = MaterialTheme.typography.bodySmall, color = c.muted)
+                    Text("Gastos a mercado", style = MaterialTheme.typography.bodySmall, color = c.muted)
                     AmountText(r.monthExpense, r.currency)
                 }
                 Column(Modifier.weight(1f)) {
@@ -289,6 +293,19 @@ private fun ReportCard(r: com.merxbit.ecoghost.data.net.ReportDto) {
                     Text("Neto", style = MaterialTheme.typography.bodySmall, color = c.muted)
                     AmountText(r.net, r.currency, prefix = if (r.net > 0) "+" else "", color = if (r.net < 0) c.danger else c.text)
                 }
+            }
+            if (r.fxResult != 0L || r.fxExchange != 0L) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Diferencias de cambio ", style = MaterialTheme.typography.bodySmall, color = c.muted)
+                    AmountText(
+                        r.fxResult, r.currency, prefix = if (r.fxResult > 0) "+" else "",
+                        color = if (r.fxResult < 0) c.danger else c.income, style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                Text(
+                    "por cambio ${signed(r.fxExchange)} · por retener ${signed(r.fxHolding)} ${r.currency}",
+                    style = MaterialTheme.typography.bodySmall, color = c.muted,
+                )
             }
             val pat = r.patrimony
             if (pat.atCost != null) {
@@ -341,4 +358,11 @@ private fun DebtCard(label: String, amounts: Map<String, Long>, modifier: Modifi
             amounts.forEach { (cur, v) -> AmountText(v, cur, style = MaterialTheme.typography.titleMedium) }
         }
     }
+}
+
+/** Centavos con signo y dos decimales: "+9,77", "−7,69". */
+private fun signed(cents: Long): String {
+    val sign = if (cents > 0) "+" else if (cents < 0) "−" else ""
+    val abs = kotlin.math.abs(cents)
+    return "$sign${"%,d".format(java.util.Locale("es", "ES"), abs / 100)},${"%02d".format(abs % 100)}"
 }

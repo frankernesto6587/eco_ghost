@@ -61,20 +61,30 @@ data class OverviewDto(
     val pendingDebtsReceivable: Map<String, Long> = emptyMap(),
     val pendingDebtsPayable: Map<String, Long> = emptyMap(),
     val pending: ApprovalCountsDto = ApprovalCountsDto(),
-    /** El mes en la moneda de estadisticas (FIFO); null si la organizacion no lo tiene activo. */
+    /** El mes en la moneda de estadisticas (a mercado + diferencias de cambio); null si no esta activo. */
     val report: ReportDto? = null,
 )
 
 @Serializable
-data class PatrimonyTotalsDto(val atCost: Long? = null, val atToday: Long? = null, val unrealized: Long? = null)
+data class PatrimonyTotalsDto(
+    val atCost: Long? = null,
+    val atToday: Long? = null,
+    val unrealized: Long? = null,
+    val unrealizedExchange: Long? = null,
+    val unrealizedHolding: Long? = null,
+)
 
 @Serializable
 data class ReportDto(
     val currency: String,
     val monthIncome: Long = 0,
     val monthExpense: Long = 0,
+    /** Ingresos - gastos + diferencias de cambio: cuadra con el coste real. */
     val net: Long = 0,
+    /** Diferencias de cambio (a favor > 0) = por cambio + por retener. */
     val fxResult: Long = 0,
+    val fxExchange: Long = 0,
+    val fxHolding: Long = 0,
     val incomplete: Int = 0,
     val estimates: Int = 0,
     val patrimony: PatrimonyTotalsDto = PatrimonyTotalsDto(),
@@ -113,8 +123,10 @@ data class TransactionDto(
     /** Solo APPROVED cuenta en saldos. */
     val status: String = "APPROVED",
     val rejectionReason: String? = null,
-    /** Valor en la moneda de estadisticas (centavos), si la valoracion esta activa. */
+    /** Coste FIFO en la moneda de estadisticas (centavos), si la valoracion esta activa. */
     val reportAmount: Long? = null,
+    /** A la tasa de mercado de su dia: lo que se muestra como "≈ USD". */
+    val marketAmount: Long? = null,
     val valuationStatus: String? = null,
     val category: CategoryDto? = null,
     val account: AccountDto? = null,

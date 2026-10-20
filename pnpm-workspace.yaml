@@ -1,3 +1,5 @@
 packages:
   - "apps/*"
   - "packages/*"
+  # Proyecto Gradle, no es un paquete de pnpm
+  - "!apps/android"

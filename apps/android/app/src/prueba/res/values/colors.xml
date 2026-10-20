@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- La variante de prueba lleva el icono en naranja Dracula para no confundirla con la real -->
+    <color name="icon_bg">#FFB86C</color>
+    <color name="icon_fg">#282A36</color>
+</resources>

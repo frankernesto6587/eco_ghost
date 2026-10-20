@@ -68,12 +68,16 @@ class HomeViewModel @Inject constructor(private val repo: FinanceRepository) : V
     var home by mutableStateOf<Home?>(null); private set
     var error by mutableStateOf<String?>(null); private set
     var refreshing by mutableStateOf(false); private set
-    private var loadedFor: String? = null
+    private var loadedFor: OrgDto? = null
+
+    init {
+        viewModelScope.launch { repo.changes.collect { loadedFor?.let { load(it, force = true) } } }
+    }
 
     fun load(org: OrgDto, force: Boolean = false) {
-        if (!force && loadedFor == org.id && home != null) return
-        if (loadedFor != org.id) home = null
-        loadedFor = org.id
+        if (!force && loadedFor?.id == org.id && home != null) return
+        if (loadedFor?.id != org.id) home = null
+        loadedFor = org
         refreshing = true
         viewModelScope.launch {
             runCatching { repo.home(org.baseCurrency) }

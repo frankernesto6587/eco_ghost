@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import com.merxbit.ecoghost.data.AuthRepository
 import com.merxbit.ecoghost.data.Session
 import com.merxbit.ecoghost.data.session.SessionStore
+import com.merxbit.ecoghost.ui.entry.EntrySheet
 import com.merxbit.ecoghost.ui.home.HomeScreen
 import com.merxbit.ecoghost.ui.login.LoginScreen
 import com.merxbit.ecoghost.ui.more.MoreScreen
@@ -112,10 +113,12 @@ private fun Main(s: Session.LoggedIn, auth: AuthRepository, store: SessionStore,
     val org = s.org ?: return
     var tab by rememberSaveable { mutableStateOf(Tab.HOME) }
     var orgSheet by remember { mutableStateOf(false) }
+    var entry by remember { mutableStateOf(false) }
     val snack = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val c = Eco.colors
-    val soon: (String) -> Unit = { what -> scope.launch { snack.showSnackbar("$what llega en la próxima versión") } }
+    // El visualizador solo mira: no ve el botón de anotar
+    val canWrite = org.role != "VIEWER"
 
     BackHandler(tab != Tab.HOME) { tab = Tab.HOME }
 
@@ -123,7 +126,7 @@ private fun Main(s: Session.LoggedIn, auth: AuthRepository, store: SessionStore,
         containerColor = c.bg,
         snackbarHost = { SnackbarHost(snack) },
         bottomBar = {
-            BottomBar(tab, onTab = { tab = it }, onAdd = { soon("Anotar movimientos") })
+            BottomBar(tab, canWrite, onTab = { tab = it }, onAdd = { entry = true })
         },
     ) { pad ->
         Box(Modifier.padding(pad).statusBarsPadding()) {
@@ -140,6 +143,10 @@ private fun Main(s: Session.LoggedIn, auth: AuthRepository, store: SessionStore,
                 )
             }
         }
+    }
+
+    if (entry) {
+        EntrySheet(org.id, onDismiss = { entry = false }, onSaved = { msg -> scope.launch { snack.showSnackbar(msg) } })
     }
 
     if (orgSheet) {
@@ -162,14 +169,14 @@ private fun Soon(title: String, text: String) {
 }
 
 @Composable
-private fun BottomBar(tab: Tab, onTab: (Tab) -> Unit, onAdd: () -> Unit) {
+private fun BottomBar(tab: Tab, canWrite: Boolean, onTab: (Tab) -> Unit, onAdd: () -> Unit) {
     val c = Eco.colors
     Column(Modifier.background(c.surface).navigationBarsPadding()) {
         HorizontalDivider(color = c.line)
         Row(Modifier.fillMaxWidth().height(64.dp), verticalAlignment = Alignment.CenterVertically) {
             TabItem(Icons.Outlined.Home, "Inicio", tab == Tab.HOME, Modifier.weight(1f)) { onTab(Tab.HOME) }
             TabItem(Icons.Outlined.ReceiptLong, "Movim.", tab == Tab.TXS, Modifier.weight(1f)) { onTab(Tab.TXS) }
-            Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+            if (canWrite) Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
                 Box(
                     Modifier.size(48.dp).clip(EcoShape.fab).background(c.accent).clickable(onClick = onAdd),
                     contentAlignment = Alignment.Center,

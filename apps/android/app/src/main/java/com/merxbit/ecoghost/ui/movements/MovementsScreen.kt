@@ -41,7 +41,7 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
-class MovementsViewModel @Inject constructor(private val api: EcoApi) : ViewModel() {
+class MovementsViewModel @Inject constructor(private val api: EcoApi, repo: FinanceRepository) : ViewModel() {
     private val raw = mutableListOf<TransactionDto>()
     var items by mutableStateOf<List<Movement>>(emptyList()); private set
     var loading by mutableStateOf(false); private set
@@ -49,6 +49,10 @@ class MovementsViewModel @Inject constructor(private val api: EcoApi) : ViewMode
     private var page = 0
     private var end = false
     private var org: String? = null
+
+    init {
+        viewModelScope.launch { repo.changes.collect { if (org != null) refresh() } }
+    }
 
     fun open(orgId: String) {
         if (org == orgId) return

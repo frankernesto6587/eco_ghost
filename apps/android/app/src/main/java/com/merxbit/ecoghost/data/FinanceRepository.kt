@@ -6,6 +6,8 @@ import com.merxbit.ecoghost.data.net.OverviewDto
 import com.merxbit.ecoghost.data.net.TransactionDto
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
 import java.time.LocalDate
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -43,6 +45,14 @@ data class Home(
 
 @Singleton
 class FinanceRepository @Inject constructor(private val api: EcoApi) {
+    private val _changes = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+
+    /** Se emite al guardar algo: las pantallas que muestran saldos o movimientos se recargan. */
+    val changes: SharedFlow<Unit> = _changes
+
+    fun notifyChanged() {
+        _changes.tryEmit(Unit)
+    }
 
     suspend fun home(baseCurrency: String): Home = coroutineScope {
         val overview = async { api.overview() }

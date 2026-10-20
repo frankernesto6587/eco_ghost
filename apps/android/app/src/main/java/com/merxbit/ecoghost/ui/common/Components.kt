@@ -63,6 +63,8 @@ fun categoryIcon(name: String?): ImageVector = when (name) {
     "medicine-box" -> Icons.Outlined.MedicalServices
     "credit-card" -> Icons.Outlined.CreditCard
     "dollar" -> Icons.Outlined.AttachMoney
+    "team" -> Icons.Outlined.Groups
+    "ellipsis" -> Icons.Outlined.MoreHoriz
     else -> Icons.Outlined.Category
 }
 

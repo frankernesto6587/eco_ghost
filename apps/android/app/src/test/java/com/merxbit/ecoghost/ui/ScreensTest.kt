@@ -10,9 +10,15 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.merxbit.ecoghost.data.Account
+import com.merxbit.ecoghost.data.EntryData
+import com.merxbit.ecoghost.data.EntryRepository
+import com.merxbit.ecoghost.data.EntryType
 import com.merxbit.ecoghost.data.Home
 import com.merxbit.ecoghost.data.Movement
+import com.merxbit.ecoghost.data.net.CategoryNodeDto
 import com.merxbit.ecoghost.data.net.OrgDto
+import com.merxbit.ecoghost.ui.entry.EntryContent
+import com.merxbit.ecoghost.ui.entry.EntryForm
 import com.merxbit.ecoghost.ui.home.HomeContent
 import com.merxbit.ecoghost.ui.login.LoginContent
 import com.merxbit.ecoghost.ui.theme.Eco
@@ -59,6 +65,25 @@ class ScreensTest {
         ),
     )
 
+    private val entryData = EntryData(
+        accounts = home.accounts,
+        groups = EntryRepository.groups(
+            listOf(
+                CategoryNodeDto("ali", "Alimentacion", "coffee", "#fa7c20", children = listOf(
+                    CategoryNodeDto("mer", "Mercado"), CategoryNodeDto("del", "Delivery"), CategoryNodeDto("res", "Restaurantes"),
+                )),
+                CategoryNodeDto("tra", "Transporte", "car", "#c97adb", children = listOf(CategoryNodeDto("com", "Combustible"))),
+                CategoryNodeDto("viv", "Vivienda", "home", "#6d95ee", children = listOf(CategoryNodeDto("cons", "Construccion"))),
+            ),
+        ),
+        usage = mapOf(EntryType.EXPENSE to listOf("mer", "cons", "del", "com", "res")),
+        preferredAccountId = "2",
+    )
+
+    @Composable
+    private fun entry(form: EntryForm, error: String? = null) =
+        EntryContent(form, entryData, false, error, null, {}, {}, {}, {})
+
     private fun shot(name: String, mode: ThemeMode, content: @Composable () -> Unit) {
         compose.setContent {
             EcoTheme(mode) { Box(Modifier.fillMaxSize().background(Eco.colors.bg)) { content() } }
@@ -70,5 +95,14 @@ class ScreensTest {
     @Test fun loginOscuro() = shot("login-oscuro", ThemeMode.DARK) { LoginContent(false, "Correo o contraseña incorrectos", { _, _ -> }, {}) }
     @Test fun inicioClaro() = shot("inicio-claro", ThemeMode.LIGHT) { HomeContent(org, "Frank", home, null, false, {}) }
     @Test fun inicioOscuro() = shot("inicio-oscuro", ThemeMode.DARK) { HomeContent(org, "Frank", home, null, false, {}) }
+    @Test fun anotarGastoClaro() = shot("anotar-gasto-claro", ThemeMode.LIGHT) {
+        entry(EntryForm(amount = "6400", accountId = "2", categoryId = "mer", description = "Agro"))
+    }
+    @Test fun anotarCambioOscuro() = shot("anotar-cambio-oscuro", ThemeMode.DARK) {
+        entry(EntryForm(type = EntryType.TRANSFER, amount = "100", toAmount = "38000", typingTo = true, accountId = "4", toAccountId = "2"))
+    }
+    @Test fun anotarVacioOscuro() = shot("anotar-vacio-oscuro", ThemeMode.DARK) {
+        entry(EntryForm(accountId = "2"), error = "Escribe el importe")
+    }
     @Test fun inicioSinConexion() = shot("inicio-sin-conexion", ThemeMode.LIGHT) { HomeContent(org, "Frank", null, "Sin conexión con el servidor", false, {}) }
 }

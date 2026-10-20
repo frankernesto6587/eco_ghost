@@ -70,6 +70,15 @@ class SessionStore @Inject constructor(@ApplicationContext private val ctx: Cont
         ctx.dataStore.edit { it[kOrg] = id }
     }
 
+    /** Última cuenta usada al anotar, por organización (la hoja la preselecciona). */
+    suspend fun lastAccount(orgId: String): String? = ctx.dataStore.data.first()[lastAccountKey(orgId)]
+
+    suspend fun setLastAccount(orgId: String, accountId: String) {
+        ctx.dataStore.edit { it[lastAccountKey(orgId)] = accountId }
+    }
+
+    private fun lastAccountKey(orgId: String) = stringPreferencesKey("last_account_$orgId")
+
     suspend fun setTheme(mode: ThemeMode) {
         ctx.dataStore.edit { it[kTheme] = mode.name }
     }

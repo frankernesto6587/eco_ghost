@@ -1,5 +1,6 @@
 package com.merxbit.ecoghost.data
 
+import com.merxbit.ecoghost.data.net.ApiJson
 import com.merxbit.ecoghost.data.net.EcoApi
 import com.merxbit.ecoghost.data.net.LoginRequest
 import com.merxbit.ecoghost.data.net.OrgDto
@@ -13,6 +14,9 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import retrofit2.HttpException
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -82,7 +86,20 @@ class AuthRepository @Inject constructor(
 fun errorMessage(e: Throwable): String = when {
     e is HttpException && e.code() == 401 -> "Correo o contraseña incorrectos"
     e is HttpException && e.code() == 429 -> "Demasiados intentos. Espera un minuto."
+    e is HttpException && e.code() == 403 -> "Tu rol en esta organización no permite hacerlo"
+    e is HttpException && e.code() == 400 -> apiMessage(e) ?: "Revisa los datos e inténtalo de nuevo"
     e is HttpException -> "El servidor respondió ${e.code()}. Inténtalo de nuevo."
     e is java.io.IOException -> "Sin conexión con el servidor"
     else -> "Algo salió mal: ${e.message ?: e.javaClass.simpleName}"
 }
+
+/** El mensaje de validación de NestJS: {"message": "..."} o {"message": ["...", ...]}. */
+private fun apiMessage(e: HttpException): String? = runCatching {
+    val body = e.response()?.errorBody()?.string() ?: return null
+    val msg = (ApiJson.parseToJsonElement(body) as JsonObject)["message"] ?: return null
+    when (msg) {
+        is JsonArray -> msg.joinToString(". ") { (it as JsonPrimitive).content }
+        is JsonPrimitive -> msg.content
+        else -> null
+    }
+}.getOrNull()

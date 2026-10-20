@@ -13,9 +13,9 @@
 .story {
   position: relative;
   background:
-    radial-gradient(ellipse 60% 50% at 15% 12%, rgba(212, 112, 10, 0.18), transparent 60%),
-    radial-gradient(ellipse 80% 60% at 110% 110%, rgba(60, 30, 10, 0.5), transparent 60%),
-    #1a1410;
+    radial-gradient(ellipse 60% 50% at 15% 12%, rgb(189 147 249 / 0.20), transparent 60%),
+    radial-gradient(ellipse 80% 60% at 110% 110%, rgb(255 121 198 / 0.14), transparent 60%),
+    #191a21;
   color: var(--eco-fg);
   padding: 44px 56px;
   display: flex;
@@ -27,7 +27,7 @@
 .storyDots {
   position: absolute;
   inset: 0;
-  background-image: radial-gradient(circle at 50% 50%, rgba(80, 70, 60, 0.5) 0.6px, transparent 1px);
+  background-image: radial-gradient(circle at 50% 50%, rgb(98 114 164 / 0.5) 0.6px, transparent 1px);
   background-size: 18px 18px;
   mask-image: linear-gradient(135deg, black, transparent 70%);
   opacity: 0.35;
@@ -84,7 +84,7 @@
   padding: 3px 8px;
   border: 1px solid var(--eco-line);
   border-radius: 6px;
-  background: oklch(0.13 0.008 80 / 0.6);
+  background: rgb(33 34 44 / 0.6);
 }
 
 /* Headline */
@@ -147,7 +147,7 @@
 }
 
 .floatCard {
-  background: oklch(0.17 0.010 80 / 0.9);
+  background: rgb(40 42 54 / 0.9);
   border: 1px solid var(--eco-line);
   border-radius: 14px;
   padding: 14px 16px;

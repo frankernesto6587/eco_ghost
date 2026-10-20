@@ -1,103 +1,105 @@
-/* ═══════ Ember Design System — Global Tokens ═══════ */
+/* ═══════ Dracula / Alucard — Global Tokens ═══════
+   Oscuro = Dracula Classic, claro = Alucard Classic (spec oficial:
+   https://draculatheme.com/spec). Fondos y acentos son los hex del spec; los
+   grises de texto intermedios (fg2..fg4) se interpolan entre Foreground y
+   Comment para mantener contraste legible. */
 :root {
   --safe-area-bottom: env(safe-area-inset-bottom, 0px);
 
-  /* Ember accent */
-  --eco-accent: oklch(0.72 0.18 50);
-  --eco-accent-soft: oklch(0.72 0.18 50 / 0.16);
-  --eco-accent-weak: oklch(0.72 0.18 50 / 0.08);
-  --eco-accent-ink: oklch(0.25 0.12 50);
+  /* Acento: Purple */
+  --eco-accent: #bd93f9;
+  --eco-accent-soft: rgb(189 147 249 / 0.16);
+  --eco-accent-weak: rgb(189 147 249 / 0.08);
+  --eco-accent-ink: #282a36;
 
-  /* Warm neutrals */
-  --eco-bg: oklch(0.13 0.008 80);
-  --eco-surface: oklch(0.17 0.010 80);
-  --eco-surface2: oklch(0.20 0.012 80);
-  --eco-surface3: oklch(0.24 0.012 80);
-  --eco-line: oklch(0.27 0.010 80);
-  --eco-line-soft: oklch(0.22 0.010 80);
+  /* Fondos: Background Dark / Background / Light / Lighter / Selection */
+  --eco-bg: #21222c;
+  --eco-surface: #282a36;
+  --eco-surface2: #343746;
+  --eco-surface3: #424450;
+  --eco-line: #44475a;
+  --eco-line-soft: #353747;
 
-  /* Foreground */
-  --eco-fg: oklch(0.97 0.005 80);
-  --eco-fg2: oklch(0.78 0.008 80);
-  --eco-fg3: oklch(0.58 0.010 80);
-  --eco-fg4: oklch(0.44 0.010 80);
+  /* Texto: Foreground -> Comment */
+  --eco-fg: #f8f8f2;
+  --eco-fg2: #cfcfde;
+  --eco-fg3: #9aa3cc;
+  --eco-fg4: #6272a4;
 
-  /* Semantic */
-  --eco-pos: oklch(0.76 0.14 150);
-  --eco-pos-soft: oklch(0.76 0.14 150 / 0.14);
-  --eco-neg: oklch(0.70 0.18 25);
-  --eco-neg-soft: oklch(0.70 0.18 25 / 0.14);
-  --eco-fx: oklch(0.75 0.12 220);
-  --eco-fx-soft: oklch(0.75 0.12 220 / 0.16);
+  /* Semantica: Green / Red / Cyan */
+  --eco-pos: #50fa7b;
+  --eco-pos-soft: rgb(80 250 123 / 0.14);
+  --eco-neg: #ff5555;
+  --eco-neg-soft: rgb(255 85 85 / 0.14);
+  --eco-fx: #8be9fd;
+  --eco-fx-soft: rgb(139 233 253 / 0.16);
 
   /* Elevation */
-  --eco-shadow1: 0 1px 0 oklch(0.22 0.010 80 / 0.6), 0 2px 4px oklch(0 0 0 / 0.3);
-  --eco-shadow2: 0 2px 0 oklch(0.22 0.010 80 / 0.6), 0 8px 20px oklch(0 0 0 / 0.35);
+  --eco-shadow1: 0 1px 0 rgb(25 26 33 / 0.6), 0 2px 4px rgb(0 0 0 / 0.3);
+  --eco-shadow2: 0 2px 0 rgb(25 26 33 / 0.6), 0 8px 20px rgb(0 0 0 / 0.35);
 
 
-  /* Rampa categorica para graficos. Ordenada por separacion de tono, no por
-     bonito: cat-1..cat-7 deben distinguirse entre si de un vistazo; cat-8 es
-     el neutro reservado para el bucket "Otros". */
-  --eco-cat-1: oklch(0.72 0.18 50);
-  --eco-cat-2: oklch(0.72 0.14 200);
-  --eco-cat-3: oklch(0.74 0.15 150);
-  --eco-cat-4: oklch(0.70 0.16 320);
-  --eco-cat-5: oklch(0.78 0.14 90);
-  --eco-cat-6: oklch(0.68 0.14 265);
-  --eco-cat-7: oklch(0.74 0.12 20);
-  --eco-cat-8: oklch(0.66 0.06 80);
+  /* Rampa categorica para graficos: los acentos Dracula ordenados para que
+     vecinos no se parezcan; cat-8 es el neutro (Comment) del bucket "Otros". */
+  --eco-cat-1: #bd93f9;
+  --eco-cat-2: #8be9fd;
+  --eco-cat-3: #ffb86c;
+  --eco-cat-4: #ff79c6;
+  --eco-cat-5: #50fa7b;
+  --eco-cat-6: #f1fa8c;
+  --eco-cat-7: #ff5555;
+  --eco-cat-8: #6272a4;
   /* Radii */
   --eco-radius: 14px;
   --eco-radius-sm: 10px;
 }
 
-/* ═══════ Light Theme Overrides ═══════ */
+/* ═══════ Light Theme Overrides (Alucard) ═══════ */
 [data-theme="light"] {
-  /* Ember accent — slightly darker for better contrast on light bg */
-  --eco-accent: oklch(0.62 0.18 50);
-  --eco-accent-soft: oklch(0.62 0.18 50 / 0.12);
-  --eco-accent-weak: oklch(0.62 0.18 50 / 0.06);
-  --eco-accent-ink: oklch(0.98 0.005 80);
+  --eco-accent: #644ac9;
+  --eco-accent-soft: rgb(100 74 201 / 0.12);
+  --eco-accent-weak: rgb(100 74 201 / 0.06);
+  --eco-accent-ink: #fffbeb;
 
-  /* Warm neutrals — inverted */
-  --eco-bg: oklch(0.97 0.004 80);
-  --eco-surface: oklch(1 0 0);
-  --eco-surface2: oklch(0.96 0.004 80);
-  --eco-surface3: oklch(0.93 0.006 80);
-  --eco-line: oklch(0.88 0.008 80);
-  --eco-line-soft: oklch(0.92 0.006 80);
+  /* Fondos: Lighter / Background / Floating / Light / Dark */
+  --eco-bg: #ece9df;
+  --eco-surface: #fffbeb;
+  --eco-surface2: #efeddc;
+  --eco-surface3: #dedccf;
+  --eco-line: #ceccc0;
+  --eco-line-soft: #dedccf;
 
-  /* Foreground — dark text on light bg */
-  --eco-fg: oklch(0.18 0.010 80);
-  --eco-fg2: oklch(0.35 0.010 80);
-  --eco-fg3: oklch(0.50 0.010 80);
-  --eco-fg4: oklch(0.64 0.008 80);
+  /* Texto: Foreground -> Comment */
+  --eco-fg: #1f1f1f;
+  --eco-fg2: #3d3a2e;
+  --eco-fg3: #6c664b;
+  --eco-fg4: #8e8869;
 
-  /* Semantic — slightly deeper for light bg contrast */
-  --eco-pos: oklch(0.52 0.16 150);
-  --eco-pos-soft: oklch(0.52 0.16 150 / 0.10);
-  --eco-neg: oklch(0.55 0.20 25);
-  --eco-neg-soft: oklch(0.55 0.20 25 / 0.10);
-  --eco-fx: oklch(0.55 0.14 220);
-  --eco-fx-soft: oklch(0.55 0.14 220 / 0.10);
+  /* Semantica */
+  --eco-pos: #14710a;
+  --eco-pos-soft: rgb(20 113 10 / 0.10);
+  --eco-neg: #cb3a2a;
+  --eco-neg-soft: rgb(203 58 42 / 0.10);
+  --eco-fx: #036a96;
+  --eco-fx-soft: rgb(3 106 150 / 0.10);
 
   /* Elevation — softer shadows for light mode */
-  --eco-shadow1: 0 1px 2px oklch(0 0 0 / 0.06), 0 1px 3px oklch(0 0 0 / 0.08);
-  --eco-shadow2: 0 2px 4px oklch(0 0 0 / 0.06), 0 8px 16px oklch(0 0 0 / 0.08);
+  --eco-shadow1: 0 1px 2px rgb(31 31 31 / 0.06), 0 1px 3px rgb(31 31 31 / 0.08);
+  --eco-shadow2: 0 2px 4px rgb(31 31 31 / 0.06), 0 8px 16px rgb(31 31 31 / 0.08);
 
-  /* Rampa categorica: mismo tono, algo mas oscura para contrastar sobre claro */
-  --eco-cat-1: oklch(0.62 0.18 50);
-  --eco-cat-2: oklch(0.60 0.14 200);
-  --eco-cat-3: oklch(0.62 0.15 150);
-  --eco-cat-4: oklch(0.58 0.16 320);
-  --eco-cat-5: oklch(0.66 0.14 90);
-  --eco-cat-6: oklch(0.56 0.14 265);
-  --eco-cat-7: oklch(0.62 0.12 20);
-  --eco-cat-8: oklch(0.56 0.06 80);
+  /* Rampa categorica: los mismos acentos en su version Alucard */
+  --eco-cat-1: #644ac9;
+  --eco-cat-2: #036a96;
+  --eco-cat-3: #a34d14;
+  --eco-cat-4: #a3144d;
+  --eco-cat-5: #14710a;
+  --eco-cat-6: #846e15;
+  --eco-cat-7: #cb3a2a;
+  --eco-cat-8: #6c664b;
 
 }
 
-/* ═══════ Ant Design — Ember Overrides ═══════ */
+/* ═══════ Ant Design — Overrides ═══════ */
 
 /* Modal */
 .ant-modal .ant-modal-content {

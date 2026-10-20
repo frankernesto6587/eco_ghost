@@ -1,17 +1,26 @@
 import { theme as antdThemeAlg } from 'antd';
 import type { ThemeConfig } from 'antd';
 
-// Ember brand palette (hex approximations of oklch design tokens)
-const EMBER_PRIMARY = '#d07a1c'; // oklch(0.72 0.18 50)
-const EMBER_SUCCESS = '#52b565'; // oklch(0.76 0.14 150)
-const EMBER_ERROR = '#c95640';   // oklch(0.70 0.18 25)
-const EMBER_WARNING = '#d49a0a';
+// Dracula (oscuro) y Alucard (claro): mismos hex que los tokens de global.css
+const DRACULA = {
+  primary: '#bd93f9',
+  success: '#50fa7b',
+  warning: '#ffb86c',
+  error: '#ff5555',
+  info: '#8be9fd',
+  // El morado es claro: el texto encima va en el fondo oscuro, no en blanco
+  onPrimary: '#282a36',
+};
+const ALUCARD = {
+  primary: '#644ac9',
+  success: '#14710a',
+  warning: '#a34d14',
+  error: '#cb3a2a',
+  info: '#036a96',
+  onPrimary: '#fffbeb',
+};
 
 const sharedTokens: ThemeConfig['token'] = {
-  colorPrimary: EMBER_PRIMARY,
-  colorSuccess: EMBER_SUCCESS,
-  colorWarning: EMBER_WARNING,
-  colorError: EMBER_ERROR,
   borderRadius: 10,
   fontFamily: "'Geist', 'Inter', system-ui, -apple-system, sans-serif",
   fontFamilyCode: "'Geist Mono', ui-monospace, monospace",
@@ -23,21 +32,28 @@ export function getAntdTheme(isDark: boolean): ThemeConfig {
       algorithm: antdThemeAlg.darkAlgorithm,
       token: {
         ...sharedTokens,
-        colorBgBase: '#1f1c1a',
-        colorBgContainer: '#282420',
-        colorBgElevated: '#302b27',
-        colorBgLayout: '#1a1715',
-        colorBorder: '#3d3730',
-        colorBorderSecondary: '#332e28',
+        colorPrimary: DRACULA.primary,
+        colorSuccess: DRACULA.success,
+        colorWarning: DRACULA.warning,
+        colorError: DRACULA.error,
+        colorInfo: DRACULA.info,
+        colorTextLightSolid: DRACULA.onPrimary,
+        colorBgBase: '#282a36',
+        colorTextBase: '#f8f8f2',
+        colorBgContainer: '#282a36',
+        colorBgElevated: '#343746',
+        colorBgLayout: '#21222c',
+        colorBorder: '#44475a',
+        colorBorderSecondary: '#353747',
       },
       components: {
         Layout: {
-          siderBg: '#282420',
-          headerBg: '#282420',
-          bodyBg: '#1a1715',
+          siderBg: '#282a36',
+          headerBg: '#282a36',
+          bodyBg: '#21222c',
         },
         Menu: {
-          darkItemBg: '#282420',
+          darkItemBg: '#282a36',
           itemBorderRadius: 10,
         },
         Button: {
@@ -57,17 +73,24 @@ export function getAntdTheme(isDark: boolean): ThemeConfig {
     algorithm: antdThemeAlg.defaultAlgorithm,
     token: {
       ...sharedTokens,
-      colorBgLayout: '#f7f5f3',
-      colorBgContainer: '#ffffff',
-      colorBgElevated: '#ffffff',
-      colorBorder: '#e5e0da',
-      colorBorderSecondary: '#ede9e3',
+      colorPrimary: ALUCARD.primary,
+      colorSuccess: ALUCARD.success,
+      colorWarning: ALUCARD.warning,
+      colorError: ALUCARD.error,
+      colorInfo: ALUCARD.info,
+      colorTextLightSolid: ALUCARD.onPrimary,
+      colorTextBase: '#1f1f1f',
+      colorBgLayout: '#ece9df',
+      colorBgContainer: '#fffbeb',
+      colorBgElevated: '#fffbeb',
+      colorBorder: '#ceccc0',
+      colorBorderSecondary: '#dedccf',
     },
     components: {
       Layout: {
-        headerBg: '#ffffff',
-        siderBg: '#ffffff',
-        bodyBg: '#f7f5f3',
+        headerBg: '#fffbeb',
+        siderBg: '#fffbeb',
+        bodyBg: '#ece9df',
       },
       Menu: {
         itemBorderRadius: 10,

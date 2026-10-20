@@ -27,8 +27,8 @@ function App() {
   useEffect(() => {
     const theme = isDark ? 'dark' : 'light';
     document.documentElement.setAttribute('data-theme', theme);
-    document.documentElement.style.background = isDark ? '#1a1715' : '#f7f5f3';
-    document.body.style.background = isDark ? '#1a1715' : '#f7f5f3';
+    document.documentElement.style.background = isDark ? '#21222c' : '#ece9df';
+    document.body.style.background = isDark ? '#21222c' : '#ece9df';
   }, [isDark]);
 
   return (

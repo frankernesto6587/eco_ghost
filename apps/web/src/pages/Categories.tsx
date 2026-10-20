@@ -142,7 +142,7 @@ export default function CategoriesPage() {
       form.setFieldsValue({
         name: category.name,
         icon: category.icon ?? '',
-        color: category.color ?? '#d07a1c',
+        color: category.color ?? '#bd93f9',
         parentId: category.parentId ?? undefined,
         isAdjustment: category.isAdjustment ?? false,
       });
@@ -165,8 +165,8 @@ export default function CategoriesPage() {
         typeof values.color === 'string'
           ? values.color
           : typeof values.color === 'object' && values.color !== null
-            ? (values.color as { toHexString?: () => string }).toHexString?.() ?? '#d07a1c'
-            : '#d07a1c';
+            ? (values.color as { toHexString?: () => string }).toHexString?.() ?? '#bd93f9'
+            : '#bd93f9';
 
       const payload: CreateCategoryDto = {
         name: values.name,
@@ -435,7 +435,7 @@ export default function CategoriesPage() {
             />
           </Form.Item>
 
-          <Form.Item name="color" label={t('categories.color')} initialValue="#d07a1c">
+          <Form.Item name="color" label={t('categories.color')} initialValue="#bd93f9">
             <ColorPicker format="hex" />
           </Form.Item>
 

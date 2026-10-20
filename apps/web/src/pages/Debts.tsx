@@ -50,13 +50,13 @@ interface DebtTransaction {
 type FilterTab = 'ALL' | DebtType.RECEIVABLE | DebtType.PAYABLE;
 
 const PERSON_COLORS = [
-  'oklch(0.72 0.16 60)',
-  'oklch(0.68 0.18 350)',
-  'oklch(0.7 0.14 180)',
-  'oklch(0.58 0.2 300)',
-  'oklch(0.7 0.12 30)',
-  'oklch(0.65 0.15 110)',
-  'oklch(0.6 0.1 220)',
+  'var(--eco-cat-3)',
+  'var(--eco-cat-4)',
+  'var(--eco-cat-2)',
+  'var(--eco-cat-1)',
+  'var(--eco-cat-5)',
+  'var(--eco-cat-6)',
+  'var(--eco-cat-8)',
 ];
 
 function getPersonColor(name: string): string {

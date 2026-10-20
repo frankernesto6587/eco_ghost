@@ -63,9 +63,13 @@ class ScreensTest {
             Account("4", "Efectivo USD", "CASH", "USD", 57_000),
         ),
         monthIncome = 4_500_000, monthExpense = 4_519_900,
+        report = com.merxbit.ecoghost.data.net.ReportDto(
+            "USD", monthIncome = 27_500, monthExpense = 13_191, net = 14_309,
+            patrimony = com.merxbit.ecoghost.data.net.PatrimonyTotalsDto(atCost = 260_012, atToday = 251_890),
+        ),
         receivable = mapOf("USD" to 25_000), payable = mapOf("MN" to 4_500_000),
         recent = listOf(
-            Movement("a", today, "Agro", "EXPENSE", 640_000, "MN", "Efectivo MN", "Mercado", "shopping-cart", "#fa7c20"),
+            Movement("a", today, "Agro", "EXPENSE", 640_000, "MN", "Efectivo MN", "Mercado", "shopping-cart", "#fa7c20", reportAmount = 790, valuationStatus = "EXACT"),
             Movement("b", today, "Salario", "INCOME", 4_500_000, "MN", "BANDEC", "Salario", "wallet", "#5ac576"),
             Movement("c", today.minusDays(1), "Cambio USD a MN", "EXCHANGE", 10_000, "USD", "Efectivo USD", null, null, null, "Efectivo MN", 3_800_000, "MN"),
             Movement("d", today.minusDays(1), "Extraccion cajero", "TRANSFER", 3_500_000, "MN", "BANDEC", null, null, null, "Efectivo MN"),

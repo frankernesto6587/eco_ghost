@@ -2,6 +2,7 @@ package com.merxbit.ecoghost.data
 
 import com.merxbit.ecoghost.data.net.AccountDto
 import com.merxbit.ecoghost.data.net.ApprovalCountsDto
+import com.merxbit.ecoghost.data.net.ReportDto
 import com.merxbit.ecoghost.data.net.EcoApi
 import com.merxbit.ecoghost.data.net.OverviewDto
 import com.merxbit.ecoghost.data.net.TransactionDto
@@ -42,6 +43,9 @@ data class Movement(
     val viaTelegram: Boolean = false,
     /** PENDING o REJECTED: se ve, pero no cuenta en los saldos. */
     val status: String = "APPROVED",
+    /** Valor en la moneda de estadisticas, si esta activa (null: sin valorar). */
+    val reportAmount: Long? = null,
+    val valuationStatus: String? = null,
 )
 
 data class Home(
@@ -54,6 +58,7 @@ data class Home(
     val payable: Map<String, Long>,
     val recent: List<Movement>,
     val pending: ApprovalCountsDto = ApprovalCountsDto(),
+    val report: ReportDto? = null,
 )
 
 @Singleton
@@ -92,6 +97,7 @@ class FinanceRepository @Inject constructor(private val api: EcoApi) {
                 payable = o.pendingDebtsPayable,
                 recent = movements(txs).take(5),
                 pending = o.pending,
+                report = o.report,
             )
         }
 
@@ -124,6 +130,8 @@ class FinanceRepository @Inject constructor(private val api: EcoApi) {
                         toCurrency = to?.account?.currency,
                         viaTelegram = t.source == "telegram",
                         status = t.status,
+                        reportAmount = t.reportAmount,
+                        valuationStatus = t.valuationStatus,
                     )
                 }
         }

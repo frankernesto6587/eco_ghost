@@ -143,7 +143,7 @@ fun Avatar(name: String, size: Int = 34) {
 
 /** Fila de movimiento (igual que txRow del prototipo). */
 @Composable
-fun MovementRow(m: Movement, modifier: Modifier = Modifier) {
+fun MovementRow(m: Movement, modifier: Modifier = Modifier, reportCurrency: String? = null) {
     val c = Eco.colors
     val (icon, color) = when (m.type) {
         "TRANSFER" -> Icons.Outlined.SwapHoriz to c.muted
@@ -179,6 +179,15 @@ fun MovementRow(m: Movement, modifier: Modifier = Modifier) {
             }
             if (m.type == "EXCHANGE" && m.toAmount != null) {
                 AmountText(m.toAmount, m.toCurrency, prefix = "+", color = c.muted, style = MaterialTheme.typography.bodySmall)
+            }
+            // Lo que va en otra moneda, valorado en la de estadisticas (FIFO)
+            if (reportCurrency != null && m.currency != reportCurrency && m.type != "TRANSFER" && m.type != "EXCHANGE") {
+                when {
+                    m.reportAmount != null -> AmountText(
+                        m.reportAmount, reportCurrency, prefix = "≈ ", color = c.muted, style = MaterialTheme.typography.bodySmall,
+                    )
+                    m.valuationStatus == "MISSING_RATE" -> Text("falta tasa", style = MaterialTheme.typography.bodySmall, color = c.warning)
+                }
             }
         }
     }

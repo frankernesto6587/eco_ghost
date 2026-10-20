@@ -159,6 +159,7 @@ fun HomeContent(
             Hero(home)
             Accounts(home)
             Month(home)
+            home.report?.let { ReportCard(it) }
             Debts(home)
 
             SectionTitle("Últimos movimientos") {
@@ -169,7 +170,7 @@ fun HomeContent(
             }
             home.recent.forEachIndexed { i, m ->
                 if (i > 0) HorizontalDivider(color = c.line)
-                MovementRow(m)
+                MovementRow(m, reportCurrency = home.report?.currency)
             }
             Spacer(Modifier.height(24.dp))
         }
@@ -264,6 +265,45 @@ private fun Month(home: Home) {
             }
             Bar("Ingresos", home.monthIncome, max, c.income)
             Bar("Gastos", home.monthExpense, max, c.warning)
+        }
+    }
+}
+
+/** El mes y el patrimonio en la moneda de estadisticas (gastos en MN valorados por FIFO). */
+@Composable
+private fun ReportCard(r: com.merxbit.ecoghost.data.net.ReportDto) {
+    val c = Eco.colors
+    EcoCard(Modifier.fillMaxWidth().padding(top = 8.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Este mes en ${r.currency}", style = MaterialTheme.typography.titleSmall)
+            Row {
+                Column(Modifier.weight(1f)) {
+                    Text("Gastos", style = MaterialTheme.typography.bodySmall, color = c.muted)
+                    AmountText(r.monthExpense, r.currency)
+                }
+                Column(Modifier.weight(1f)) {
+                    Text("Ingresos", style = MaterialTheme.typography.bodySmall, color = c.muted)
+                    AmountText(r.monthIncome, r.currency, color = c.income)
+                }
+                Column(Modifier.weight(1f)) {
+                    Text("Neto", style = MaterialTheme.typography.bodySmall, color = c.muted)
+                    AmountText(r.net, r.currency, prefix = if (r.net > 0) "+" else "", color = if (r.net < 0) c.danger else c.text)
+                }
+            }
+            val pat = r.patrimony
+            if (pat.atCost != null) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Patrimonio a costo ", style = MaterialTheme.typography.bodySmall, color = c.muted)
+                    AmountText(pat.atCost, r.currency, style = MaterialTheme.typography.bodySmall)
+                    pat.atToday?.let {
+                        Text("  ·  hoy ", style = MaterialTheme.typography.bodySmall, color = c.muted)
+                        AmountText(it, r.currency, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
+            if (r.incomplete > 0) {
+                Text("${r.incomplete} sin valorar: falta la tasa de algún día (la pone un admin en la web).", style = MaterialTheme.typography.bodySmall, color = c.warning)
+            }
         }
     }
 }

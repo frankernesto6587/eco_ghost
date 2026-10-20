@@ -49,6 +49,8 @@ class MovementsViewModel @Inject constructor(private val api: EcoApi, repo: Fina
     private var page = 0
     private var end = false
     private var org: String? = null
+    /** Moneda de estadisticas, si la organizacion valora (para el "≈ USD" de cada fila). */
+    var reportCurrency by mutableStateOf<String?>(null); private set
 
     init {
         viewModelScope.launch { repo.changes.collect { if (org != null) refresh() } }
@@ -58,6 +60,9 @@ class MovementsViewModel @Inject constructor(private val api: EcoApi, repo: Fina
         if (org == orgId) return
         org = orgId
         refresh()
+        viewModelScope.launch {
+            reportCurrency = runCatching { api.valuationStatus() }.getOrNull()?.takeIf { it.enabled }?.reportCurrency
+        }
     }
 
     fun refresh() {
@@ -116,7 +121,7 @@ fun MovementsScreen(orgId: String, vm: MovementsViewModel = hiltViewModel()) {
                     )
                 }
                 items(list, key = { it.id }) { m ->
-                    MovementRow(m)
+                    MovementRow(m, reportCurrency = vm.reportCurrency)
                     HorizontalDivider(color = c.line)
                 }
             }

@@ -35,4 +35,9 @@ export class BudgetProgressQueryDto {
   @IsOptional()
   @Matches(MONTH_RE, { message: 'month debe tener formato YYYY-MM' })
   month?: string;
+
+  @ApiPropertyOptional({ enum: ['NATIVE', 'REPORT'], default: 'NATIVE' })
+  @IsOptional()
+  @IsIn(['NATIVE', 'REPORT'])
+  basis?: 'NATIVE' | 'REPORT';
 }

@@ -11,6 +11,7 @@ import { ValuationService } from './valuation.service';
 import { RatesQueryDto, SetRatesDto, ValuationSettingsDto } from './dto';
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
+const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
 
 @ApiTags('valuation')
 @ApiBearerAuth()
@@ -45,7 +46,11 @@ export class ValuationController {
   @Roles(Role.OWNER)
   @ApiOperation({ summary: 'Activar la valoracion y elegir la moneda de estadisticas' })
   async settings(@OrgId() orgId: string, @CurrentUser('id') userId: string, @Body() dto: ValuationSettingsDto) {
-    const before = await this.prisma.organization.findUniqueOrThrow({ where: { id: orgId }, select: { valuationEnabled: true, reportCurrency: true } });
+    const before = await this.prisma.organization.findUniqueOrThrow({ where: { id: orgId }, select: { valuationEnabled: true, reportCurrency: true, closedThrough: true } });
+    // Con meses cerrados, cambiar la moneda cambiaria sus numeros congelados.
+    if (dto.reportCurrency !== undefined && dto.reportCurrency !== before.reportCurrency && before.closedThrough) {
+      throw new BadRequestException('Hay meses cerrados: reábrelos antes de cambiar la moneda de estadísticas');
+    }
     const org = await this.prisma.organization.update({
       where: { id: orgId },
       data: {
@@ -70,6 +75,22 @@ export class ValuationController {
     return this.valuation.status(orgId);
   }
 
+  @Post('valuation/months/:month/close')
+  @Roles(Role.OWNER, Role.ADMIN)
+  @ApiOperation({ summary: 'Cerrar hasta un mes: no se anota ni cambia nada en el y sus valores quedan congelados' })
+  close(@OrgId() orgId: string, @CurrentUser('id') userId: string, @Param('month') month: string) {
+    if (!MONTH.test(month)) throw new BadRequestException('month debe ser YYYY-MM');
+    return this.valuation.closeMonth(orgId, userId, month);
+  }
+
+  @Post('valuation/months/:month/reopen')
+  @Roles(Role.OWNER)
+  @ApiOperation({ summary: 'Reabrir desde un mes (incluido)' })
+  reopen(@OrgId() orgId: string, @CurrentUser('id') userId: string, @Param('month') month: string) {
+    if (!MONTH.test(month)) throw new BadRequestException('month debe ser YYYY-MM');
+    return this.valuation.reopenMonth(orgId, userId, month);
+  }
+
   @Get('rates')
   @ApiOperation({ summary: 'Tasas por dia: las de elTOQUE y las corregidas a mano' })
   list(@OrgId() orgId: string, @Query() q: RatesQueryDto) {
@@ -81,6 +102,7 @@ export class ValuationController {
   @ApiOperation({ summary: 'Poner o corregir la tasa de un dia (MN por unidad)' })
   async set(@OrgId() orgId: string, @CurrentUser('id') userId: string, @Param('day') day: string, @Body() dto: SetRatesDto) {
     if (!DAY.test(day) || day > dayKey(new Date())) throw new BadRequestException('day debe ser YYYY-MM-DD y no futuro');
+    await this.assertDayOpen(orgId, day);
     for (const [c, v] of Object.entries(dto.rates)) {
       if (!CURRENCY_CODES.includes(c) || c === 'MN') throw new BadRequestException(`Moneda ${c} no valida`);
       if (typeof v !== 'number' || !(v > 0) || v > 1_000_000) throw new BadRequestException(`Tasa de ${c} no valida`);
@@ -93,7 +115,16 @@ export class ValuationController {
   @Roles(Role.OWNER, Role.ADMIN)
   @ApiOperation({ summary: 'Quitar una tasa puesta a mano (vuelve la de elTOQUE)' })
   async remove(@OrgId() orgId: string, @CurrentUser('id') userId: string, @Param('day') day: string, @Param('currency') currency: string) {
+    await this.assertDayOpen(orgId, day);
     await this.rates.deleteOverride(orgId, userId, day, currency);
     return this.rates.list(orgId, day, day);
+  }
+
+  /** La tasa de un dia de un mes cerrado no se toca: cambiaria sus valores congelados. */
+  private async assertDayOpen(orgId: string, day: string) {
+    const org = await this.prisma.organization.findUniqueOrThrow({ where: { id: orgId }, select: { closedThrough: true } });
+    if (org.closedThrough && day.slice(0, 7) <= org.closedThrough) {
+      throw new BadRequestException(`El mes ${day.slice(0, 7)} está cerrado`);
+    }
   }
 }

@@ -1,10 +1,10 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma, TransactionType } from '@prisma/client';
 import * as dayjs from 'dayjs';
 import { PrismaService } from '../../prisma/prisma.service';
 import { computeAccountBalances } from '../../common/account-balance.util';
-import { dayKey } from '../../common/date-range.util';
-import { COUNTED } from '../../common/tx-filters';
+import { currentMonth, dayKey, monthKey, resolveMonth } from '../../common/date-range.util';
+import { COUNTED, PENDING_LIVE } from '../../common/tx-filters';
 import { EngineEvent, RateFn, microsToCents, roundDiv, valuate } from './fifo-engine';
 import { rateMicros } from './rates.service';
 
@@ -36,24 +36,24 @@ export class ValuationService {
   async ensureFresh(orgId: string) {
     const org = await this.prisma.organization.findUnique({
       where: { id: orgId },
-      select: { reportCurrency: true, valuationEnabled: true, valuationFingerprint: true },
+      select: { reportCurrency: true, valuationEnabled: true, valuationFingerprint: true, closedThrough: true },
     });
     if (!org) throw new NotFoundException('Organization not found');
     if (!org.valuationEnabled) return org;
-    const fp = await this.fingerprint(orgId, org.reportCurrency);
+    const fp = await this.fingerprint(orgId, org.reportCurrency, org.closedThrough);
     if (fp !== org.valuationFingerprint) await this.recompute(orgId, org.reportCurrency, fp);
     return org;
   }
 
   /** Cambia si cambia cualquier movimiento, tasa o la moneda de estadisticas (y una vez al dia). */
-  private async fingerprint(orgId: string, reportCurrency: string): Promise<string> {
+  private async fingerprint(orgId: string, reportCurrency: string, closedThrough: string | null): Promise<string> {
     const [[tx], [rates], [overrides]] = await Promise.all([
       this.prisma.$queryRaw<{ n: bigint; m: Date | null }[]>`SELECT count(*) AS n, max("updatedAt") AS m FROM "transactions" WHERE "orgId" = ${orgId}`,
       this.prisma.$queryRaw<{ n: bigint; m: Date | null }[]>`SELECT count(*) AS n, max("fetchedAt") AS m FROM "reference_rates"`,
       this.prisma.$queryRaw<{ n: bigint; m: Date | null }[]>`SELECT count(*) AS n, max("updatedAt") AS m FROM "rate_overrides" WHERE "orgId" = ${orgId}`,
     ]);
     // El dia de hoy entra porque "hoy" y "ayer" usan la ultima tasa como estimada.
-    return [reportCurrency, tx.n, tx.m?.getTime(), rates.n, rates.m?.getTime(), overrides.n, overrides.m?.getTime(), dayKey(new Date())].join('|');
+    return [reportCurrency, closedThrough ?? '', tx.n, tx.m?.getTime(), rates.n, rates.m?.getTime(), overrides.n, overrides.m?.getTime(), dayKey(new Date())].join('|');
   }
 
   /** Recalculo completo de una organizacion, con un bloqueo para que no corran dos a la vez. */
@@ -62,13 +62,13 @@ export class ValuationService {
     await this.prisma.$transaction(
       async (db) => {
         await db.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'fx:' + orgId}))`;
-        const fp = fingerprint ?? (await this.fingerprint(orgId, reportCurrency));
-        const current = await db.organization.findUniqueOrThrow({ where: { id: orgId }, select: { valuationFingerprint: true } });
+        const current = await db.organization.findUniqueOrThrow({ where: { id: orgId }, select: { valuationFingerprint: true, closedThrough: true } });
+        const fp = fingerprint ?? (await this.fingerprint(orgId, reportCurrency, current.closedThrough));
         if (fingerprint && current.valuationFingerprint === fp) return; // otro lo hizo mientras esperabamos
 
         const events = await this.loadEvents(db, orgId);
         const rate = await this.rateFn(db, orgId);
-        const r = valuate(events, rate, reportCurrency);
+        const r = valuate(events, rate, reportCurrency, current.closedThrough);
 
         // Lo que no esta aprobado o se borro deja de tener valor.
         await db.$executeRaw`UPDATE "transactions" SET "reportAmount" = NULL, "valuationStatus" = NULL, "fxResult" = NULL
@@ -169,13 +169,59 @@ export class ValuationService {
     };
   }
 
+  // ─── Cierre de mes ───────────────────────────────────────────────
+
+  /**
+   * Cierra todo hasta `month` ('YYYY-MM', anterior al actual). Exige que en
+   * esos meses no quede nada pendiente de aprobar ni sin valorar por falta de
+   * tasa: lo que se cierra tiene que estar completo.
+   */
+  async closeMonth(orgId: string, userId: string, month: string) {
+    const cfg = await this.ensureFresh(orgId);
+    if (month >= currentMonth()) throw new BadRequestException('Solo se cierran meses ya terminados');
+    if (cfg.closedThrough && month <= cfg.closedThrough) return this.closures(orgId);
+    const end = resolveMonth(month).to;
+    const [pending, missing] = await Promise.all([
+      this.prisma.transaction.count({ where: { orgId, ...PENDING_LIVE, date: { lt: end } } }),
+      cfg.valuationEnabled
+        ? this.prisma.transaction.count({ where: { orgId, ...COUNTED, valuationStatus: 'MISSING_RATE', date: { lt: end } } })
+        : 0,
+    ]);
+    if (pending) throw new ConflictException(`Hay ${pending} movimientos por aprobar hasta ${month}: apruébalos o recházalos antes de cerrar`);
+    if (missing) throw new ConflictException(`Hay ${missing} movimientos sin valorar por falta de tasa hasta ${month}: pon esas tasas antes de cerrar`);
+    await this.prisma.organization.update({ where: { id: orgId }, data: { closedThrough: month } });
+    await this.prisma.auditLog.create({
+      data: { action: 'CLOSE_MONTH', entity: 'Organization', entityId: orgId, metadata: { month, previous: cfg.closedThrough }, userId, orgId },
+    });
+    return this.closures(orgId);
+  }
+
+  /** Reabre desde `month` (incluido): solo el propietario, y queda en el historial. */
+  async reopenMonth(orgId: string, userId: string, month: string) {
+    const org = await this.prisma.organization.findUniqueOrThrow({ where: { id: orgId }, select: { closedThrough: true } });
+    if (!org.closedThrough || month > org.closedThrough) return this.closures(orgId);
+    const previous = dayjs(`${month}-01`).subtract(1, 'month').format('YYYY-MM');
+    const first = await this.prisma.transaction.findFirst({ where: { orgId }, orderBy: { date: 'asc' }, select: { date: true } });
+    const closedThrough = first && previous < monthKey(first.date) ? null : previous;
+    await this.prisma.organization.update({ where: { id: orgId }, data: { closedThrough } });
+    await this.prisma.auditLog.create({
+      data: { action: 'REOPEN_MONTH', entity: 'Organization', entityId: orgId, metadata: { month, previous: org.closedThrough }, userId, orgId },
+    });
+    return this.closures(orgId);
+  }
+
+  async closures(orgId: string) {
+    const org = await this.prisma.organization.findUniqueOrThrow({ where: { id: orgId }, select: { closedThrough: true } });
+    return { closedThrough: org.closedThrough };
+  }
+
   // ─── Lectura ─────────────────────────────────────────────────────
 
   async status(orgId: string) {
     const cfg = await this.ensureFresh(orgId);
     const org = await this.prisma.organization.findUniqueOrThrow({
       where: { id: orgId },
-      select: { reportCurrency: true, valuationEnabled: true, valuedAt: true, valuationIssues: true },
+      select: { reportCurrency: true, valuationEnabled: true, valuedAt: true, valuationIssues: true, closedThrough: true },
     });
     const issues = (org.valuationIssues ?? { missingRates: [], openDeficits: {}, mismatch: {} }) as unknown as Issues;
     const [estimates, missing] = cfg.valuationEnabled
@@ -187,6 +233,7 @@ export class ValuationService {
     return {
       enabled: org.valuationEnabled,
       reportCurrency: org.reportCurrency,
+      closedThrough: org.closedThrough,
       valuedAt: org.valuedAt,
       missingRates: issues.missingRates,
       openDeficits: issues.openDeficits,

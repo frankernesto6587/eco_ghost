@@ -12,6 +12,7 @@ import { debtInitialType, debtPaymentType, recomputeDebt } from '../../common/de
 import { decideStatusFor, statusFields } from '../../common/approval-policy';
 import { Actor, ENTRY_HEAD, PENDING_LIVE, canApprove } from '../../common/tx-filters';
 import { TelegramService } from '../telegram/telegram.service';
+import { assertOpenPeriod } from '../../common/period-lock.util';
 import { TransactionsService, isPair, snapshot } from '../transactions/transactions.service';
 import { UpdateTransactionDto } from '../transactions/dto';
 import { ApprovalQueryDto } from './dto';
@@ -119,6 +120,8 @@ export class ApprovalsService {
       if (entry.head.status !== TransactionStatus.PENDING) {
         throw new ConflictException('This entry was already reviewed');
       }
+      // Aprobar algo de un mes cerrado cambiaria sus numeros congelados.
+      await assertOpenPeriod(tx, orgId, [entry.head.date]);
 
       let before = snapshot(entry.head, entry.head.linkedTransaction ?? undefined);
       if (hasEdits(edits)) {
@@ -210,6 +213,8 @@ export class ApprovalsService {
       this.assertAuthorCanChange(entry, actor);
       const wasRejected = entry.head.status === TransactionStatus.REJECTED;
       if (mustBeRejected && !wasRejected) throw new ConflictException('Only rejected entries can be resubmitted');
+      // Con autoconfirmar podria entrar aprobado: no en un mes cerrado.
+      await assertOpenPeriod(tx, orgId, [entry.head.date]);
 
       let before = snapshot(entry.head, entry.head.linkedTransaction ?? undefined);
       if (hasEdits(edits)) {

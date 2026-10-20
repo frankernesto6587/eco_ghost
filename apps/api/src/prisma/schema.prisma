@@ -145,6 +145,8 @@ model Organization {
   valuedAt             DateTime?
   /// Lo que el motor dejo pendiente: tasas que faltan, deficits sin cubrir, descuadres.
   valuationIssues      Json?
+  /// Ultimo mes cerrado ('YYYY-MM'): ahi no se anota ni se cambia nada y sus valores quedan congelados.
+  closedThrough        String?
   createdAt        DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -370,6 +372,9 @@ model Budget {
   categoryId String?
   category   Category? @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   currency   String
+  /// NATIVE: solo el gasto de las cuentas de `currency`. REPORT: todo el gasto
+  /// valorado en la moneda de estadisticas (FIFO); `currency` es esa moneda.
+  basis      String    @default("NATIVE")
   amount     Int
   period     String    @default("MONTHLY")
   startMonth String

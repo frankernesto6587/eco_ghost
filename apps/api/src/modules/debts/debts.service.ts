@@ -9,6 +9,7 @@ import { assertOrgRefs } from '../../common/org-refs.util';
 import { debtInitialType, debtPaymentType, recomputeDebt } from '../../common/debt-balance.util';
 import { Actor, PENDING_LIVE, canApprove } from '../../common/tx-filters';
 import { decideStatusFor, statusFields } from '../../common/approval-policy';
+import { assertOpenPeriod } from '../../common/period-lock.util';
 
 /** Nombre de la categoria de los movimientos de deudas. */
 const LOAN_CATEGORY = 'Prestamos';
@@ -50,6 +51,8 @@ export class DebtsService {
       const accounts = await assertOrgRefs(tx, orgId, { accountIds: [dto.accountId] });
       const account = accounts.get(dto.accountId)!;
       const currency = account.currency;
+      const date = dto.date ? parseEntryDate(dto.date) : new Date();
+      await assertOpenPeriod(tx, orgId, [date]);
       // La deuda y su movimiento inicial esperan juntos la aprobacion.
       const status = await decideStatusFor(tx, orgId, userId, [{ currency, amount: dto.totalAmount }]);
 
@@ -74,7 +77,7 @@ export class DebtsService {
         include: { account: true },
         data: {
           ...statusFields(status, userId),
-          date: dto.date ? parseEntryDate(dto.date) : new Date(),
+          date,
           description: `Debt: ${dto.description}`,
           amount: dto.totalAmount,
           type: debtInitialType(dto.type),
@@ -180,6 +183,8 @@ export class DebtsService {
       throw new NotFoundException(`Debt with id ${id} not found`);
     }
 
+    const dates = await this.prisma.transaction.findMany({ where: { debtId: id, deletedAt: null }, select: { date: true } });
+    await assertOpenPeriod(this.prisma, orgId, dates.map((d) => d.date));
     const now = new Date();
     const deleted = await this.prisma.$transaction(async (tx) => {
       await tx.transaction.updateMany({
@@ -237,6 +242,7 @@ export class DebtsService {
         throw new BadRequestException(`This debt is in ${debt.currency}; pay it from an account in ${debt.currency}`);
       }
 
+      await assertOpenPeriod(tx, orgId, [parseEntryDate(dto.date)]);
       const status = await decideStatusFor(tx, orgId, userId, [{ currency: debt.currency, amount: dto.amount }]);
 
       // RECEIVABLE debts: payments are INCOME (money coming in).

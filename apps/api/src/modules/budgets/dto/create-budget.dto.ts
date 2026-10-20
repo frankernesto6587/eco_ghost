@@ -27,6 +27,15 @@ export class CreateBudgetDto {
   @IsIn(CURRENCY_CODES, { message: `currency debe ser una de: ${CURRENCY_CODES.join(', ')}` })
   currency: string;
 
+  @ApiPropertyOptional({
+    enum: ['NATIVE', 'REPORT'],
+    default: 'NATIVE',
+    description: 'REPORT: el tope es en la moneda de estadisticas y cuenta todo el gasto valorado (FIFO)',
+  })
+  @IsOptional()
+  @IsIn(['NATIVE', 'REPORT'])
+  basis?: 'NATIVE' | 'REPORT';
+
   @ApiProperty({ example: 1500000, description: 'Tope en centavos' })
   @IsInt()
   @Min(1)

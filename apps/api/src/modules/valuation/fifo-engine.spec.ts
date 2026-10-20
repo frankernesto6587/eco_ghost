@@ -123,6 +123,26 @@ describe('bolsa en negativo', () => {
   });
 });
 
+describe('cierre de mes', () => {
+  it('lo estimado de un mes cerrado se congela; la diferencia va a resultado cambiario', () => {
+    const g = expense('2026-09-28', 'MN', mn(100_000));
+    const lot = exchange('2026-10-03', 'USD', usd(300), 'MN', mn(198_000));
+    const r = valuate([g, lot], rates({ '2026-09-28': { USD: 620 } }), 'USD', '2026-09');
+    // El gasto de septiembre queda en 161,29 estimado aunque octubre lo cubra a 660
+    expect(r.tx.get(g.id)).toEqual({ reportAmount: 16129, status: 'ESTIMATE', fxResult: 0 });
+    // 161,290323 estimados - 151,515152 reales = 9,78 a favor, en el cambio de octubre
+    expect(r.tx.get(lot.id)?.fxResult).toBe(978);
+    expect(r.mismatch.size).toBe(0);
+  });
+
+  it('sin cierre, el mismo caso se revalora al cubrirse', () => {
+    const g = expense('2026-09-28', 'MN', mn(100_000));
+    const lot = exchange('2026-10-03', 'USD', usd(300), 'MN', mn(198_000));
+    const r = valuate([g, lot], rates({ '2026-09-28': { USD: 620 } }), 'USD');
+    expect(r.tx.get(g.id)).toEqual({ reportAmount: 15152, status: 'EXACT', fxResult: 0 });
+  });
+});
+
 describe('entradas que no vienen de un cambio', () => {
   it('saldo inicial o ventas en MN entran a la tasa de referencia del dia', () => {
     const ini = income('2026-10-01', 'MN', mn(81_000));

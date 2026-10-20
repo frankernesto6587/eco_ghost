@@ -102,6 +102,8 @@ interface Lot extends LotOut {}
 
 interface Deficit {
   consumerId: string;
+  /** Dia del consumidor (para saber si su mes esta cerrado). */
+  day: string;
   qty: number;
   estMicros: bigint | null;
   estimated: boolean;
@@ -119,7 +121,13 @@ interface Consumer {
   deficitUnknown: boolean;
 }
 
-export function valuate(events: EngineEvent[], rate: RateFn, reportCurrency: string): EngineResult {
+/**
+ * `closedThrough` ('YYYY-MM'): meses cerrados. Lo de esos meses queda
+ * congelado: un deficit de un mes cerrado que se cubre despues no revalora el
+ * gasto, la diferencia va como resultado cambiario de quien trajo el lote.
+ */
+export function valuate(events: EngineEvent[], rate: RateFn, reportCurrency: string, closedThrough?: string | null): EngineResult {
+  const closed = (day: string) => !!closedThrough && day.slice(0, 7) <= closedThrough;
   const R = reportCurrency;
   const pools = new Map<string, { lots: Lot[]; deficits: Deficit[] }>();
   const pool = (c: string) => {
@@ -188,7 +196,7 @@ export function valuate(events: EngineEvent[], rate: RateFn, reportCurrency: str
     }
     if (need > 0) {
       const est = valueAt(need, c, day);
-      p.deficits.push({ consumerId, qty: need, estMicros: est?.micros ?? null, estimated: est?.estimated ?? false, terminal });
+      p.deficits.push({ consumerId, day, qty: need, estMicros: est?.micros ?? null, estimated: est?.estimated ?? false, terminal });
       allocations.push({ consumerTxId: consumerId, currency: c, lotSeq: null, qty: need, costMicros: est?.micros ?? null, kind: 'DEFICIT' });
       s.deficitQty += need;
       if (est) s.deficitEst += est.micros;
@@ -208,7 +216,9 @@ export function valuate(events: EngineEvent[], rate: RateFn, reportCurrency: str
       const cost = slice(l, take);
       const estPart = d.estMicros === null ? null : take === d.qty ? d.estMicros : roundDiv(d.estMicros * BigInt(take), BigInt(d.qty));
       allocations.push({ consumerTxId: d.consumerId, currency: l.currency, lotSeq: l.seq, qty: take, costMicros: cost, kind: 'DEFICIT_SETTLED' });
-      if (d.terminal) {
+      // Si el gasto es de un mes cerrado y el lote no, el gasto queda como estaba.
+      const frozen = closed(d.day) && !closed(l.day);
+      if (d.terminal && !frozen) {
         const s = consumerOf(d.consumerId);
         s.deficitQty -= take;
         if (estPart !== null) s.deficitEst -= estPart;
@@ -216,8 +226,9 @@ export function valuate(events: EngineEvent[], rate: RateFn, reportCurrency: str
         else s.known += cost;
         if (l.estimated) s.estimated = true;
       } else if (estPart !== null && cost !== null) {
-        // Un cambio entre dos monedas de bolsa ya paso su coste (estimado) al
-        // lote nuevo; la diferencia con el coste real queda como resultado.
+        // Un cambio entre dos monedas de bolsa (o un gasto de un mes cerrado) ya
+        // tiene su valor estimado; la diferencia con el coste real queda como
+        // resultado cambiario de quien trajo el lote.
         addFx(l.sourceTxId, estPart - cost);
       }
       d.qty -= take;
@@ -234,6 +245,8 @@ export function valuate(events: EngineEvent[], rate: RateFn, reportCurrency: str
     if (s.unknown || s.deficitUnknown) return { micros: null, status: 'MISSING_RATE' };
     return { micros: s.known + s.deficitEst, status: s.deficitQty > 0 || s.estimated ? 'ESTIMATE' : 'EXACT' };
   };
+  // Un deficit congelado por cierre sigue contando en `deficitQty` del gasto
+  // (queda estimado), pero sale de la bolsa al cubrirse.
 
   // Lo que hay que resolver al final (cuando ya se sabe que deficits se cubrieron).
   const finals: (() => void)[] = [];

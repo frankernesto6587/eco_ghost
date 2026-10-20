@@ -103,6 +103,33 @@ await api('DELETE', `/transactions/${lot3.id}`, { reason: 'check' });
 await api('DELETE', `/transactions/${deficit.id}`, { reason: 'check' });
 await api('DELETE', '/rates/2026-09-21/USD');
 
+// ── Analisis y presupuestos "todo en USD" ────────────────────────────────
+const sum = (await api('GET', '/analytics/summary?from=2026-09-01&to=2026-09-30&currency=USD&basis=REPORT')).body;
+ok(sum.currency === 'USD' && sum.totals?.expense === 33333 + 81818, 'Análisis en USD: gasto de septiembre = 333,33 + 818,18', sum.totals);
+const native = (await api('GET', '/analytics/summary?from=2026-09-01&to=2026-09-30&currency=MN')).body;
+ok(native.totals?.expense === 70000000, 'Análisis en MN sigue igual: 700 000 MN', native.totals);
+const trend = (await api('GET', '/analytics/trend?currency=USD&basis=REPORT&months=3')).body;
+ok(trend.points?.some((p) => p.month === '2026-09' && p.expense === 115151), 'tendencia en USD: septiembre 1 151,51', trend.points);
+const bud = await api('POST', '/budgets', { basis: 'REPORT', currency: 'USD', amount: 100000, startMonth: '2026-09', endMonth: '2026-09' });
+ok(bud.status === 201, 'presupuesto "todo en USD" de 1 000 USD', bud.body);
+ok((await api('POST', '/budgets', { basis: 'REPORT', currency: 'MN', amount: 1, startMonth: '2026-09' })).status === 400, 'un presupuesto en USD tiene que ir en USD');
+const prog = (await api('GET', '/budgets/progress?currency=USD&month=2026-09&basis=REPORT')).body;
+ok(prog.items?.[0]?.spent === 115151 && prog.items?.[0]?.status === 'OVER', 'el presupuesto suma el gasto en MN valorado: 1 151,51 de 1 000 → pasado', prog.items?.[0]);
+
+// ── Cierre de mes ────────────────────────────────────────────────────────
+const close = await api('POST', '/valuation/months/2026-09/close');
+ok(close.status === 201 && close.body.closedThrough === '2026-09', 'cerrar septiembre', close.body);
+ok((await api('POST', '/transactions', { date: '2026-09-30', description: 'tarde', amount: 100, type: 'EXPENSE', accountId: mn })).status === 409, 'anotar en septiembre cerrado → 409');
+ok((await api('DELETE', `/transactions/${g1.id}`, { reason: 'x' })).status === 409, 'borrar en septiembre cerrado → 409');
+ok((await api('PUT', '/rates/2026-09-10', { rates: { USD: 700 } })).status === 400, 'cambiar una tasa de septiembre cerrado → 400');
+ok((await api('PATCH', '/valuation/settings', { reportCurrency: 'EUR' })).status === 400, 'no se cambia la moneda de estadísticas con meses cerrados');
+ok((await value(g1.id)).reportAmount === 33333, 'los valores de septiembre siguen igual');
+const reopen = await api('POST', '/valuation/months/2026-09/reopen');
+ok(reopen.status === 201 && reopen.body.closedThrough !== '2026-09', 'reabrir septiembre (propietario)', reopen.body);
+const late = await api('POST', '/transactions', { date: '2026-09-30', description: 'tarde', amount: 100, type: 'EXPENSE', accountId: mn });
+ok(late.status === 201, 'reabierto, se puede anotar otra vez');
+await api('DELETE', `/transactions/${late.body.id}`, { reason: 'check' });
+
 // ── Lo pendiente no se valora hasta aprobarse (en Casa, con Pedro) ───────
 const pedro = await login('pedro@prueba.ecoghost');
 const casaPedro = client(pedro.tokens.accessToken, casaId);

@@ -174,6 +174,22 @@ export interface DashboardOverview {
   dailyBalance: DashboardDailyBalance[];
   /** Aprobaciones: lo que espera revision (para quien aprueba) y lo propio */
   pending: ApprovalCounts;
+  /** El rango en la moneda de estadisticas (FIFO); null si no esta activa */
+  report: DashboardReport | null;
+}
+
+/** Resumen del rango en la moneda de estadisticas (centavos). */
+export interface DashboardReport {
+  currency: string;
+  monthIncome: number;
+  monthExpense: number;
+  net: number;
+  /** Resultado cambiario de vender MN (u otra moneda) en el rango */
+  fxResult: number;
+  /** Movimientos del rango sin valorar (falta una tasa): no estan en los totales */
+  incomplete: number;
+  estimates: number;
+  patrimony: { atCost: number | null; atToday: number | null; unrealized: number | null };
 }
 
 // ─── Aprobaciones ────────────────────────────────────────────────────

@@ -13,6 +13,8 @@ export interface AnalyticsRangeParams {
   currency: string;
   /** CSV en el request; el DTO del backend lo parte */
   accountId?: string;
+  /** REPORT: todas las cuentas, valoradas por FIFO en la moneda de estadisticas */
+  basis?: 'NATIVE' | 'REPORT';
 }
 
 /**
@@ -49,7 +51,7 @@ export const analyticsService = {
     return data;
   },
 
-  async getTrend(params: { currency: string; months?: number; accountId?: string }) {
+  async getTrend(params: { currency: string; months?: number; accountId?: string; basis?: 'NATIVE' | 'REPORT' }) {
     const { data } = await api.get<AnalyticsTrend>('/analytics/trend', {
       params: clean(params),
     });

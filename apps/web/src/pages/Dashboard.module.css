@@ -970,3 +970,25 @@
 
   .seg { margin-left: 0; }
 }
+
+/* ═══════ EN LA MONEDA DE ESTADISTICAS ═══════ */
+.reportGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.reportNum {
+  font-family: 'Geist Mono', monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 22px;
+  font-weight: 500;
+  color: var(--eco-fg);
+}
+
+.reportSub {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--eco-fg3);
+}

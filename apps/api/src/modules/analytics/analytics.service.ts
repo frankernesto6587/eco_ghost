@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { Prisma, TransactionType } from '@prisma/client';
 import type {
   AnalyticsRecurring,
@@ -9,6 +9,7 @@ import type {
 } from '@ecoghost/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { flowSql, flowWhere } from '../../common/tx-filters';
+import { ValuationService } from '../valuation/valuation.service';
 import {
   APP_TZ,
   resolveRange,
@@ -46,7 +47,36 @@ function pct(current: number, previous: number): number | null {
 
 @Injectable()
 export class AnalyticsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly valuation: ValuationService,
+  ) {}
+
+  /**
+   * Que se suma y de que cuentas. NATIVE: los importes de las cuentas de una
+   * moneda. REPORT: todas las cuentas, con su valor en la moneda de
+   * estadisticas (FIFO); lo que no se pudo valorar (falta una tasa) no suma.
+   */
+  private async scope(orgId: string, q: { currency: string; accountId?: string[]; basis?: 'NATIVE' | 'REPORT' }) {
+    if (q.basis !== 'REPORT') {
+      return { accountIds: await this.resolveAccountIds(orgId, q.currency, q.accountId), currency: q.currency, field: 'amount' as const };
+    }
+    const cfg = await this.valuation.ensureFresh(orgId);
+    if (!cfg.valuationEnabled) throw new BadRequestException('La valoracion en la moneda de estadisticas no esta activa');
+    const accounts = await this.prisma.account.findMany({
+      where: { orgId, ...(q.accountId?.length ? { id: { in: q.accountId } } : {}) },
+      select: { id: true },
+    });
+    return { accountIds: accounts.map((a) => a.id), currency: cfg.reportCurrency, field: 'reportAmount' as const };
+  }
+
+  /** Filas de groupBy con `_sum` del campo elegido, como si fuera `amount`. */
+  private static asAmount(
+    rows: { categoryId: string | null; type: TransactionType; _sum: { amount?: number | null; reportAmount?: number | null }; _count?: { _all: number } }[],
+    field: 'amount' | 'reportAmount',
+  ) {
+    return rows.map((r) => ({ ...r, _sum: { amount: r._sum[field] ?? 0 } }));
+  }
 
   // ─── Resolucion de cuentas por moneda ─────────────────────────────
 
@@ -228,8 +258,8 @@ export class AnalyticsService {
 
   async getSummary(orgId: string, q: AnalyticsSummaryQueryDto): Promise<AnalyticsSummary> {
     const r = resolveRange(q.from, q.to);
-    const accountIds = await this.resolveAccountIds(orgId, q.currency, q.accountId);
-    if (accountIds.length === 0) return AnalyticsService.emptySummary(q.currency, r);
+    const { accountIds, currency, field } = await this.scope(orgId, q);
+    if (accountIds.length === 0) return AnalyticsService.emptySummary(currency, r);
 
     const topLimit = q.topLimit ?? 8;
 
@@ -239,13 +269,13 @@ export class AnalyticsService {
       this.prisma.transaction.groupBy({
         by: ['categoryId', 'type'],
         where: this.flowWhere(orgId, accountIds, r.from, r.to),
-        _sum: { amount: true },
+        _sum: { [field]: true },
         _count: { _all: true },
       }),
       this.prisma.transaction.groupBy({
         by: ['categoryId', 'type'],
         where: this.flowWhere(orgId, accountIds, r.prevFrom, r.prevTo),
-        _sum: { amount: true },
+        _sum: { [field]: true },
       }),
       this.prisma.category.findMany({
         where: { orgId },
@@ -256,19 +286,20 @@ export class AnalyticsService {
         where: {
           ...this.flowWhere(orgId, accountIds, r.from, r.to),
           type: TransactionType.EXPENSE,
+          ...(field === 'reportAmount' && { reportAmount: { not: null } }),
         },
-        orderBy: { amount: 'desc' },
+        orderBy: { [field]: 'desc' },
         take: topLimit,
         select: {
-          id: true, date: true, description: true, amount: true, type: true,
+          id: true, date: true, description: true, amount: true, reportAmount: true, type: true,
           category: { select: { id: true, name: true, color: true } },
           account: { select: { id: true, name: true, currency: true } },
         },
       }),
     ]);
 
-    const cur = AnalyticsService.splitRows(curRows);
-    const prev = AnalyticsService.splitRows(prevRows);
+    const cur = AnalyticsService.splitRows(AnalyticsService.asAmount(curRows, field));
+    const prev = AnalyticsService.splitRows(AnalyticsService.asAmount(prevRows, field));
 
     const expenseByCategory = this.buildRollup(
       categories, cur.expense, AnalyticsService.flatten(prev.expense), cur.expenseTotal,
@@ -280,7 +311,7 @@ export class AnalyticsService {
     const uncategorized = cur.expense.get(UNCATEGORIZED_KEY) ?? { amount: 0, count: 0 };
 
     return {
-      currency: q.currency,
+      currency,
       range: { from: r.fromLabel, to: r.toLabel },
       previousRange: { from: r.prevFromLabel, to: r.prevToLabel },
       totals: {
@@ -308,7 +339,7 @@ export class AnalyticsService {
         id: t.id,
         date: t.date.toISOString(),
         description: t.description,
-        amount: t.amount,
+        amount: field === 'reportAmount' ? t.reportAmount ?? 0 : t.amount,
         type: t.type,
         category: t.category,
         account: t.account,
@@ -322,15 +353,15 @@ export class AnalyticsService {
   async getTopCategories(orgId: string, q: TopCategoriesQueryDto): Promise<TopCategoriesWidget> {
     const r = resolveRange(q.from, q.to);
     const limit = q.limit ?? 5;
+    const { accountIds, currency, field } = await this.scope(orgId, q);
     const empty: TopCategoriesWidget = {
-      currency: q.currency,
+      currency,
       range: { from: r.fromLabel, to: r.toLabel },
       totalExpense: 0,
       items: [],
       uncategorizedShare: 0,
     };
 
-    const accountIds = await this.resolveAccountIds(orgId, q.currency, q.accountId);
     if (accountIds.length === 0) return empty;
 
     const [curRows, prevRows, categories] = await Promise.all([
@@ -340,7 +371,7 @@ export class AnalyticsService {
           ...this.flowWhere(orgId, accountIds, r.from, r.to),
           type: TransactionType.EXPENSE,
         },
-        _sum: { amount: true },
+        _sum: { [field]: true },
         _count: { _all: true },
       }),
       this.prisma.transaction.groupBy({
@@ -349,7 +380,7 @@ export class AnalyticsService {
           ...this.flowWhere(orgId, accountIds, r.prevFrom, r.prevTo),
           type: TransactionType.EXPENSE,
         },
-        _sum: { amount: true },
+        _sum: { [field]: true },
       }),
       this.prisma.category.findMany({
         where: { orgId },
@@ -358,8 +389,8 @@ export class AnalyticsService {
       }),
     ]);
 
-    const cur = AnalyticsService.splitRows(curRows);
-    const prev = AnalyticsService.splitRows(prevRows);
+    const cur = AnalyticsService.splitRows(AnalyticsService.asAmount(curRows, field));
+    const prev = AnalyticsService.splitRows(AnalyticsService.asAmount(prevRows, field));
     const roots = this.buildRollup(
       categories, cur.expense, AnalyticsService.flatten(prev.expense), cur.expenseTotal,
     );
@@ -367,7 +398,7 @@ export class AnalyticsService {
     const uncategorized = cur.expense.get(UNCATEGORIZED_KEY) ?? { amount: 0, count: 0 };
 
     return {
-      currency: q.currency,
+      currency,
       range: { from: r.fromLabel, to: r.toLabel },
       totalExpense: cur.expenseTotal,
       items: roots.slice(0, limit).map((n) => ({
@@ -406,9 +437,10 @@ export class AnalyticsService {
     const { from, to, monthKeys } = resolveTrailingMonths(months);
 
     const zero = monthKeys.map((month) => ({ month, income: 0, expense: 0, net: 0 }));
-    const accountIds = await this.resolveAccountIds(orgId, q.currency, q.accountId);
+    const { accountIds, currency, field } = await this.scope(orgId, q);
+    const col = Prisma.raw(`t."${field}"`);
     if (accountIds.length === 0) {
-      return { currency: q.currency, points: zero, averages: { income: 0, expense: 0, net: 0 } };
+      return { currency, points: zero, averages: { income: 0, expense: 0, net: 0 } };
     }
 
     const rows = await this.prisma.$queryRaw<
@@ -419,7 +451,7 @@ export class AnalyticsService {
                'YYYY-MM'
              )                       AS month,
              t."type"::text          AS type,
-             SUM(t."amount")::bigint AS total
+             COALESCE(SUM(${col}), 0)::bigint AS total
       FROM "transactions" t
       WHERE t."orgId" = ${orgId}
         AND ${flowSql('t')}
@@ -452,7 +484,7 @@ export class AnalyticsService {
     );
 
     return {
-      currency: q.currency,
+      currency,
       points,
       averages: {
         income: Math.round(sum.income / n),
@@ -481,8 +513,9 @@ export class AnalyticsService {
     const r = resolveRange(q.from, q.to);
     const minCount = q.minCount ?? 3;
 
-    const accountIds = await this.resolveAccountIds(orgId, q.currency, q.accountId);
-    if (accountIds.length === 0) return { currency: q.currency, items: [] };
+    const { accountIds, currency, field } = await this.scope(orgId, q);
+    const col = Prisma.raw(`t."${field}"`);
+    if (accountIds.length === 0) return { currency, items: [] };
 
     const rows = await this.prisma.$queryRaw<
       {
@@ -499,7 +532,7 @@ export class AnalyticsService {
     >(Prisma.sql`
       WITH norm AS (
         SELECT t."id",
-               t."amount",
+               ${col} AS "amount",
                t."date",
                t."categoryId",
                t."description" AS original,
@@ -512,6 +545,7 @@ export class AnalyticsService {
         WHERE t."orgId" = ${orgId}
           AND ${flowSql('t')}
           AND t."type" = 'EXPENSE'
+          AND ${col} IS NOT NULL
           AND t."accountId" IN (${Prisma.join(accountIds)})
           AND t."date" >= ${r.from}
           AND t."date" < ${r.to}
@@ -535,7 +569,7 @@ export class AnalyticsService {
     `);
 
     return {
-      currency: q.currency,
+      currency,
       items: rows.map((row) => ({
         key: row.key,
         sample: row.sample,

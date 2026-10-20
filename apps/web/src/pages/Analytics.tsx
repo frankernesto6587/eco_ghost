@@ -35,6 +35,10 @@ import {
 import type { Budget } from '@ecoghost/shared';
 import c from '@/components/analytics/Analytics.module.css';
 import s from './Analytics.module.css';
+import { useValuationStatus } from '@/hooks/useValuation';
+
+/** Valor del chip "todo en <moneda de estadisticas>". */
+const REPORT_KEY = '__REPORT__';
 
 const TREND_OPTIONS: (6 | 12 | 24)[] = [6, 12, 24];
 
@@ -140,36 +144,45 @@ export default function AnalyticsPage() {
     return [...set.entries()].sort((a, b) => b[1] - a[1]).map(([cur]) => cur);
   }, [accounts]);
 
-  const currency = useMemo(() => {
-    if (filters.currency && currencies.includes(filters.currency)) return filters.currency;
+  // "Todo en USD": un chip mas que suma todas las cuentas valoradas por FIFO.
+  const valuation = useValuationStatus().data;
+  const reportOn = !!valuation?.enabled;
+  const chipOptions = useMemo(() => (reportOn ? [...currencies, REPORT_KEY] : currencies), [currencies, reportOn]);
+
+  const choice = useMemo(() => {
+    if (filters.currency && chipOptions.includes(filters.currency)) return filters.currency;
     const base = currentOrg?.baseCurrency;
     if (base && currencies.includes(base)) return base;
     return currencies[0] ?? base ?? 'USD';
-  }, [filters.currency, currencies, currentOrg?.baseCurrency]);
+  }, [filters.currency, chipOptions, currencies, currentOrg?.baseCurrency]);
 
   // Fijar la moneda resuelta la primera vez, para que los chips reflejen el estado real.
   useEffect(() => {
-    if (!filters.currency && currency) setFilters({ currency });
-  }, [filters.currency, currency, setFilters]);
+    if (!filters.currency && choice) setFilters({ currency: choice });
+  }, [filters.currency, choice, setFilters]);
 
-  const hasAccountsInCurrency = currencies.includes(currency);
+  const report = choice === REPORT_KEY && reportOn;
+  /** La moneda que se pide a la API: en "todo en", la de estadisticas. */
+  const currency = report ? valuation!.reportCurrency : choice;
+  const basis: 'NATIVE' | 'REPORT' = report ? 'REPORT' : 'NATIVE';
+  const hasAccountsInCurrency = report || currencies.includes(currency);
 
   const summaryQuery = useQuery({
-    queryKey: ['analytics', 'summary', currency, range.from, range.to],
+    queryKey: ['analytics', 'summary', currency, basis, range.from, range.to],
     queryFn: () =>
-      analyticsService.getSummary({ currency, from: range.from, to: range.to, topLimit: 8 }),
+      analyticsService.getSummary({ currency, basis, from: range.from, to: range.to, topLimit: 8 }),
     enabled: !!currency && hasAccountsInCurrency,
   });
 
   const trendQuery = useQuery({
-    queryKey: ['analytics', 'trend', currency, filters.trendMonths],
-    queryFn: () => analyticsService.getTrend({ currency, months: filters.trendMonths }),
+    queryKey: ['analytics', 'trend', currency, basis, filters.trendMonths],
+    queryFn: () => analyticsService.getTrend({ currency, basis, months: filters.trendMonths }),
     enabled: !!currency && hasAccountsInCurrency,
   });
 
   const budgetQuery = useQuery({
-    queryKey: ['budgets', 'progress', currency, month],
-    queryFn: () => budgetsService.getProgress({ currency, month }),
+    queryKey: ['budgets', 'progress', currency, basis, month],
+    queryFn: () => budgetsService.getProgress({ currency, basis, month }),
     enabled: !!currency,
   });
 
@@ -191,9 +204,9 @@ export default function AnalyticsPage() {
   }, [recurringVisible]);
 
   const recurringQuery = useQuery({
-    queryKey: ['analytics', 'recurring', currency, range.from, range.to],
+    queryKey: ['analytics', 'recurring', currency, basis, range.from, range.to],
     queryFn: () =>
-      analyticsService.getRecurring({ currency, from: range.from, to: range.to, minCount: 3 }),
+      analyticsService.getRecurring({ currency, basis, from: range.from, to: range.to, minCount: 3 }),
     enabled: recurringVisible && !!currency && hasAccountsInCurrency,
   });
 
@@ -203,7 +216,7 @@ export default function AnalyticsPage() {
 
   const createBudget = useMutation({
     mutationFn: (values: BudgetFormValues) =>
-      budgetsService.create({ ...values, currency }),
+      budgetsService.create({ ...values, currency, basis }),
     onSuccess: () => {
       message.success(t('budgets.createSuccess'));
       setBudgetOpen(false);
@@ -252,7 +265,8 @@ export default function AnalyticsPage() {
         : { uncategorized: 'true' }),
       from: range.from,
       to: range.to,
-      currency,
+      // En "todo en USD" se ven los movimientos de todas las monedas
+      ...(report ? {} : { currency }),
       type: 'EXPENSE',
     });
   };
@@ -345,9 +359,10 @@ export default function AnalyticsPage() {
         </div>
         <div className={s.controls}>
           <CurrencyChips
-            currencies={currencies}
-            value={currency}
+            currencies={chipOptions}
+            value={choice}
             onChange={(cur) => setFilters({ currency: cur })}
+            labels={reportOn ? { [REPORT_KEY]: `Todo en ${valuation!.reportCurrency}` } : undefined}
           />
           <RangePresetChips
             preset={filters.preset}

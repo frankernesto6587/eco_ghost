@@ -6,9 +6,11 @@ import { parseEntryDate } from '../../common/date-range.util';
 import { assertOrgRefs } from '../../common/org-refs.util';
 import { recomputeDebt } from '../../common/debt-balance.util';
 import { Actor, flowWhere, visibleWhere } from '../../common/tx-filters';
+import { assertOpenPeriod } from '../../common/period-lock.util';
 import { decideStatusFor, statusFields } from '../../common/approval-policy';
 import { TelegramService } from '../telegram/telegram.service';
 import { AuditService } from '../audit/audit.service';
+import { ValuationService } from '../valuation/valuation.service';
 import {
   CreateTransactionDto,
   UpdateTransactionDto,
@@ -55,6 +57,7 @@ export class TransactionsService {
     private readonly prisma: PrismaService,
     private readonly telegram: TelegramService,
     private readonly audit: AuditService,
+    private readonly valuation: ValuationService,
   ) {}
 
   /**
@@ -80,6 +83,7 @@ export class TransactionsService {
       tagIds: dto.tagIds,
     });
     const date = parseEntryDate(dto.date);
+    await assertOpenPeriod(this.prisma, orgId, [date]);
     const tags = dto.tagIds?.length ? { tags: { create: dto.tagIds.map((tagId) => ({ tagId })) } } : {};
 
     if (isPair(dto.type)) {
@@ -272,6 +276,8 @@ export class TransactionsService {
     const { page = 1, limit = 15, sortBy, sortOrder } = query;
 
     const where = this.buildWhere(orgId, query, actor);
+    // reportAmount/valuationStatus al dia (recalcula solo si cambio algo)
+    await this.valuation.ensureFresh(orgId);
 
     // Build orderBy from sortBy/sortOrder, default to createdAt desc
     const dir = sortOrder ?? 'desc';
@@ -304,6 +310,7 @@ export class TransactionsService {
   }
 
   async findOne(orgId: string, id: string, actor: Actor) {
+    await this.valuation.ensureFresh(orgId);
     const transaction = await this.prisma.transaction.findFirst({
       where: {
         id,
@@ -384,6 +391,8 @@ export class TransactionsService {
    * (para el historial) y como queda (siempre la pierna que sale, si es par).
    */
   async applyEdits(tx: Prisma.TransactionClient, orgId: string, transaction: Transaction, dto: UpdateTransactionDto) {
+    // Ni la fecha vieja ni la nueva pueden caer en un mes cerrado.
+    await assertOpenPeriod(tx, orgId, [transaction.date, dto.date ? parseEntryDate(dto.date) : null]);
     const pair = isPair(transaction.type) ? await this.findPair(tx, transaction, { deletedAt: null }) : null;
     if (isPair(transaction.type)) {
       if (!pair) throw new BadRequestException('This transfer has lost its other side; delete it and enter it again');
@@ -494,6 +503,7 @@ export class TransactionsService {
     if (!transaction) {
       throw new NotFoundException(`Transaction with id ${id} not found`);
     }
+    await assertOpenPeriod(this.prisma, orgId, [transaction.date]);
 
     const now = new Date();
 
@@ -552,6 +562,7 @@ export class TransactionsService {
     if (!transaction) {
       throw new NotFoundException(`Transaction with id ${id} not found`);
     }
+    await assertOpenPeriod(this.prisma, orgId, [transaction.date]);
 
     // If TRANSFER/EXCHANGE, restore both linked transactions
     if (isPair(transaction.type)) {
@@ -611,8 +622,9 @@ export class TransactionsService {
 
       const rows = await tx.transaction.findMany({
         where: { ...where, id: { in: dto.ids } },
-        select: { id: true, type: true, debtId: true, status: true, createdBy: true, account: { select: { currency: true } } },
+        select: { id: true, type: true, date: true, debtId: true, status: true, createdBy: true, account: { select: { currency: true } } },
       });
+      await assertOpenPeriod(tx, orgId, rows.map((r) => r.date));
       // El contador solo reordena lo suyo que aun no esta aprobado: lo aprobado
       // ya cuenta y solo lo cambia quien aprueba.
       if (role === Role.ACCOUNTANT && rows.some((r) => r.createdBy !== userId || r.status === TransactionStatus.APPROVED)) {
@@ -659,6 +671,8 @@ export class TransactionsService {
     const where = { orgId, deletedAt: null } as const;
 
     const allIds = await this.withPairedIds(this.prisma, orgId, dto.ids, where);
+    const dates = await this.prisma.transaction.findMany({ where: { ...where, id: { in: [...allIds] } }, select: { date: true } });
+    await assertOpenPeriod(this.prisma, orgId, dates.map((d) => d.date));
     const debtIds = await this.prisma.transaction.findMany({
       where: { ...where, id: { in: [...allIds] }, debtId: { not: null } },
       select: { debtId: true },

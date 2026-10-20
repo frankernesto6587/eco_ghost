@@ -54,7 +54,8 @@
     "settings": "Configuracion",
     "organization": "Organizacion",
     "analytics": "Analisis",
-    "approvals": "Aprobaciones"
+    "approvals": "Aprobaciones",
+    "rates": "Tasas y cierres"
   },
   "dashboard": {
     "overview": "Resumen",

@@ -54,7 +54,8 @@
     "settings": "Settings",
     "organization": "Organization",
     "analytics": "Analytics",
-    "approvals": "Approvals"
+    "approvals": "Approvals",
+    "rates": "Rates & closing"
   },
   "dashboard": {
     "overview": "Overview",

@@ -4,6 +4,8 @@ import type { Budget, BudgetProgress } from '@ecoghost/shared';
 export interface CreateBudgetDto {
   categoryId?: string | null;
   currency: string;
+  /** REPORT: tope en la moneda de estadisticas sobre todo el gasto valorado */
+  basis?: 'NATIVE' | 'REPORT';
   /** Tope en centavos */
   amount: number;
   /** 'YYYY-MM' */
@@ -27,7 +29,7 @@ export const budgetsService = {
     return data;
   },
 
-  async getProgress(params: { currency: string; month?: string }) {
+  async getProgress(params: { currency: string; month?: string; basis?: 'NATIVE' | 'REPORT' }) {
     const { data } = await api.get<BudgetProgress>('/budgets/progress', { params });
     return data;
   },

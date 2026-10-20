@@ -1,9 +1,10 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { TransactionType } from '@prisma/client';
 import type { BudgetProgress, BudgetProgressItem, BudgetStatus } from '@ecoghost/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { flowWhere } from '../../common/tx-filters';
 import { AuditService } from '../audit/audit.service';
+import { ValuationService } from '../valuation/valuation.service';
 import { currentMonth, monthProgress, resolveMonth } from '../../common/date-range.util';
 import {
   BudgetProgressQueryDto,
@@ -44,6 +45,7 @@ export class BudgetsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly valuation: ValuationService,
   ) {}
 
   private async categories(orgId: string): Promise<CategoryRow[]> {
@@ -105,13 +107,15 @@ export class BudgetsService {
    */
   private async assertNoOverlap(
     orgId: string,
-    dto: { categoryId?: string | null; currency: string; startMonth: string; endMonth?: string | null },
+    dto: { categoryId?: string | null; currency: string; basis?: string; startMonth: string; endMonth?: string | null },
     excludeId?: string,
   ): Promise<void> {
     const existing = await this.prisma.budget.findMany({
       where: {
         orgId,
         currency: dto.currency,
+        // Un tope en MN y uno "todo en USD" miden cosas distintas: no chocan.
+        basis: dto.basis ?? 'NATIVE',
         isActive: true,
         ...(excludeId ? { id: { not: excludeId } } : {}),
       },
@@ -176,13 +180,23 @@ export class BudgetsService {
     if (dto.endMonth && dto.endMonth < dto.startMonth) {
       throw new ConflictException('endMonth no puede ser anterior a startMonth');
     }
+    const basis = dto.basis ?? 'NATIVE';
+    if (basis === 'REPORT') {
+      // El tope va en la moneda de estadisticas y suma todo el gasto valorado.
+      const cfg = await this.valuation.ensureFresh(orgId);
+      if (!cfg.valuationEnabled) throw new BadRequestException('La valoracion en la moneda de estadisticas no esta activa');
+      if (dto.currency !== cfg.reportCurrency) {
+        throw new BadRequestException(`Un presupuesto "todo en ${cfg.reportCurrency}" va en ${cfg.reportCurrency}`);
+      }
+    }
 
-    await this.assertNoOverlap(orgId, dto);
+    await this.assertNoOverlap(orgId, { ...dto, basis });
 
     const budget = await this.prisma.budget.create({
       data: {
         categoryId: dto.categoryId ?? null,
         currency: dto.currency,
+        basis,
         amount: dto.amount,
         startMonth: dto.startMonth,
         endMonth: dto.endMonth ?? null,
@@ -220,6 +234,7 @@ export class BudgetsService {
         {
           categoryId: existing.categoryId,
           currency: existing.currency,
+          basis: existing.basis,
           startMonth: existing.startMonth,
           endMonth: dto.endMonth !== undefined ? dto.endMonth : existing.endMonth,
         },
@@ -281,10 +296,12 @@ export class BudgetsService {
   async getProgress(orgId: string, q: BudgetProgressQueryDto): Promise<BudgetProgress> {
     const month = q.month ?? currentMonth();
     const range = resolveMonth(month);
+    const basis = q.basis ?? 'NATIVE';
+    if (basis === 'REPORT') await this.valuation.ensureFresh(orgId);
 
     const budgets = (
       await this.prisma.budget.findMany({
-        where: { orgId, currency: q.currency, isActive: true },
+        where: { orgId, currency: q.currency, basis, isActive: true },
         include: { category: { select: { id: true, name: true, icon: true, color: true } } },
       })
     ).filter((b) => appliesTo(b, month));
@@ -297,10 +314,12 @@ export class BudgetsService {
     };
     if (budgets.length === 0) return empty;
 
+    // REPORT: todas las cuentas, con su gasto valorado en la moneda de estadisticas.
     const accounts = await this.prisma.account.findMany({
-      where: { orgId, currency: q.currency },
+      where: { orgId, ...(basis === 'NATIVE' && { currency: q.currency }) },
       select: { id: true },
     });
+    const field = basis === 'REPORT' ? 'reportAmount' : 'amount';
     const accountIds = accounts.map((a) => a.id);
     if (accountIds.length === 0) {
       // Hay presupuestos pero ninguna cuenta en esa moneda: gasto 0, no error.
@@ -323,14 +342,14 @@ export class BudgetsService {
           type: TransactionType.EXPENSE,
           date: { gte: range.from, lt: range.to },
         }),
-        _sum: { amount: true },
+        _sum: { amount: true, reportAmount: true },
       }),
     ]);
 
     const spentByCategory = new Map<string | null, number>();
     let totalSpent = 0;
     for (const row of rows) {
-      const amount = row._sum.amount ?? 0;
+      const amount = row._sum[field] ?? 0;
       spentByCategory.set(row.categoryId, amount);
       totalSpent += amount;
     }

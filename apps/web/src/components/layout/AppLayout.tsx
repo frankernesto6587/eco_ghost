@@ -4,6 +4,7 @@ import { Layout, Menu, Dropdown, Avatar, Typography, Space, Button, Tooltip, Mod
 import type { MenuProps } from 'antd';
 import {
   AuditOutlined,
+  LineChartOutlined,
   DashboardOutlined,
   SwapOutlined,
   PieChartOutlined,
@@ -139,6 +140,7 @@ export function AppLayout() {
         label: t('nav.analytics'),
       },
       ...(canWrite ? [{ key: '/approvals', icon: <AuditOutlined />, label: approvalsLabel }] : []),
+      ...(canApprove ? [{ key: '/rates', icon: <LineChartOutlined />, label: t('nav.rates') }] : []),
       {
         key: '/accounts',
         icon: <WalletOutlined />,
@@ -165,7 +167,7 @@ export function AppLayout() {
         label: t('nav.organization'),
       },
     ],
-    [t, canWrite, approvalBadge],
+    [t, canWrite, canApprove, approvalBadge],
   );
 
   const handleSwitchOrg = useCallback(
@@ -241,13 +243,14 @@ export function AppLayout() {
       { key: '/transactions', icon: <SwapOutlined />, label: t('nav.transactions') },
       { key: '/analysis', icon: <PieChartOutlined />, label: t('nav.analytics') },
       ...(canWrite ? [{ key: '/approvals', icon: <AuditOutlined />, label: approvalsLabel }] : []),
+      ...(canApprove ? [{ key: '/rates', icon: <LineChartOutlined />, label: t('nav.rates') }] : []),
       { key: '/accounts', icon: <WalletOutlined />, label: t('nav.accounts') },
       { key: '/debts', icon: <TeamOutlined />, label: t('nav.debts') },
       { key: '/categories', icon: <AppstoreOutlined />, label: t('nav.categories') },
       { key: '/settings', icon: <SettingOutlined />, label: t('nav.settings') },
       { key: '/organization', icon: <BankOutlined />, label: t('nav.organization') },
     ],
-    [t, canWrite, approvalBadge],
+    [t, canWrite, canApprove, approvalBadge],
   );
 
   // ---------- Mobile Layout ----------

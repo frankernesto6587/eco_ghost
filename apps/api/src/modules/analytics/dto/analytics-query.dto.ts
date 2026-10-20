@@ -43,13 +43,14 @@ export class AnalyticsRangeDto {
   @IsString({ each: true })
   accountId?: string[];
 
-  // ─── FASE 2 ───────────────────────────────────────────────────────
-  // convertTo?: string;
-  //
-  // NO declarar hasta que el modulo ExchangeRate exista: con
-  // `forbidNonWhitelisted: true` el ValidationPipe global rechaza con 400
-  // cualquier query param no declarado, asi que el frontend tampoco debe
-  // enviarlo antes de tiempo.
+  @ApiPropertyOptional({
+    enum: ['NATIVE', 'REPORT'],
+    default: 'NATIVE',
+    description: 'NATIVE: solo las cuentas de `currency`. REPORT: todas las cuentas, valoradas por FIFO en la moneda de estadisticas.',
+  })
+  @IsOptional()
+  @IsIn(['NATIVE', 'REPORT'])
+  basis?: 'NATIVE' | 'REPORT';
 }
 
 export class AnalyticsSummaryQueryDto extends AnalyticsRangeDto {
@@ -93,6 +94,11 @@ export class AnalyticsTrendQueryDto {
   @IsArray()
   @IsString({ each: true })
   accountId?: string[];
+
+  @ApiPropertyOptional({ enum: ['NATIVE', 'REPORT'], default: 'NATIVE' })
+  @IsOptional()
+  @IsIn(['NATIVE', 'REPORT'])
+  basis?: 'NATIVE' | 'REPORT';
 }
 
 export class AnalyticsRecurringQueryDto extends AnalyticsRangeDto {

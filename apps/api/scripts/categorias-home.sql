@@ -15,6 +15,17 @@
 \set ON_ERROR_STOP 1
 BEGIN;
 
+SELECT EXISTS (
+  SELECT 1 FROM information_schema.columns
+  WHERE table_schema = 'public' AND table_name = 'categories' AND column_name = 'kind'
+) AS migrada \gset
+\if :migrada
+\else
+  \echo 'Falta la migracion 6_tipo_categoria: despliega primero y vuelve a correrlo. No se toca nada'
+  ROLLBACK;
+  \quit
+\endif
+
 SELECT count(*) = 1 AS una_org FROM organizations WHERE name = :'org' \gset
 \if :una_org
 \else

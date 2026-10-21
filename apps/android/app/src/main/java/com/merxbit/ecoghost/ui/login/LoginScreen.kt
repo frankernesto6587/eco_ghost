@@ -42,6 +42,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.ImeAction
@@ -55,6 +56,8 @@ import androidx.lifecycle.viewModelScope
 import com.merxbit.ecoghost.BuildConfig
 import com.merxbit.ecoghost.R
 import com.merxbit.ecoghost.data.AuthRepository
+import com.merxbit.ecoghost.data.GoogleResult
+import com.merxbit.ecoghost.data.GoogleSignIn
 import com.merxbit.ecoghost.ui.theme.Eco
 import com.merxbit.ecoghost.ui.theme.EcoShape
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -75,12 +78,23 @@ class LoginViewModel @Inject constructor(private val auth: AuthRepository) : Vie
         }
     }
 
-    fun googleNotReady() { error = "Entrar con Google llega en la próxima versión" }
+    fun google(pick: suspend () -> GoogleResult) {
+        loading = true; error = null
+        viewModelScope.launch {
+            error = when (val r = pick()) {
+                is GoogleResult.Token -> auth.loginWithGoogle(r.idToken)
+                GoogleResult.Cancelled -> null
+                is GoogleResult.Failed -> r.message
+            }
+            loading = false
+        }
+    }
 }
 
 @Composable
 fun LoginScreen(vm: LoginViewModel = hiltViewModel()) {
-    LoginContent(vm.loading, vm.error, vm::login, vm::googleNotReady)
+    val activity = LocalContext.current
+    LoginContent(vm.loading, vm.error, vm::login) { vm.google { GoogleSignIn.pick(activity) } }
 }
 
 @Composable
@@ -146,7 +160,7 @@ fun LoginContent(loading: Boolean, error: String?, onLogin: (String, String) -> 
             HorizontalDivider(Modifier.weight(1f), color = c.line)
         }
         OutlinedButton(
-            onGoogle, Modifier.fillMaxWidth().height(50.dp), shape = EcoShape.field,
+            onGoogle, Modifier.fillMaxWidth().height(50.dp), enabled = !loading, shape = EcoShape.field,
             border = androidx.compose.foundation.BorderStroke(1.dp, c.line),
         ) {
             Icon(Icons.Outlined.AccountCircle, null, tint = c.text)

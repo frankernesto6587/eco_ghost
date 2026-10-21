@@ -71,21 +71,21 @@ async function createCategories(orgId: string) {
   const byName = new Map<string, string>();
   for (const cat of DEFAULT_CATEGORIES) {
     const parent = await prisma.category.create({
-      data: { name: cat.name, icon: cat.icon, color: cat.color, orgId },
+      data: { name: cat.name, icon: cat.icon, color: cat.color, kind: cat.kind, orgId },
     });
     byName.set(cat.name, parent.id);
     for (const child of cat.children) {
       const c = await prisma.category.create({
-        data: { name: child.name, icon: child.icon, color: child.color, parentId: parent.id, orgId },
+        data: { name: child.name, icon: child.icon, color: child.color, kind: cat.kind, parentId: parent.id, orgId },
       });
       byName.set(child.name, c.id);
     }
   }
   const ajuste = await prisma.category.create({
-    data: { name: 'Saldo inicial', icon: 'bank', isAdjustment: true, orgId },
+    data: { name: 'Saldo inicial', icon: 'bank', isAdjustment: true, kind: 'BOTH', orgId },
   });
   byName.set('Saldo inicial', ajuste.id);
-  const prestamos = await prisma.category.create({ data: { name: 'Prestamos', icon: 'transaction', orgId } });
+  const prestamos = await prisma.category.create({ data: { name: 'Prestamos', icon: 'transaction', kind: 'BOTH', orgId } });
   byName.set('Prestamos', prestamos.id);
   return (name: string) => {
     const id = byName.get(name);

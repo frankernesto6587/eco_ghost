@@ -41,6 +41,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { useUIStore } from '@/store';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import CategoryIcon from '@/components/common/CategoryIcon';
+import { categoriesFor, categoryIds } from '@/lib/categoryTree';
 import TransactionDrawer, { type DrawerTransaction } from '@/components/transactions/TransactionDrawer';
 import { ExchangeRateHint } from '@/components/transactions/ExchangeRateHint';
 import s from './Transactions.module.css';
@@ -172,6 +173,7 @@ export default function TransactionsPage() {
   const isMobile = useIsMobile();
   const [form] = Form.useForm<TransactionFormValues>();
   const watchedType = Form.useWatch('type', form);
+  const isPairType = watchedType === 'TRANSFER' || watchedType === 'EXCHANGE';
   const watchedAccountId = Form.useWatch('accountId', form);
 
   // ---- State ----
@@ -320,6 +322,20 @@ export default function TransactionsPage() {
     () => (categoriesQuery.data ? flattenCategories(categoriesQuery.data) : []),
     [categoriesQuery.data],
   );
+
+  // El formulario solo ofrece las categorias del tipo elegido; al cambiar de
+  // tipo, la que ya no vale se quita para que se elija otra.
+  const formCategories = useMemo(
+    () => categoriesFor(categoriesQuery.data ?? [], watchedType),
+    [categoriesQuery.data, watchedType],
+  );
+  const formCategoryTree = useMemo(() => flattenCategories(formCategories), [formCategories]);
+  useEffect(() => {
+    const current = form.getFieldValue('categoryId');
+    if (current && categoriesQuery.data && !categoryIds(formCategories).has(current)) {
+      form.setFieldValue('categoryId', undefined);
+    }
+  }, [form, formCategories, categoriesQuery.data]);
 
   // ---- Mutations ----
   const createMutation = useMutation({
@@ -565,7 +581,8 @@ export default function TransactionsPage() {
         amount: Math.round(values.amount * 100),
         type: values.type,
         accountId: values.accountId,
-        categoryId: values.categoryId,
+        // Transferencias y cambios no llevan categoria.
+        categoryId: ['TRANSFER', 'EXCHANGE'].includes(values.type) ? undefined : values.categoryId,
         notes: values.notes?.trim() || undefined,
         ...((['TRANSFER', 'EXCHANGE'].includes(values.type) && values.toAccountId) ? { toAccountId: values.toAccountId } : {}),
         ...(values.type === 'EXCHANGE' && values.toAmount ? { toAmount: Math.round(values.toAmount * 100) } : {}),
@@ -668,6 +685,15 @@ export default function TransactionsPage() {
       net: (income[cur] ?? 0) - (expense[cur] ?? 0),
     }));
   }, [selectedIds, displayedTransactions]);
+
+  // Asignar categoria en lote: solo las que valen para todo lo elegido. Si hay
+  // transferencias o cambios no se ofrece (no llevan categoria).
+  const bulkCategoryTree = useMemo(() => {
+    const types = new Set(displayedTransactions.filter((tx) => selectedIds.has(tx.id)).map((tx) => tx.type));
+    if (types.has('TRANSFER') || types.has('EXCHANGE')) return null;
+    const fit = (categoriesQuery.data ?? []).filter((c) => [...types].every((type) => categoriesFor([c], type).length));
+    return flattenCategories(fit);
+  }, [selectedIds, displayedTransactions, categoriesQuery.data]);
 
   const exportCsv = useCallback(() => {
     if (displayedTransactions.length === 0) return;
@@ -1112,12 +1138,13 @@ export default function TransactionsPage() {
               <TreeSelect
                 showSearch
                 treeNodeFilterProp="name"
-                placeholder={t('transactions.bulkAssignCategory')}
+                placeholder={bulkCategoryTree ? t('transactions.bulkAssignCategory') : t('transactions.bulkNoCategoryForPairs')}
+                disabled={!bulkCategoryTree}
                 value={undefined}
                 style={{ minWidth: 190 }}
                 size="small"
                 loading={bulkCategoryMutation.isPending}
-                treeData={categoryTree}
+                treeData={bulkCategoryTree ?? []}
                 onChange={(categoryId?: string) => {
                   if (!categoryId) return;
                   bulkCategoryMutation.mutate({ ids: Array.from(selectedIds), categoryId });
@@ -1507,7 +1534,7 @@ export default function TransactionsPage() {
                 <Input placeholder="Ej: Compra de supermercado" />
               </Form.Item>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: isPairType ? '1fr' : '1fr 1fr', gap: 12 }}>
                 <Form.Item
                   name="accountId"
                   label={watchedType === 'INCOME' ? 'Cuenta destino' : 'Cuenta origen'}
@@ -1523,20 +1550,22 @@ export default function TransactionsPage() {
                     }))}
                   />
                 </Form.Item>
-                <Form.Item name="categoryId" label="Categoria">
-                  <TreeSelect
-                    placeholder="Seleccionar"
-                    allowClear
-                    showSearch
-                    treeNodeFilterProp="label"
-                    filterTreeNode={(input, node) =>
-                      String((node as any)?.name ?? '').toLowerCase().includes(input.toLowerCase())
-                    }
-                    treeData={categoryTree}
-                    loading={categoriesQuery.isLoading}
-                    treeDefaultExpandAll
-                  />
-                </Form.Item>
+                {!isPairType && (
+                  <Form.Item name="categoryId" label="Categoria">
+                    <TreeSelect
+                      placeholder={watchedType === 'INCOME' ? 'Categoría de ingreso' : 'Categoría de gasto'}
+                      allowClear
+                      showSearch
+                      treeNodeFilterProp="label"
+                      filterTreeNode={(input, node) =>
+                        String((node as any)?.name ?? '').toLowerCase().includes(input.toLowerCase())
+                      }
+                      treeData={formCategoryTree}
+                      loading={categoriesQuery.isLoading}
+                      treeDefaultExpandAll
+                    />
+                  </Form.Item>
+                )}
               </div>
 
               {(watchedType === 'TRANSFER' || watchedType === 'EXCHANGE') && (

@@ -42,6 +42,14 @@ enum TransactionType {
   EXCHANGE
 }
 
+/// En que movimientos sale una categoria: lo decide el grupo y lo heredan sus
+/// subcategorias. Transferencias y cambios no llevan categoria.
+enum CategoryKind {
+  EXPENSE
+  INCOME
+  BOTH
+}
+
 /// Valoracion en la moneda de estadisticas: EXACT (de un cambio o a la tasa del
 /// dia), ESTIMATE (deficit sin cubrir o tasa aun no publicada) o MISSING_RATE
 /// (falta la tasa de un dia y el admin tiene que ponerla).
@@ -287,6 +295,8 @@ model Category {
   /// Categoria de ajuste (saldos iniciales, correcciones): mueve saldo pero no
   /// es ingreso ni gasto, asi que queda fuera del flujo en Analisis.
   isAdjustment Boolean    @default(false)
+  /// Copia del tipo de su grupo, para filtrar sin subir por el arbol.
+  kind         CategoryKind @default(EXPENSE)
   parentId     String?
   parent       Category?  @relation("CategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
   children     Category[] @relation("CategoryTree")

@@ -123,17 +123,22 @@ export default function TransactionDrawer({ transaction: tx, open, onClose, onEd
             </>
           )}
 
-          <dt>Categor&iacute;a</dt>
-          <dd>
-            {tx.category ? (
-              <span className={css.chip}>
-                <span className={css.chipDot} style={{ background: tx.category.color ?? 'var(--eco-fg4)' }} />
-                {tx.category.name}
-              </span>
-            ) : (
-              <span className={css.dimmed}>sin categor&iacute;a</span>
-            )}
-          </dd>
+          {/* Transferencias y cambios no llevan categoria. */}
+          {!isTransfer && !isExchange && (
+            <>
+              <dt>Categor&iacute;a</dt>
+              <dd>
+                {tx.category ? (
+                  <span className={css.chip}>
+                    <span className={css.chipDot} style={{ background: tx.category.color ?? 'var(--eco-fg4)' }} />
+                    {tx.category.name}
+                  </span>
+                ) : (
+                  <span className={css.dimmed}>sin categor&iacute;a</span>
+                )}
+              </dd>
+            </>
+          )}
 
           {tx.notes && (
             <>

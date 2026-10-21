@@ -326,3 +326,43 @@
     padding-left: 52px;
   }
 }
+
+/* ═══════ SECCIONES POR TIPO ═══════ */
+.kindSections {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.kindSection {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.kindLabel {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-family: 'Geist Mono', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--eco-fg2);
+  padding-left: 4px;
+}
+
+.kindHint {
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0.02em;
+  color: var(--eco-fg4);
+}
+
+.kindInherited {
+  font-size: 12px;
+  color: var(--eco-fg3);
+  margin: -8px 0 16px;
+}

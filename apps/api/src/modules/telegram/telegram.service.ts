@@ -372,7 +372,8 @@ export class TelegramService {
     const PAGE_SIZE = 12; // 6 rows x 2 buttons
 
     const parents = await this.prisma.category.findMany({
-      where: { orgId: pending.orgId, parentId: null },
+      // El bot solo anota gastos: los grupos de ingreso no salen.
+      where: { orgId: pending.orgId, parentId: null, kind: { not: 'INCOME' } },
       select: { id: true, name: true, _count: { select: { children: true } } },
       orderBy: { name: 'asc' },
     });
@@ -467,7 +468,7 @@ export class TelegramService {
     });
 
     const children = await this.prisma.category.findMany({
-      where: { orgId: pending.orgId, parentId },
+      where: { orgId: pending.orgId, parentId, kind: { not: 'INCOME' } },
       select: { id: true, name: true },
       orderBy: { name: 'asc' },
     });

@@ -68,6 +68,8 @@ Tres direcciones en las maquetas, mismas pantallas:
 
 Común a las tres: Material Symbols Rounded como iconos, un color e icono por categoría (ya existen `icon` y `color` en `Category`), números tabulares, chips para elegir, hojas deslizantes para crear.
 
+**Cambio (2026-10-20): la paleta pasa a Dracula (oscuro) y Alucard (claro)**, los colores oficiales de https://draculatheme.com/spec, igual que la web. Sustituye los colores de Calma/Noche de abajo (tipografía y formas no cambian). Los valores viven en `apps/android/.../ui/theme/Theme.kt` y en `apps/web/src/global.css`.
+
 **Decisión (2026-10-12): A en claro y C en oscuro, con una sola base.**
 - Tipografía: Manrope (títulos y cifras en 800, cuerpo 500-600), números tabulares.
 - Formas: **esquinas casi rectas** (decisión de Frank, 2026-10-12): radio 4 px en tarjetas, listas, chips, iconos de categoría y diálogos; 3 px en campos, botones, segmentos y etiquetas; 2 px en barras de progreso; 6 px en el botón + y el logo; 8 px en el borde superior de las hojas. Bordes finos de 1 px, sin sombras. Solo quedan redondos los avatares de personas y el interruptor.

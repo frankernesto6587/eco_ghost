@@ -1,3 +1,4 @@
+import type { CategoryKind } from '@ecoghost/shared';
 import { api } from './api';
 
 export interface Category {
@@ -7,6 +8,8 @@ export interface Category {
   color?: string;
   /** Ajuste (saldo inicial, correccion): no cuenta como ingreso ni gasto */
   isAdjustment?: boolean;
+  /** En que movimientos sale; las subcategorias llevan el de su grupo. */
+  kind: `${CategoryKind}`;
   parentId: string | null;
   orgId: string;
   children: Category[];
@@ -17,6 +20,8 @@ export interface CreateCategoryDto {
   icon?: string;
   color?: string;
   isAdjustment?: boolean;
+  /** Solo en grupos: las subcategorias toman el de su grupo */
+  kind?: `${CategoryKind}`;
   parentId?: string;
 }
 

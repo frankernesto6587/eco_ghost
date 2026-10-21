@@ -92,6 +92,7 @@ async function main() {
         name: cat.name,
         icon: cat.icon,
         color: cat.color,
+        kind: cat.kind,
         orgId: demoOrg.id,
       },
     });
@@ -103,6 +104,7 @@ async function main() {
           name: child.name,
           icon: child.icon,
           color: child.color,
+          kind: cat.kind,
           parentId: parent.id,
           orgId: demoOrg.id,
         },

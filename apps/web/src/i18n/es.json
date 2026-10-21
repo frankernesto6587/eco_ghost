@@ -110,6 +110,7 @@
     "deleteSuccess": "Transaccion eliminada exitosamente",
     "uncategorizedFilter": "Sin categoria",
     "bulkAssignCategory": "Asignar categoria",
+    "bulkNoCategoryForPairs": "Las transferencias y cambios no llevan categoría",
     "bulkAssignSuccess": "{{count}} transacciones actualizadas"
   },
   "accounts": {

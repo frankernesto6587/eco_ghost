@@ -7,6 +7,7 @@ import {
   Select,
   ColorPicker,
   Popconfirm,
+  Segmented,
   Space,
   Switch,
 } from 'antd';
@@ -46,6 +47,25 @@ function IconPicker({ value, onChange }: { value?: string; onChange?: (val: stri
   );
 }
 
+/** Cada grupo sale en los movimientos de su tipo; sus subcategorias, igual. */
+const KIND_SECTIONS = [
+  { kind: 'EXPENSE', label: 'Gastos', hint: 'salen al anotar un gasto' },
+  { kind: 'INCOME', label: 'Ingresos', hint: 'salen al anotar un ingreso' },
+  { kind: 'BOTH', label: 'Gastos e ingresos', hint: 'préstamos y ajustes: salen en los dos' },
+] as const;
+
+const KIND_OPTIONS = [
+  { label: 'Gasto', value: 'EXPENSE' },
+  { label: 'Ingreso', value: 'INCOME' },
+  { label: 'Los dos', value: 'BOTH' },
+];
+
+/** El mensaje de la API (p. ej. por que no se puede cambiar el tipo), si lo hay. */
+function apiMessage(e: unknown): string | undefined {
+  const m = (e as { response?: { data?: { message?: string | string[] } } }).response?.data?.message;
+  return Array.isArray(m) ? m[0] : m;
+}
+
 /** Lighten a hex color to create a soft background */
 function colorToBg(hex: string | null | undefined): string {
   if (!hex) return 'var(--eco-accent-weak)';
@@ -62,6 +82,7 @@ export default function CategoriesPage() {
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [form] = Form.useForm<CreateCategoryDto & { color: string }>();
+  const watchedParentId = Form.useWatch('parentId', form);
 
   // ---------- Queries ----------
 
@@ -83,8 +104,8 @@ export default function CategoriesPage() {
       message.success(t('categories.createSuccess'));
       closeModal();
     },
-    onError: () => {
-      message.error(t('common.error'));
+    onError: (e) => {
+      message.error(apiMessage(e) ?? t('common.error'));
     },
   });
 
@@ -96,8 +117,8 @@ export default function CategoriesPage() {
       message.success(t('categories.updateSuccess'));
       closeModal();
     },
-    onError: () => {
-      message.error(t('common.error'));
+    onError: (e) => {
+      message.error(apiMessage(e) ?? t('common.error'));
     },
   });
 
@@ -145,6 +166,7 @@ export default function CategoriesPage() {
         color: category.color ?? '#bd93f9',
         parentId: category.parentId ?? undefined,
         isAdjustment: category.isAdjustment ?? false,
+        kind: category.kind,
       });
       setModalOpen(true);
     },
@@ -174,6 +196,8 @@ export default function CategoriesPage() {
         color,
         isAdjustment: values.isAdjustment ?? false,
         parentId: values.parentId || undefined,
+        // Una subcategoria lleva el tipo de su grupo.
+        kind: values.parentId ? undefined : values.kind,
       };
 
       if (editingCategory) {
@@ -240,159 +264,173 @@ export default function CategoriesPage() {
           <div className={css.emptySub}>Crea tu primera categoría para organizar tus movimientos</div>
         </div>
       ) : (
-        <div className={css.catList}>
-          {rootCategories.map((parent) => {
-            const isExpanded = expandedGroups.has(parent.id);
-            const childCount = parent.children?.length ?? 0;
-
+        <div className={css.kindSections}>
+          {KIND_SECTIONS.map((section) => {
+            const groups = rootCategories.filter((c) => c.kind === section.kind);
+            if (!groups.length) return null;
             return (
-              <div key={parent.id} className={css.catGroup}>
-                {/* Parent row */}
-                <div
-                  className={css.catGroupHead}
-                  onClick={() => toggleGroup(parent.id)}
-                >
-                  <div
-                    className={css.catIcon}
-                    style={{
-                      '--cat-color': colorToBg(parent.color),
-                      '--cat-fg': parent.color ?? undefined,
-                    } as React.CSSProperties}
-                  >
-                    {parent.icon ? (
-                      <CategoryIcon name={parent.icon} />
-                    ) : (
-                      <span
-                        className={css.catDot}
-                        style={{ backgroundColor: parent.color ?? 'var(--eco-fg4)' }}
-                      />
-                    )}
-                  </div>
-
-                  <div className={css.catMeta}>
-                    <div className={css.catName}>
-                      {parent.name}
-                      {childCount > 0 && (
-                        <span className={css.catChildCount}>{childCount}</span>
-                      )}
-                    </div>
-                  </div>
-
-                  {canWrite && (
-                    <div className={css.catActions} onClick={(e) => e.stopPropagation()}>
-                      <button
-                        className={css.catActionBtn}
-                        onClick={() => openEditModal(parent)}
-                        title="Editar"
-                      >
-                        <EditOutlined />
-                      </button>
-                      <Popconfirm
-                        title={t('common.confirm')}
-                        description={
-                          <>
-                            {childCount > 0
-                              ? t('categories.deleteConfirmWithChildren')
-                              : t('categories.deleteConfirm')}
-                            {budgetCountByCategory.has(parent.id) && (
-                              <div style={{ marginTop: 6, color: 'var(--eco-accent)' }}>
-                                {t('categories.deleteWithBudgets')}
-                              </div>
-                            )}
-                          </>
-                        }
-                        onConfirm={() => handleDelete(parent.id)}
-                        okText={t('common.confirm')}
-                        cancelText={t('common.cancel')}
-                      >
-                        <button
-                          className={`${css.catActionBtn} ${css.catActionBtnDanger}`}
-                          title="Eliminar"
-                        >
-                          <DeleteOutlined />
-                        </button>
-                      </Popconfirm>
-                    </div>
-                  )}
-
-                  {childCount > 0 && (
-                    <span className={isExpanded ? css.catExpandOpen : css.catExpand}>
-                      <RightOutlined />
-                    </span>
-                  )}
+              <section key={section.kind} className={css.kindSection}>
+                <div className={css.kindLabel}>
+                  {section.label}
+                  <span className={css.kindHint}>{section.hint}</span>
                 </div>
+                <div className={css.catList}>
+                  {groups.map((parent) => {
+                  const isExpanded = expandedGroups.has(parent.id);
+                  const childCount = parent.children?.length ?? 0;
 
-                {/* Children */}
-                {isExpanded && (
-                  <div className={css.catChildren}>
-                    {childCount > 0 ? (
-                      parent.children!.map((child) => (
-                        <div key={child.id} className={css.catChild}>
-                          <div
-                            className={css.catChildIcon}
-                            style={{
-                              '--cat-color': colorToBg(child.color),
-                              '--cat-fg': child.color ?? undefined,
-                            } as React.CSSProperties}
-                          >
-                            {child.icon ? (
-                              <CategoryIcon name={child.icon} />
-                            ) : (
-                              <span
-                                className={css.catChildDot}
-                                style={{ backgroundColor: child.color ?? 'var(--eco-fg4)' }}
-                              />
+                  return (
+                    <div key={parent.id} className={css.catGroup}>
+                      {/* Parent row */}
+                      <div
+                        className={css.catGroupHead}
+                        onClick={() => toggleGroup(parent.id)}
+                      >
+                        <div
+                          className={css.catIcon}
+                          style={{
+                            '--cat-color': colorToBg(parent.color),
+                            '--cat-fg': parent.color ?? undefined,
+                          } as React.CSSProperties}
+                        >
+                          {parent.icon ? (
+                            <CategoryIcon name={parent.icon} />
+                          ) : (
+                            <span
+                              className={css.catDot}
+                              style={{ backgroundColor: parent.color ?? 'var(--eco-fg4)' }}
+                            />
+                          )}
+                        </div>
+
+                        <div className={css.catMeta}>
+                          <div className={css.catName}>
+                            {parent.name}
+                            {childCount > 0 && (
+                              <span className={css.catChildCount}>{childCount}</span>
                             )}
                           </div>
+                        </div>
 
-                          <div className={css.catChildName}>
-                            {child.name}
-                          </div>
-
-                          {canWrite && (
-                            <div className={css.catActions} onClick={(e) => e.stopPropagation()}>
+                        {canWrite && (
+                          <div className={css.catActions} onClick={(e) => e.stopPropagation()}>
+                            <button
+                              className={css.catActionBtn}
+                              onClick={() => openEditModal(parent)}
+                              title="Editar"
+                            >
+                              <EditOutlined />
+                            </button>
+                            <Popconfirm
+                              title={t('common.confirm')}
+                              description={
+                                <>
+                                  {childCount > 0
+                                    ? t('categories.deleteConfirmWithChildren')
+                                    : t('categories.deleteConfirm')}
+                                  {budgetCountByCategory.has(parent.id) && (
+                                    <div style={{ marginTop: 6, color: 'var(--eco-accent)' }}>
+                                      {t('categories.deleteWithBudgets')}
+                                    </div>
+                                  )}
+                                </>
+                              }
+                              onConfirm={() => handleDelete(parent.id)}
+                              okText={t('common.confirm')}
+                              cancelText={t('common.cancel')}
+                            >
                               <button
-                                className={css.catActionBtn}
-                                onClick={() => openEditModal(child)}
-                                title="Editar"
+                                className={`${css.catActionBtn} ${css.catActionBtnDanger}`}
+                                title="Eliminar"
                               >
-                                <EditOutlined />
+                                <DeleteOutlined />
                               </button>
-                              <Popconfirm
-                                title={t('common.confirm')}
-                                description={
-                                  <>
-                                    {t('categories.deleteConfirm')}
-                                    {budgetCountByCategory.has(child.id) && (
-                                      <div style={{ marginTop: 6, color: 'var(--eco-accent)' }}>
-                                        {t('categories.deleteWithBudgets')}
-                                      </div>
-                                    )}
-                                  </>
-                                }
-                                onConfirm={() => handleDelete(child.id)}
-                                okText={t('common.confirm')}
-                                cancelText={t('common.cancel')}
-                              >
-                                <button
-                                  className={`${css.catActionBtn} ${css.catActionBtnDanger}`}
-                                  title="Eliminar"
+                            </Popconfirm>
+                          </div>
+                        )}
+
+                        {childCount > 0 && (
+                          <span className={isExpanded ? css.catExpandOpen : css.catExpand}>
+                            <RightOutlined />
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Children */}
+                      {isExpanded && (
+                        <div className={css.catChildren}>
+                          {childCount > 0 ? (
+                            parent.children!.map((child) => (
+                              <div key={child.id} className={css.catChild}>
+                                <div
+                                  className={css.catChildIcon}
+                                  style={{
+                                    '--cat-color': colorToBg(child.color),
+                                    '--cat-fg': child.color ?? undefined,
+                                  } as React.CSSProperties}
                                 >
-                                  <DeleteOutlined />
-                                </button>
-                              </Popconfirm>
+                                  {child.icon ? (
+                                    <CategoryIcon name={child.icon} />
+                                  ) : (
+                                    <span
+                                      className={css.catChildDot}
+                                      style={{ backgroundColor: child.color ?? 'var(--eco-fg4)' }}
+                                    />
+                                  )}
+                                </div>
+
+                                <div className={css.catChildName}>
+                                  {child.name}
+                                </div>
+
+                                {canWrite && (
+                                  <div className={css.catActions} onClick={(e) => e.stopPropagation()}>
+                                    <button
+                                      className={css.catActionBtn}
+                                      onClick={() => openEditModal(child)}
+                                      title="Editar"
+                                    >
+                                      <EditOutlined />
+                                    </button>
+                                    <Popconfirm
+                                      title={t('common.confirm')}
+                                      description={
+                                        <>
+                                          {t('categories.deleteConfirm')}
+                                          {budgetCountByCategory.has(child.id) && (
+                                            <div style={{ marginTop: 6, color: 'var(--eco-accent)' }}>
+                                              {t('categories.deleteWithBudgets')}
+                                            </div>
+                                          )}
+                                        </>
+                                      }
+                                      onConfirm={() => handleDelete(child.id)}
+                                      okText={t('common.confirm')}
+                                      cancelText={t('common.cancel')}
+                                    >
+                                      <button
+                                        className={`${css.catActionBtn} ${css.catActionBtnDanger}`}
+                                        title="Eliminar"
+                                      >
+                                        <DeleteOutlined />
+                                      </button>
+                                    </Popconfirm>
+                                  </div>
+                                )}
+                              </div>
+                            ))
+                          ) : (
+                            <div className={css.catEmptyChildren}>
+                              {t('categories.noCategories')}
                             </div>
                           )}
                         </div>
-                      ))
-                    ) : (
-                      <div className={css.catEmptyChildren}>
-                        {t('categories.noCategories')}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
+                      )}
+                    </div>
+                  );
+                  })}
+                </div>
+              </section>
             );
           })}
         </div>
@@ -435,6 +473,21 @@ export default function CategoriesPage() {
             />
           </Form.Item>
 
+          {watchedParentId ? (
+            <div className={css.kindInherited}>
+              Tipo: lo decide el grupo ({KIND_OPTIONS.find((o) => o.value === rootCategories.find((c) => c.id === watchedParentId)?.kind)?.label ?? '—'})
+            </div>
+          ) : (
+            <Form.Item
+              name="kind"
+              label="Tipo"
+              initialValue="EXPENSE"
+              extra="En qué movimientos sale este grupo. Sus subcategorías llevan el mismo."
+            >
+              <Segmented options={KIND_OPTIONS} />
+            </Form.Item>
+          )}
+
           <Form.Item name="color" label={t('categories.color')} initialValue="#bd93f9">
             <ColorPicker format="hex" />
           </Form.Item>
@@ -450,7 +503,8 @@ export default function CategoriesPage() {
             initialValue={false}
             extra="Para saldos iniciales y correcciones: mueve el saldo pero no cuenta como ingreso ni como gasto en Analisis."
           >
-            <Switch />
+            {/* Un ajuste puede sumar o restar: lo normal es que valga para los dos. */}
+            <Switch onChange={(on) => on && !form.getFieldValue('parentId') && form.setFieldValue('kind', 'BOTH')} />
           </Form.Item>
         </Form>
       </Modal>

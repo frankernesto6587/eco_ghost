@@ -390,6 +390,7 @@ export class OrganizationsService {
           name: category.name,
           icon: category.icon,
           color: category.color,
+          kind: category.kind,
           orgId,
         },
       });
@@ -400,6 +401,7 @@ export class OrganizationsService {
             name: child.name,
             icon: child.icon,
             color: child.color,
+            kind: category.kind,
             parentId: parent.id,
             orgId,
           })),

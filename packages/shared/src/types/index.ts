@@ -36,6 +36,22 @@ export enum TransactionType {
   EXCHANGE = 'EXCHANGE',
 }
 
+/**
+ * En que movimientos sale una categoria. Lo decide el grupo (la raiz) y lo
+ * heredan sus subcategorias. Transferencias y cambios no llevan categoria.
+ */
+export enum CategoryKind {
+  EXPENSE = 'EXPENSE',
+  INCOME = 'INCOME',
+  BOTH = 'BOTH',
+}
+
+/** Si una categoria de ese tipo vale para un movimiento de ese tipo. */
+export function categoryFits(kind: `${CategoryKind}`, type: `${TransactionType}`): boolean {
+  if (type !== TransactionType.INCOME && type !== TransactionType.EXPENSE) return false;
+  return kind === CategoryKind.BOTH || kind === type;
+}
+
 /** Debt direction: RECEIVABLE = they owe me, PAYABLE = I owe them */
 /** Aprobacion: solo APPROVED cuenta en saldos y estadisticas. */
 export enum TransactionStatus {

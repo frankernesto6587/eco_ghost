@@ -9,7 +9,7 @@ import { categoriesService } from '@/services/categories.service';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useAuthStore } from '@/store/auth.store';
 import { invalidateMoneyQueries } from '@/lib/invalidateMoney';
-import { flattenCategories } from '@/lib/categoryTree';
+import { categoriesFor, flattenCategories } from '@/lib/categoryTree';
 import { ExchangeRateHint } from '@/components/transactions/ExchangeRateHint';
 import { formatRelativeDate } from '@/lib/formatters';
 import css from './Approvals.module.css';
@@ -69,7 +69,6 @@ export default function ApprovalsPage() {
   });
   const accounts = useQuery({ queryKey: ['accounts'], queryFn: () => accountsService.getAll() }).data ?? [];
   const categories = useQuery({ queryKey: ['categories'], queryFn: () => categoriesService.getAll() }).data;
-  const categoryTree = useMemo(() => (categories ? flattenCategories(categories) : []), [categories]);
 
   const done = (msg: string) => {
     message.success(msg);
@@ -159,6 +158,11 @@ export default function ApprovalsPage() {
   const watchedAccountId = Form.useWatch('accountId', form);
   const fromAccount = accounts.find((a) => a.id === watchedAccountId);
   const isDebt = editingItem?.kind === 'DEBT_CREATE' || editingItem?.kind === 'DEBT_PAYMENT';
+  // Solo gastos e ingresos llevan categoria, y solo las de su tipo.
+  const categoryTree = useMemo(
+    () => flattenCategories(categoriesFor(categories ?? [], editingItem?.kind)),
+    [categories, editingItem?.kind],
+  );
   // Las cuentas que tienen sentido: en deudas, la misma moneda; en un traspaso,
   // misma moneda; en un cambio, el destino en otra.
   const fromOptions = accounts.filter((a) => !isDebt || a.currency === editingItem?.from.currency);
@@ -328,7 +332,7 @@ export default function ApprovalsPage() {
             </div>
           )}
           {editingItem?.kind === 'EXCHANGE' && <ExchangeRateHint form={form} accounts={accounts} />}
-          {!isDebt && (
+          {categoryTree.length > 0 && (
             <Form.Item name="categoryId" label="Categoría">
               <TreeSelect allowClear showSearch treeData={categoryTree} treeNodeFilterProp="name" treeDefaultExpandAll placeholder="Sin categoría" />
             </Form.Item>

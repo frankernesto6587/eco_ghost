@@ -337,6 +337,7 @@ export class AuthService {
           name: parentCat.name,
           icon: parentCat.icon,
           color: parentCat.color,
+          kind: parentCat.kind,
           orgId,
         },
       });
@@ -347,6 +348,7 @@ export class AuthService {
             name: child.name,
             icon: child.icon,
             color: child.color,
+            kind: parentCat.kind,
             parentId: parent.id,
             orgId,
           })),

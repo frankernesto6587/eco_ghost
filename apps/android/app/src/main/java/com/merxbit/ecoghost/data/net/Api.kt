@@ -17,6 +17,10 @@ data class LoginRequest(val email: String, val password: String)
 @Serializable
 data class RefreshRequest(val refreshToken: String)
 
+/** ID token de Google (Credential Manager) para POST /auth/google/mobile. */
+@Serializable
+data class GoogleMobileRequest(val idToken: String)
+
 @Serializable
 data class Tokens(val accessToken: String, val refreshToken: String)
 
@@ -227,6 +231,9 @@ data class CreateTransactionRequest(
 interface EcoApi {
     @POST("auth/login")
     suspend fun login(@Body body: LoginRequest): AuthResponse
+
+    @POST("auth/google/mobile")
+    suspend fun loginWithGoogle(@Body body: GoogleMobileRequest): AuthResponse
 
     @POST("auth/refresh")
     suspend fun refresh(@Body body: RefreshRequest): Tokens

@@ -24,8 +24,11 @@ android {
         applicationId = "com.merxbit.ecoghost"
         minSdk = 26
         targetSdk = 35
-        versionCode = 8
-        versionName = "0.6.0"
+        versionCode = 9
+        versionName = "0.7.0"
+        // Cliente web de Google (el mismo que usa la API): el ID token sale con esta audiencia.
+        // Además, cada paquete necesita su cliente Android (paquete + SHA-1) en la consola.
+        buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"404310093136-87jpm95pd7q2s0al610ibgj9daai0f02.apps.googleusercontent.com\"")
     }
 
     signingConfigs {
@@ -100,6 +103,9 @@ dependencies {
     implementation(libs.retrofit.kotlinx.serialization)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.androidx.datastore.preferences)
+    implementation(libs.androidx.credentials)
+    implementation(libs.androidx.credentials.play.services)
+    implementation(libs.googleid)
     debugImplementation(libs.androidx.compose.ui.tooling)
 
     testImplementation(libs.junit)

@@ -1,7 +1,9 @@
 package com.merxbit.ecoghost.data
 
 import com.merxbit.ecoghost.data.net.ApiJson
+import com.merxbit.ecoghost.data.net.AuthResponse
 import com.merxbit.ecoghost.data.net.EcoApi
+import com.merxbit.ecoghost.data.net.GoogleMobileRequest
 import com.merxbit.ecoghost.data.net.LoginRequest
 import com.merxbit.ecoghost.data.net.OrgDto
 import com.merxbit.ecoghost.data.net.RefreshRequest
@@ -57,11 +59,18 @@ class AuthRepository @Inject constructor(
     }
 
     /** Devuelve un mensaje de error para la pantalla, o null si entró. */
-    suspend fun login(email: String, password: String): String? = runCatching {
-        val r = api.login(LoginRequest(email.trim(), password))
+    suspend fun login(email: String, password: String): String? =
+        enter { api.login(LoginRequest(email.trim(), password)) }?.let(::errorMessage)
+
+    /** Igual que [login], con el ID token que da Google en el teléfono. */
+    suspend fun loginWithGoogle(idToken: String): String? =
+        enter { api.loginWithGoogle(GoogleMobileRequest(idToken)) }?.let(::googleErrorMessage)
+
+    private suspend fun enter(call: suspend () -> AuthResponse): Throwable? = runCatching {
+        val r = call()
         store.saveTokens(r.tokens)
         open(r.user, r.organizations)
-    }.exceptionOrNull()?.let(::errorMessage)
+    }.exceptionOrNull()
 
     private suspend fun open(user: UserDto, orgs: List<OrgDto>) {
         // La última organización usada, o la única que haya
@@ -92,6 +101,11 @@ fun errorMessage(e: Throwable): String = when {
     e is java.io.IOException -> "Sin conexión con el servidor"
     else -> "Algo salió mal: ${e.message ?: e.javaClass.simpleName}"
 }
+
+/** Con Google no hay contraseña: un 401 es que la API no aceptó la cuenta. */
+fun googleErrorMessage(e: Throwable): String =
+    if (e is HttpException && e.code() == 401) "La cuenta de Google no se pudo validar. Inténtalo de nuevo."
+    else errorMessage(e)
 
 /** El mensaje de validación de NestJS: {"message": "..."} o {"message": ["...", ...]}. */
 private fun apiMessage(e: HttpException): String? = runCatching {

@@ -34,6 +34,12 @@ object Dates {
     fun localDate(iso: String): LocalDate =
         java.time.Instant.parse(iso).atZone(ZoneId.systemDefault()).toLocalDate()
 
+    /** Día y hora de algo que pasó: "Hoy · 14:05", "Mar 21 oct · 09:30". */
+    fun stamp(iso: String, today: LocalDate = LocalDate.now()): String {
+        val t = java.time.Instant.parse(iso).atZone(ZoneId.systemDefault())
+        return "${label(t.toLocalDate(), today)} · %02d:%02d".format(t.hour, t.minute)
+    }
+
     /** "Hoy", "Ayer", "Vie 14 oct" (y el año si no es el actual). */
     fun label(d: LocalDate, today: LocalDate = LocalDate.now()): String {
         val diff = ChronoUnit.DAYS.between(d, today)

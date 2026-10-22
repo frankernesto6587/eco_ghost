@@ -10,6 +10,19 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.merxbit.ecoghost.data.Account
+import com.merxbit.ecoghost.data.EditLock
+import com.merxbit.ecoghost.data.MovementDetail
+import com.merxbit.ecoghost.data.MovementsRepository
+import com.merxbit.ecoghost.data.net.AccountDto
+import com.merxbit.ecoghost.data.net.BreakdownDto
+import com.merxbit.ecoghost.data.net.BreakdownLotDto
+import com.merxbit.ecoghost.data.net.BreakdownPartDto
+import com.merxbit.ecoghost.data.net.HistoryChangeDto
+import com.merxbit.ecoghost.data.net.HistoryEntryDto
+import com.merxbit.ecoghost.data.net.LegDto
+import com.merxbit.ecoghost.data.net.TransactionDto
+import com.merxbit.ecoghost.ui.movements.MovementDetailContent
+import kotlinx.serialization.json.JsonPrimitive
 import com.merxbit.ecoghost.data.EntryData
 import com.merxbit.ecoghost.data.EntryRepository
 import com.merxbit.ecoghost.data.EntryType
@@ -103,8 +116,8 @@ class ScreensTest {
     private val rates = RateSuggestionDto("$today", mapOf("USD" to SuggestedRateDto(390.0, "$today"), "MLC" to SuggestedRateDto(250.0, "$today")))
 
     @Composable
-    private fun entry(form: EntryForm, error: String? = null, rates: RateSuggestionDto? = null) =
-        EntryContent(form, entryData, false, error, null, rates, {}, {}, {}, {})
+    private fun entry(form: EntryForm, error: String? = null, rates: RateSuggestionDto? = null, lock: EditLock? = null) =
+        EntryContent(form, entryData, false, error, null, rates, {}, {}, {}, {}, lock)
 
     private val now = "${today}T16:00:00.000Z"
     private val bandeja = listOf(
@@ -117,6 +130,39 @@ class ScreensTest {
     )
     private val rechazado = bandeja[0].copy(id = "r1", status = "REJECTED", description = "Almuerzo", reviewer = NamedDto("a", "Ana Admin"),
         rejectionReason = "Fue con la tarjeta, no en efectivo", source = null)
+
+    private val mn = AccountDto("2", "Efectivo MN", "CASH", "MN")
+    private val detalleGasto = MovementDetail(
+        tx = TransactionDto(
+            "g1", now, "Agro", 640_000, "EXPENSE", "2", source = "telegram", account = mn,
+            category = CategoryDto("mer", "Mercado", "shopping-cart", "#fa7c20"), notes = "Viandas y frutas para la semana",
+        ),
+        history = listOf(
+            HistoryEntryDto("CREATE", now, NamedDto("u", "Lidice"), source = "telegram"),
+            HistoryEntryDto("APPROVE", now, NamedDto("f", "Frank"), changes = listOf(
+                HistoryChangeDto("amount", JsonPrimitive(600_000), JsonPrimitive(640_000), "MN"),
+                HistoryChangeDto("category", JsonPrimitive("Delivery"), JsonPrimitive("Mercado")),
+            )),
+        ),
+        breakdown = BreakdownDto(
+            reportAmount = 1_067, marketAmount = 1_032, status = "EXACT", fxResult = -35, fxExchange = -20, fxHolding = -15,
+            parts = listOf(BreakdownPartDto("LOT", "MN", 640_000, BreakdownLotDto("EXCHANGE", "${today.withDayOfMonth(1)}T00:00:00.000Z", rate = 600.0, marketRate = 620.0))),
+        ),
+        reportCurrency = "USD",
+    )
+    private val detalleCambio = MovementDetail(
+        tx = TransactionDto(
+            "c1", now, "Cambio USD a MN", 10_000, "EXCHANGE", "4", status = "PENDING", account = AccountDto("4", "Efectivo USD", "CASH", "USD"),
+            linkedTransaction = LegDto("c2", 3_900_000, "2", mn),
+        ),
+        history = listOf(
+            HistoryEntryDto("CREATE", now, NamedDto("p", "Pedro Pendiente")),
+            HistoryEntryDto("EDIT_PENDING", now, NamedDto("p", "Pedro Pendiente"), changes = listOf(
+                HistoryChangeDto("toAmount", JsonPrimitive(3_800_000), JsonPrimitive(3_900_000), "MN"),
+            )),
+        ),
+        breakdown = null, reportCurrency = "USD",
+    )
 
     @Composable
     private fun approvals(scope: String, items: List<ApprovalItemDto>, canApprove: Boolean) = ApprovalsContent(
@@ -152,5 +198,10 @@ class ScreensTest {
     }
     @Test fun aprobacionesRevisarOscuro() = shot("aprobaciones-revisar-oscuro", ThemeMode.DARK) { approvals("review", bandeja, true) }
     @Test fun aprobacionesMiasClaro() = shot("aprobaciones-mias-claro", ThemeMode.LIGHT) { approvals("mine", listOf(rechazado) + bandeja.take(1), false) }
+    @Test fun detalleGastoClaro() = shot("detalle-gasto-claro", ThemeMode.LIGHT) { MovementDetailContent(detalleGasto, true, false, null, {}, {}, {}) }
+    @Test fun detalleCambioOscuro() = shot("detalle-cambio-oscuro", ThemeMode.DARK) { MovementDetailContent(detalleCambio, false, false, null, {}, {}, {}) }
+    @Test fun editarGastoOscuro() = shot("editar-gasto-oscuro", ThemeMode.DARK) {
+        entry(EntryForm.of(detalleGasto.tx), lock = MovementsRepository.lock(detalleGasto.tx))
+    }
     @Test fun inicioSinConexion() = shot("inicio-sin-conexion", ThemeMode.LIGHT) { HomeContent(org, "Frank", null, "Sin conexión con el servidor", false, {}) }
 }

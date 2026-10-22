@@ -1,8 +1,11 @@
 package com.merxbit.ecoghost.data.net
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.HTTP
 import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.Path
@@ -134,10 +137,66 @@ data class TransactionDto(
     val valuationStatus: String? = null,
     val category: CategoryDto? = null,
     val account: AccountDto? = null,
+    // Lo que trae GET /transactions/:id (el detalle); la lista no lo necesita.
+    val notes: String? = null,
+    val createdAt: String? = null,
+    val debtId: String? = null,
+    /** En un par: la pierna que entra (si esta es la que sale)... */
+    val linkedTransaction: LegDto? = null,
+    /** ...o la que sale (si esta es la que entra). */
+    val linkedBy: LegDto? = null,
 )
+
+/** La otra pierna de una transferencia o cambio. */
+@Serializable
+data class LegDto(val id: String, val amount: Long, val accountId: String, val account: AccountDto? = null)
 
 @Serializable
 data class Page<T>(val data: List<T>)
+
+/** Un paso del historial de un movimiento (GET /transactions/:id/history). */
+@Serializable
+data class HistoryEntryDto(
+    /** CREATE, UPDATE, APPROVE, REJECT, RESUBMIT, EDIT_PENDING, WITHDRAW, DELETE, RESTORE, BULK_UPDATE... */
+    val action: String,
+    val at: String,
+    val user: NamedDto? = null,
+    val source: String? = null,
+    val reason: String? = null,
+    val changes: List<HistoryChangeDto> = emptyList(),
+)
+
+/** Un campo que cambio. Importes en centavos, fechas ISO; cuentas y categorias ya con su nombre. */
+@Serializable
+data class HistoryChangeDto(
+    val field: String,
+    val before: JsonPrimitive? = null,
+    val after: JsonPrimitive? = null,
+    val currency: String? = null,
+)
+
+/** De que cambios (lotes) sale el valor en la moneda de estadisticas. Centavos. */
+@Serializable
+data class BreakdownDto(
+    val reportAmount: Long? = null,
+    val marketAmount: Long? = null,
+    /** EXACT, ESTIMATE o MISSING_RATE. */
+    val status: String? = null,
+    val fxResult: Long? = null,
+    val fxExchange: Long? = null,
+    val fxHolding: Long? = null,
+    val parts: List<BreakdownPartDto> = emptyList(),
+)
+
+@Serializable
+data class BreakdownPartDto(val kind: String, val currency: String, val qty: Long, val lot: BreakdownLotDto? = null)
+
+/** origin: EXCHANGE (un cambio), CARRY (cambio entre monedas) o una entrada a tasa del dia. Tasas: unidades por 1 de la moneda de estadisticas. */
+@Serializable
+data class BreakdownLotDto(val origin: String, val day: String, val description: String? = null, val rate: Double? = null, val marketRate: Double? = null)
+
+@Serializable
+data class DeleteRequest(val reason: String)
 
 /** GET /categories devuelve el árbol (raíces con sus hijas). */
 @Serializable
@@ -266,6 +325,23 @@ interface EcoApi {
 
     @POST("transactions")
     suspend fun createTransaction(@Body body: CreateTransactionRequest): TransactionDto
+
+    @GET("transactions/{id}")
+    suspend fun transaction(@Path("id") id: String): TransactionDto
+
+    @GET("transactions/{id}/history")
+    suspend fun history(@Path("id") id: String): List<HistoryEntryDto>
+
+    /** Solo los campos que cambian; un null explicito borra (p. ej. la categoria). Propietario y admin. */
+    @PATCH("transactions/{id}")
+    suspend fun updateTransaction(@Path("id") id: String, @Body body: JsonObject): TransactionDto
+
+    /** A la papelera, con motivo (en un par, las dos piernas). Propietario y admin. */
+    @HTTP(method = "DELETE", path = "transactions/{id}", hasBody = true)
+    suspend fun deleteTransaction(@Path("id") id: String, @Body body: DeleteRequest)
+
+    @GET("valuation/transactions/{id}")
+    suspend fun breakdown(@Path("id") id: String): BreakdownDto
 
     @GET("valuation/status")
     suspend fun valuationStatus(): ValuationStatusDto

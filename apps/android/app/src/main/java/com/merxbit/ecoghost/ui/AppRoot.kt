@@ -56,6 +56,7 @@ import com.merxbit.ecoghost.ui.home.HomeScreen
 import com.merxbit.ecoghost.ui.login.LoginScreen
 import com.merxbit.ecoghost.ui.more.MoreScreen
 import com.merxbit.ecoghost.ui.more.OrgList
+import com.merxbit.ecoghost.ui.movements.MovementDetailSheet
 import com.merxbit.ecoghost.ui.movements.MovementsScreen
 import com.merxbit.ecoghost.ui.theme.Eco
 import com.merxbit.ecoghost.ui.theme.EcoShape
@@ -116,6 +117,8 @@ private fun Main(s: Session.LoggedIn, auth: AuthRepository, store: SessionStore,
     var orgSheet by remember { mutableStateOf(false) }
     var entry by remember { mutableStateOf(false) }
     var approvals by rememberSaveable { mutableStateOf(false) }
+    /** El movimiento cuyo detalle está abierto. */
+    var detail by remember { mutableStateOf<String?>(null) }
     val snack = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val c = Eco.colors
@@ -138,9 +141,9 @@ private fun Main(s: Session.LoggedIn, auth: AuthRepository, store: SessionStore,
             } else when (tab) {
                 Tab.HOME -> HomeScreen(
                     org, s.user.name, onOrgClick = { orgSheet = true }, onAvatarClick = { tab = Tab.MORE },
-                    onSeeAll = { tab = Tab.TXS }, onApprovals = { approvals = true },
+                    onSeeAll = { tab = Tab.TXS }, onApprovals = { approvals = true }, onOpen = { detail = it },
                 )
-                Tab.TXS -> MovementsScreen(org.id)
+                Tab.TXS -> MovementsScreen(org.id, onOpen = { detail = it })
                 Tab.DEBTS -> Soon("Deudas", "Lo que te deben y lo que debes, con sus pagos.")
                 Tab.ANALYSIS -> Soon("Análisis", "Gastos por categoría, meses y presupuestos.")
                 Tab.MORE -> MoreScreen(
@@ -156,6 +159,11 @@ private fun Main(s: Session.LoggedIn, auth: AuthRepository, store: SessionStore,
 
     if (entry) {
         EntrySheet(org.id, onDismiss = { entry = false }, onSaved = { msg -> scope.launch { snack.showSnackbar(msg) } })
+    }
+
+    detail?.let { id ->
+        // Editar y borrar: propietario y admin (la API no deja a los demás)
+        MovementDetailSheet(id, org.id, canEdit = canApprove, onDismiss = { detail = null }, onMessage = { msg -> scope.launch { snack.showSnackbar(msg) } })
     }
 
     if (orgSheet) {

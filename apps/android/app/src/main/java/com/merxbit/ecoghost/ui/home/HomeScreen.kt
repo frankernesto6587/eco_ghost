@@ -97,10 +97,11 @@ fun HomeScreen(
     onAvatarClick: () -> Unit,
     onSeeAll: () -> Unit,
     onApprovals: () -> Unit,
+    onOpen: (String) -> Unit,
     vm: HomeViewModel = hiltViewModel(),
 ) {
     LaunchedEffect(org.id) { vm.load(org) }
-    HomeContent(org, userName, vm.home, vm.error, vm.refreshing, { vm.load(org, force = true) }, onOrgClick, onAvatarClick, onSeeAll, onApprovals)
+    HomeContent(org, userName, vm.home, vm.error, vm.refreshing, { vm.load(org, force = true) }, onOrgClick, onAvatarClick, onSeeAll, onApprovals, onOpen)
 }
 
 /** Solo pinta el estado (sin ViewModel): se usa también en las capturas de los tests. */
@@ -117,6 +118,8 @@ fun HomeContent(
     onAvatarClick: () -> Unit = {},
     onSeeAll: () -> Unit = {},
     onApprovals: () -> Unit = {},
+    /** Abre el detalle de un movimiento. */
+    onOpen: (String) -> Unit = {},
 ) {
     val c = Eco.colors
     PullToRefreshBox(refreshing && home != null, onRefresh, Modifier.fillMaxSize()) {
@@ -170,7 +173,7 @@ fun HomeContent(
             }
             home.recent.forEachIndexed { i, m ->
                 if (i > 0) HorizontalDivider(color = c.line)
-                MovementRow(m, reportCurrency = home.report?.currency)
+                MovementRow(m, Modifier.clickable { onOpen(m.id) }, reportCurrency = home.report?.currency)
             }
             Spacer(Modifier.height(24.dp))
         }

@@ -68,7 +68,7 @@ export class TelegramService {
   private static readonly PENDING_TTL_MS = 15 * 60 * 1000;
 
   private getPending(key: string): PendingExpense | undefined {
-    const pending = this.getPending(key);
+    const pending = this.pendingExpenses.get(key);
     if (pending && Date.now() - pending.createdAt > TelegramService.PENDING_TTL_MS) {
       this.pendingExpenses.delete(key);
       return undefined;

@@ -106,6 +106,12 @@ ok(r.status === 400, 'un cambio no puede pasar a gasto → 400', r.body);
 const mid = await balances();
 ok(mid['Efectivo USD'] === before['Efectivo USD'] - 20000 && mid['Efectivo MN'] === before['Efectivo MN'] + 7000000,
   'saldos reflejan el cambio editado', { antes: before, ahora: mid });
+const hist = (await api('GET', `/transactions/${incId}/history`)).body;
+ok(Array.isArray(hist) && hist[0]?.action === 'CREATE' && !!hist[0].user?.name, 'el historial empieza por quien lo anoto', hist?.[0]);
+const upd = Array.isArray(hist) ? hist.find((h) => h.action === 'UPDATE') : null;
+ok(upd?.changes?.some((c) => c.field === 'amount' && c.before === 10000 && c.after === 20000 && c.currency === 'USD')
+  && upd.changes.some((c) => c.field === 'toAmount' && c.before === 3800000 && c.after === 7000000 && c.currency === 'MN'),
+  'y la edicion, con lo que cambio en las dos piernas (abierto desde la que entra)', upd);
 
 // ── 5. En pares no se cambia en lote ni la categoria (no llevan) ni la cuenta ──
 const cats = (await api('GET', '/categories')).body;

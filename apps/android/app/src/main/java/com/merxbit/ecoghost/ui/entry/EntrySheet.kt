@@ -76,11 +76,14 @@ import com.merxbit.ecoghost.data.Dates
 import com.merxbit.ecoghost.data.Draft
 import com.merxbit.ecoghost.data.EntryData
 import com.merxbit.ecoghost.data.EntryRepository
+import com.merxbit.ecoghost.data.EditLock
 import com.merxbit.ecoghost.data.EntryType
+import com.merxbit.ecoghost.data.MovementsRepository
 import com.merxbit.ecoghost.data.Money
 import com.merxbit.ecoghost.data.RateHint
 import com.merxbit.ecoghost.data.RateHints
 import com.merxbit.ecoghost.data.net.RateSuggestionDto
+import com.merxbit.ecoghost.data.net.TransactionDto
 import com.merxbit.ecoghost.data.errorMessage
 import com.merxbit.ecoghost.ui.common.accountIcon
 import com.merxbit.ecoghost.ui.common.categoryIcon
@@ -116,10 +119,32 @@ data class EntryForm(
 
     /** Lo que se borra tras "Guardar y otro": se quedan el tipo, la cuenta y la fecha. */
     fun next() = copy(amount = "", toAmount = "", typingTo = false, categoryId = null, description = "", notes = "", showNotes = false)
+
+    companion object {
+        /** La hoja rellena con un movimiento para editarlo. En un par, desde la pierna que sale. */
+        fun of(tx: TransactionDto): EntryForm {
+            val legs = MovementsRepository.legs(tx)
+            return EntryForm(
+                type = when (tx.type) { "INCOME" -> EntryType.INCOME; "EXPENSE" -> EntryType.EXPENSE; else -> EntryType.TRANSFER },
+                amount = ApprovalsRepository.centsText(legs?.first?.amount ?: tx.amount),
+                toAmount = if (tx.type == "EXCHANGE" && legs != null) ApprovalsRepository.centsText(legs.second.amount) else "",
+                accountId = legs?.first?.accountId ?: tx.accountId,
+                toAccountId = legs?.second?.accountId,
+                categoryId = tx.category?.id,
+                description = tx.description,
+                date = Dates.localDate(tx.date),
+                notes = tx.notes.orEmpty(),
+                showNotes = !tx.notes.isNullOrBlank(),
+            )
+        }
+    }
 }
 
 @HiltViewModel
-class EntryViewModel @Inject constructor(private val repo: EntryRepository) : ViewModel() {
+class EntryViewModel @Inject constructor(
+    private val repo: EntryRepository,
+    private val movements: MovementsRepository,
+) : ViewModel() {
     var data by mutableStateOf<EntryData?>(null); private set
     var form by mutableStateOf(EntryForm()); private set
     var loadError by mutableStateOf<String?>(null); private set
@@ -129,13 +154,29 @@ class EntryViewModel @Inject constructor(private val repo: EntryRepository) : Vi
     /** Tasa de elTOQUE del día del cambio, para sugerir lo que se recibe. */
     var rates by mutableStateOf<RateSuggestionDto?>(null); private set
     private var ratesDay: LocalDate? = null
+    /** El movimiento que se edita (null: se anota uno nuevo). */
+    var editing by mutableStateOf<TransactionDto?>(null); private set
+    var lock by mutableStateOf<EditLock?>(null); private set
+    /** Como estaba al abrir: al guardar solo se envía lo que cambió. */
+    private var original: Draft? = null
 
     /** Cada apertura empieza de cero y recarga cuentas y categorías (pueden haber cambiado). */
-    fun open(orgId: String) {
+    fun open(orgId: String, tx: TransactionDto? = null) {
+        // Al editar no sirven las cuentas de la vez anterior: hay que añadir las del movimiento
+        if (tx != null || editing != null) data = null
         form = EntryForm(); error = null; saved = null; loadError = null; rates = null; ratesDay = null
+        editing = tx; lock = tx?.let(MovementsRepository::lock); original = null
         viewModelScope.launch {
             runCatching { repo.load(orgId) }
-                .onSuccess { data = it; form = form.copy(accountId = it.preferredAccountId) }
+                .onSuccess {
+                    if (tx == null) {
+                        data = it; form = form.copy(accountId = it.preferredAccountId)
+                    } else {
+                        data = MovementsRepository.forEditing(it, tx)
+                        form = EntryForm.of(tx); original = form.draft()
+                        loadRates()
+                    }
+                }
                 .onFailure { loadError = errorMessage(it) }
         }
     }
@@ -175,6 +216,23 @@ class EntryViewModel @Inject constructor(private val repo: EntryRepository) : Vi
         }
     }
 
+    /** Guarda lo que cambió del movimiento que se edita. */
+    fun saveEdit(onDone: (String) -> Unit) {
+        val d = data ?: return
+        val tx = editing ?: return
+        val before = original ?: return
+        val draft = form.draft()
+        EntryRepository.missing(draft, d)?.let { error = it; return }
+        val edits = MovementsRepository.edits(before, draft, d) ?: run { onDone("Sin cambios"); return }
+        saving = true; error = null
+        viewModelScope.launch {
+            runCatching { movements.update(tx.id, edits) }
+                .onSuccess { onDone("Cambios guardados · ${it.description}") }
+                .onFailure { error = errorMessage(it) }
+            saving = false
+        }
+    }
+
     private fun savedMessage(d: Draft, data: EntryData, pending: Boolean): String {
         val req = EntryRepository.request(d, data)
         val cur = data.accounts.first { it.id == d.accountId }.currency
@@ -187,8 +245,15 @@ class EntryViewModel @Inject constructor(private val repo: EntryRepository) : Vi
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun EntrySheet(orgId: String, onDismiss: () -> Unit, onSaved: (String) -> Unit, vm: EntryViewModel = hiltViewModel()) {
-    LaunchedEffect(orgId) { vm.open(orgId) }
+fun EntrySheet(
+    orgId: String,
+    onDismiss: () -> Unit,
+    onSaved: (String) -> Unit,
+    /** Con un movimiento, la hoja sirve para editarlo. */
+    editing: TransactionDto? = null,
+    vm: EntryViewModel = hiltViewModel(),
+) {
+    LaunchedEffect(orgId, editing) { vm.open(orgId, editing) }
     val c = Eco.colors
     ModalBottomSheet(
         onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
@@ -198,7 +263,7 @@ fun EntrySheet(orgId: String, onDismiss: () -> Unit, onSaved: (String) -> Unit, 
         when {
             vm.loadError != null -> Column(Modifier.fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(vm.loadError!!, color = c.muted)
-                TextButton({ vm.open(orgId) }) { Text("Reintentar", color = c.accent) }
+                TextButton({ vm.open(orgId, editing) }) { Text("Reintentar", color = c.accent) }
             }
             data == null -> Box(Modifier.fillMaxWidth().height(240.dp), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = c.accent)
@@ -206,7 +271,11 @@ fun EntrySheet(orgId: String, onDismiss: () -> Unit, onSaved: (String) -> Unit, 
             else -> EntryContent(
                 vm.form, data, vm.saving, vm.error, vm.saved, vm.rates,
                 onChange = vm::change, onKey = vm::key, onClose = onDismiss,
-                onSave = { again -> vm.save(orgId, again) { msg -> onSaved(msg); onDismiss() } },
+                onSave = { again ->
+                    val done = { msg: String -> onSaved(msg); onDismiss() }
+                    if (vm.editing != null) vm.saveEdit(done) else vm.save(orgId, again, done)
+                },
+                lock = vm.lock,
             )
         }
     }
@@ -226,6 +295,8 @@ fun EntryContent(
     onKey: (Char) -> Unit,
     onClose: () -> Unit,
     onSave: (again: Boolean) -> Unit,
+    /** Al editar: qué tipos y monedas se pueden elegir (null: se anota uno nuevo). */
+    lock: EditLock? = null,
 ) {
     val c = Eco.colors
     var pickDate by remember { mutableStateOf(false) }
@@ -238,7 +309,7 @@ fun EntryContent(
     Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 16.dp)) {
         Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Anotar", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+                Text(if (lock != null) "Editar" else "Anotar", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
                 IconButton(onClose) { Icon(Icons.Outlined.Close, "Cerrar", tint = c.muted) }
             }
             SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(top = 4.dp)) {
@@ -246,10 +317,14 @@ fun EntryContent(
                     SegmentedButton(
                         selected = form.type == t,
                         onClick = { onChange(form.copy(type = t, typingTo = false, categoryId = null)) },
+                        enabled = lock == null || t in lock.types,
                         shape = SegmentedButtonDefaults.itemShape(i, EntryType.entries.size, EcoShape.field),
                         colors = SegmentedButtonDefaults.colors(
                             activeContainerColor = c.accentSoft, activeContentColor = c.accent, activeBorderColor = c.line,
                             inactiveContainerColor = c.surface, inactiveContentColor = c.text, inactiveBorderColor = c.line,
+                            disabledInactiveContainerColor = c.surface, disabledInactiveContentColor = c.muted.copy(alpha = 0.5f),
+                            disabledInactiveBorderColor = c.line,
+                            disabledActiveContainerColor = c.accentSoft, disabledActiveContentColor = c.accent, disabledActiveBorderColor = c.line,
                         ),
                         icon = {},
                     ) { Text(t.label, style = MaterialTheme.typography.labelLarge) }
@@ -287,7 +362,7 @@ fun EntryContent(
 
             Label(if (form.type == EntryType.INCOME) "Cuenta destino" else if (move) "Cuenta origen" else "Cuenta")
             ChipRow {
-                data.accounts.forEach { a ->
+                data.accounts.filter { lock?.fromCurrency == null || it.currency == lock.fromCurrency }.forEach { a ->
                     EcoChip(a.name, form.accountId == a.id, accountIcon(a.type)) {
                         onChange(form.copy(accountId = a.id, toAccountId = form.toAccountId.takeIf { it != a.id }))
                     }
@@ -297,7 +372,7 @@ fun EntryContent(
             if (move) {
                 Label("Cuenta destino", if (exchange) "otra moneda: es un cambio" else null)
                 ChipRow {
-                    data.accounts.filter { it.id != form.accountId }.forEach { a ->
+                    data.accounts.filter { it.id != form.accountId && (lock?.toCurrency == null || it.currency == lock.toCurrency) }.forEach { a ->
                         EcoChip("${a.name} · ${a.currency}", form.toAccountId == a.id, accountIcon(a.type)) {
                             onChange(form.copy(toAccountId = a.id, typingTo = false))
                         }
@@ -339,7 +414,7 @@ fun EntryContent(
         }
         Keypad(onKey)
         Row(Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(
+            if (lock == null) OutlinedButton(
                 { onSave(true) }, Modifier.weight(1f).height(48.dp), enabled = !saving, shape = EcoShape.field,
                 border = BorderStroke(1.dp, c.line),
             ) { Text("Guardar y otro", color = c.text, style = MaterialTheme.typography.labelLarge) }
@@ -348,7 +423,7 @@ fun EntryContent(
                 colors = ButtonDefaults.buttonColors(containerColor = c.accent, contentColor = c.onAccent),
             ) {
                 if (saving) CircularProgressIndicator(Modifier.size(20.dp), color = c.onAccent, strokeWidth = 2.dp)
-                else Text("Guardar", style = MaterialTheme.typography.labelLarge)
+                else Text(if (lock != null) "Guardar cambios" else "Guardar", style = MaterialTheme.typography.labelLarge)
             }
         }
     }

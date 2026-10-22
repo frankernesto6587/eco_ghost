@@ -12,6 +12,7 @@ import { decideStatusFor, statusFields } from '../../common/approval-policy';
 import { TelegramService } from '../telegram/telegram.service';
 import { AuditService } from '../audit/audit.service';
 import { ValuationService } from '../valuation/valuation.service';
+import { HistoryEntry, describeChanges, referencedIds, snapsOf } from './transaction-history';
 import {
   CreateTransactionDto,
   UpdateTransactionDto,
@@ -331,6 +332,44 @@ export class TransactionsService {
     }
 
     return transaction;
+  }
+
+  /**
+   * Quien lo anoto y todo lo que le paso despues (aprobar, corregir, editar,
+   * borrar y restaurar), con nombres. Lo ve quien puede ver el movimiento.
+   */
+  async history(orgId: string, id: string, actor: Actor): Promise<HistoryEntry[]> {
+    const t = await this.findOne(orgId, id, actor);
+    const legIds = [t.id, t.linkedTransactionId, t.linkedBy?.id].filter((x): x is string => !!x);
+    const logs = await this.prisma.auditLog.findMany({
+      where: { orgId, entity: 'Transaction', entityId: { in: legIds } },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const snaps = logs.map((l) => snapsOf(l.action, l.changes));
+    const refs = referencedIds(snaps.flatMap((s) => [s.before, s.after]));
+    const [users, accounts, categories] = await Promise.all([
+      this.prisma.user.findMany({ where: { id: { in: [t.createdBy, ...logs.map((l) => l.userId)] } }, select: { id: true, name: true } }),
+      this.prisma.account.findMany({ where: { orgId, id: { in: refs.accounts } }, select: { id: true, name: true, currency: true } }),
+      this.prisma.category.findMany({ where: { orgId, id: { in: refs.categories } }, select: { id: true, name: true } }),
+    ]);
+    const names = {
+      accounts: new Map(accounts.map((a) => [a.id, { name: a.name, currency: a.currency }])),
+      categories: new Map(categories.map((c) => [c.id, c.name])),
+    };
+    const user = (userId: string) => users.find((u) => u.id === userId) ?? null;
+
+    // El alta sale del propio movimiento: lo que entra por Telegram no deja registro de CREATE.
+    const created: HistoryEntry = { action: 'CREATE', at: t.createdAt, user: user(t.createdBy), source: t.source, changes: [] };
+    const rest = logs.flatMap((l, i): HistoryEntry[] => {
+      if (l.action === 'CREATE') return [];
+      const changes = describeChanges(snaps[i].before, snaps[i].after, names);
+      // Una edicion sin nada que mostrar (p. ej. solo etiquetas) no aporta
+      if (changes.length === 0 && (l.action === 'UPDATE' || l.action === 'EDIT_PENDING')) return [];
+      const reason = (l.metadata as { reason?: string } | null)?.reason ?? null;
+      return [{ action: l.action, at: l.createdAt, user: user(l.userId), reason, changes }];
+    });
+    return [created, ...rest];
   }
 
   /** Las dos piernas de un par a partir de cualquiera de ellas. */

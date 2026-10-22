@@ -91,6 +91,16 @@ export class TransactionsController {
     return this.transactionsService.findOne(orgId, id, { userId, role });
   }
 
+  @Get(':id/history')
+  history(
+    @OrgId() orgId: string,
+    @CurrentUser('id') userId: string,
+    @OrgRole() role: Role,
+    @Param('id') id: string,
+  ) {
+    return this.transactionsService.history(orgId, id, { userId, role });
+  }
+
   @Patch(':id')
   @Roles(Role.OWNER, Role.ADMIN)
   update(

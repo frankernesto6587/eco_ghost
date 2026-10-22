@@ -1,5 +1,6 @@
 package com.merxbit.ecoghost.ui.movements
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -93,7 +94,7 @@ class MovementsViewModel @Inject constructor(private val api: EcoApi, repo: Fina
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MovementsScreen(orgId: String, vm: MovementsViewModel = hiltViewModel()) {
+fun MovementsScreen(orgId: String, onOpen: (String) -> Unit, vm: MovementsViewModel = hiltViewModel()) {
     LaunchedEffect(orgId) { vm.open(orgId) }
     val c = Eco.colors
     val state = rememberLazyListState()
@@ -121,7 +122,7 @@ fun MovementsScreen(orgId: String, vm: MovementsViewModel = hiltViewModel()) {
                     )
                 }
                 items(list, key = { it.id }) { m ->
-                    MovementRow(m, reportCurrency = vm.reportCurrency)
+                    MovementRow(m, Modifier.clickable { onOpen(m.id) }, reportCurrency = vm.reportCurrency)
                     HorizontalDivider(color = c.line)
                 }
             }

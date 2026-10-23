@@ -6,13 +6,14 @@ import { parseEntryDate } from '../../common/date-range.util';
 import { assertOrgRefs } from '../../common/org-refs.util';
 import { assertCategoryFits } from '../../common/category-kind.util';
 import { recomputeDebt } from '../../common/debt-balance.util';
-import { Actor, flowWhere, visibleWhere } from '../../common/tx-filters';
+import { Actor, ENTRY_HEAD, flowWhere, visibleWhere } from '../../common/tx-filters';
 import { assertOpenPeriod } from '../../common/period-lock.util';
 import { decideStatusFor, statusFields } from '../../common/approval-policy';
 import { TelegramService } from '../telegram/telegram.service';
 import { AuditService } from '../audit/audit.service';
 import { ValuationService } from '../valuation/valuation.service';
 import { HistoryEntry, describeChanges, referencedIds, snapsOf } from './transaction-history';
+import { searchSql } from './transaction-search';
 import {
   CreateTransactionDto,
   UpdateTransactionDto,
@@ -241,14 +242,15 @@ export class TransactionsService {
    * ignoraba en silencio el resto de filtros, asi que el resumen no cuadraba con
    * la lista que el usuario tenia delante.
    */
-  private buildWhere(orgId: string, query: TransactionQueryDto, actor: Actor): Prisma.TransactionWhereInput {
-    const { from, to, type, categoryId, accountId, projectId, currency, deleted, uncategorized } = query;
+  private async buildWhere(orgId: string, query: TransactionQueryDto, actor: Actor): Promise<Prisma.TransactionWhereInput> {
+    const { from, to, type, categoryId, accountId, projectId, currency, deleted, uncategorized, search } = query;
 
+    // Pendientes y rechazados solo los ven quien los anoto y quien aprueba.
+    const and: Prisma.TransactionWhereInput[] = [visibleWhere(actor, query.status)];
     const where: Prisma.TransactionWhereInput = {
       orgId,
       deletedAt: deleted ? { not: null } : null,
-      // Pendientes y rechazados solo los ven quien los anoto y quien aprueba.
-      AND: [visibleWhere(actor, query.status)],
+      AND: and,
     };
 
     if (from || to) {
@@ -275,13 +277,20 @@ export class TransactionsService {
     if (projectId) where.projectId = projectId;
     if (currency) where.account = { currency };
 
+    // Sin tildes no se puede con un `contains` de Prisma: los ids salen de SQL a mano
+    const sql = search?.trim() ? searchSql(orgId, search) : null;
+    if (sql) {
+      const rows = await this.prisma.$queryRaw<{ id: string }[]>(sql);
+      and.push({ id: { in: rows.map((r) => r.id) } });
+    }
+
     return where;
   }
 
   async findAll(orgId: string, query: TransactionQueryDto, actor: Actor) {
     const { page = 1, limit = 15, sortBy, sortOrder } = query;
 
-    const where = this.buildWhere(orgId, query, actor);
+    const where = await this.buildWhere(orgId, query, actor);
     // reportAmount/valuationStatus al dia (recalcula solo si cambio algo)
     await this.valuation.ensureFresh(orgId);
 
@@ -751,7 +760,9 @@ export class TransactionsService {
   }
 
   async getSummary(orgId: string, query: TransactionQueryDto, actor: Actor) {
-    const where = this.buildWhere(orgId, query, actor);
+    const where = await this.buildWhere(orgId, query, actor);
+    // marketAmount al dia antes de sumarlo
+    const cfg = await this.valuation.ensureFresh(orgId);
 
     // Solo INCOME/EXPENSE son flujo, pero hay que INTERSECAR con el filtro de tipo
     // del usuario en vez de pisarlo: si filtro a INCOME, el resumen no debe
@@ -766,7 +777,7 @@ export class TransactionsService {
     const transactions = selected.length
       ? await this.prisma.transaction.findMany({
           where: query.deleted ? filter : flowWhere(filter),
-          include: { account: { select: { currency: true } } },
+          select: { type: true, amount: true, marketAmount: true, account: { select: { currency: true } } },
         })
       : [];
 
@@ -788,7 +799,27 @@ export class TransactionsService {
       balance[currency] = (income[currency] ?? 0) - (expense[currency] ?? 0);
     }
 
-    return { income, expense, balance };
+    // Filas como las ve la lista: un traspaso o cambio cuenta una vez, aunque
+    // solo coincida la pierna que entra (al filtrar por la cuenta destino).
+    const [heads, loneIncoming] = await Promise.all([
+      this.prisma.transaction.count({ where: { AND: [where, ENTRY_HEAD] } }),
+      this.prisma.transaction.count({
+        where: { AND: [where, { linkedBy: { isNot: null } }, { NOT: { linkedBy: { is: where } } }] },
+      }),
+    ]);
+
+    // En la moneda de estadisticas, a mercado como el panel. Sin tasa no suma: va en `incomplete`.
+    let report: { currency: string; income: number; expense: number; incomplete: number } | null = null;
+    if (cfg.valuationEnabled && !query.deleted) {
+      report = { currency: cfg.reportCurrency, income: 0, expense: 0, incomplete: 0 };
+      for (const tx of transactions) {
+        if (tx.marketAmount == null) report.incomplete++;
+        else if (tx.type === 'INCOME') report.income += tx.marketAmount;
+        else report.expense += tx.marketAmount;
+      }
+    }
+
+    return { income, expense, balance, count: heads + loneIncoming, report };
   }
 }
 

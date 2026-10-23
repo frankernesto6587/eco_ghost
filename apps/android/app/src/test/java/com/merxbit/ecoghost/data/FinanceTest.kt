@@ -1,6 +1,8 @@
 package com.merxbit.ecoghost.data
 
 import com.merxbit.ecoghost.data.net.AccountDto
+import com.merxbit.ecoghost.data.net.CategoryDto
+import com.merxbit.ecoghost.data.net.LegDto
 import com.merxbit.ecoghost.data.net.TransactionDto
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -46,8 +48,40 @@ class MovementsTest {
         assertEquals("MN", ex.toCurrency)
     }
 
-    @Test fun `la pata de entrada sin su salida en la pagina no se muestra suelta`() {
+    @Test fun `una pata huerfana de datos viejos no se muestra`() {
         val list = FinanceRepository.movements(listOf(tx("in", "TRANSFER", 100, mn)))
         assertEquals(emptyList<Movement>(), list)
+    }
+
+    @Test fun `si solo llega la pata que entra, la fila sale igual y con el id de la que sale`() {
+        // Al filtrar por la cuenta destino, o con la otra pata en la pagina siguiente
+        val inc = tx("in", "EXCHANGE", 3_800_000, mn).copy(linkedBy = LegDto("out", 10_000, usd.id, usd))
+        val alone = FinanceRepository.movements(listOf(inc)).single()
+        assertEquals("out", alone.id)
+        assertEquals("Efectivo USD", alone.accountName)
+        assertEquals(10_000L, alone.amount)
+        assertEquals("Efectivo MN", alone.toAccountName)
+        assertEquals(3_800_000L, alone.toAmount)
+        // Cuando llega la otra no se duplica
+        val both = FinanceRepository.movements(listOf(inc, tx("out", "EXCHANGE", 10_000, usd, linked = "in")))
+        assertEquals(listOf("out"), both.map { it.id })
+    }
+
+    @Test fun `la pata que sale sin la otra en la pagina toma el destino de linkedTransaction`() {
+        val out = tx("out", "TRANSFER", 500_000, usd, linked = "in").copy(linkedTransaction = LegDto("in", 500_000, "a3", AccountDto("a3", "Zelle", "BANK", "USD")))
+        assertEquals("Zelle", FinanceRepository.movements(listOf(out)).single().toAccountName)
+    }
+
+    @Test fun `solo cuenta en los totales lo aprobado, sin deudas ni ajustes`() {
+        val list = FinanceRepository.movements(
+            listOf(
+                tx("g", "EXPENSE", 500, mn),
+                tx("p", "EXPENSE", 500, mn).copy(status = "PENDING"),
+                tx("d", "EXPENSE", 500, mn).copy(debtId = "d1"),
+                tx("a", "INCOME", 500, mn).copy(category = CategoryDto("c", "Saldo inicial", isAdjustment = true)),
+                tx("in", "TRANSFER", 500, mn).copy(linkedBy = LegDto("out", 500, usd.id, usd)),
+            ),
+        )
+        assertEquals(listOf("g"), list.filter { it.inTotals }.map { it.id })
     }
 }

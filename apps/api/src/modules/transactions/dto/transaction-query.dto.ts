@@ -9,6 +9,7 @@ import {
   Min,
   IsArray,
   IsEnum,
+  MaxLength,
 } from 'class-validator';
 import { Type, Transform } from 'class-transformer';
 import { TransactionStatus } from '@prisma/client';
@@ -71,6 +72,15 @@ export class TransactionQueryDto {
   @IsOptional()
   @IsString()
   projectId?: string;
+
+  @ApiPropertyOptional({
+    example: 'cafe',
+    description: 'Busca en descripcion, nota, categoria y cuenta, sin tildes; si es un importe (6400), tambien ese importe',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  search?: string;
 
   @ApiPropertyOptional({ default: 1, minimum: 1 })
   @IsOptional()

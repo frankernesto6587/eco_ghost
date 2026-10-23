@@ -509,7 +509,14 @@ private fun ChipRow(content: @Composable () -> Unit) {
 }
 
 @Composable
-fun EcoChip(label: String, selected: Boolean, icon: ImageVector? = null, iconColor: Color? = null, onClick: () -> Unit) {
+fun EcoChip(
+    label: String,
+    selected: Boolean,
+    icon: ImageVector? = null,
+    iconColor: Color? = null,
+    trailing: ImageVector? = null,
+    onClick: () -> Unit,
+) {
     val c = Eco.colors
     Row(
         Modifier.height(36.dp).clip(EcoShape.field)
@@ -521,6 +528,10 @@ fun EcoChip(label: String, selected: Boolean, icon: ImageVector? = null, iconCol
         icon?.let { Icon(it, null, tint = if (selected) c.accent else iconColor ?: c.muted, modifier = Modifier.size(18.dp)) }
         if (icon != null) Spacer(Modifier.width(6.dp))
         Text(label, style = MaterialTheme.typography.labelLarge, color = if (selected) c.accent else c.text, maxLines = 1)
+        trailing?.let {
+            Spacer(Modifier.width(4.dp))
+            Icon(it, null, tint = if (selected) c.accent else c.muted, modifier = Modifier.size(18.dp))
+        }
     }
 }
 

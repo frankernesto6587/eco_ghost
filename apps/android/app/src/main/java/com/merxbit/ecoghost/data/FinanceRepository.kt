@@ -4,6 +4,7 @@ import com.merxbit.ecoghost.data.net.AccountDto
 import com.merxbit.ecoghost.data.net.ApprovalCountsDto
 import com.merxbit.ecoghost.data.net.ReportDto
 import com.merxbit.ecoghost.data.net.EcoApi
+import com.merxbit.ecoghost.data.net.LegDto
 import com.merxbit.ecoghost.data.net.OverviewDto
 import com.merxbit.ecoghost.data.net.TransactionDto
 import kotlinx.coroutines.async
@@ -46,6 +47,8 @@ data class Movement(
     /** A mercado del dia en la moneda de estadisticas, si esta activa (null: sin valorar). */
     val marketAmount: Long? = null,
     val valuationStatus: String? = null,
+    /** Cuenta como gasto o ingreso (aprobado, sin deuda ni ajuste), como en el Panel. */
+    val inTotals: Boolean = false,
 )
 
 data class Home(
@@ -104,37 +107,51 @@ class FinanceRepository @Inject constructor(private val api: EcoApi) {
         /**
          * La API devuelve las dos patas de una transferencia o cambio. La que
          * sale de la cuenta origen lleva linkedTransactionId hacia la que entra:
-         * se muestra esa y se esconde la otra.
+         * se muestra esa y se esconde la otra. Si solo vino la que entra (al
+         * filtrar por la cuenta destino, o porque la otra está en la página
+         * siguiente), la fila se arma desde ella, con el id de la que sale: así
+         * no se duplica cuando llega la otra.
          */
         fun movements(txs: List<TransactionDto>): List<Movement> {
             val byId = txs.associateBy { it.id }
             val incomingLegs = txs.mapNotNull { it.linkedTransactionId }.toSet()
-            return txs
-                .filterNot { it.id in incomingLegs }
-                .filterNot { it.type in PAIRED && it.linkedTransactionId == null }
-                .map { t ->
-                    val to = t.linkedTransactionId?.let(byId::get)
-                    Movement(
-                        id = t.id,
-                        date = Dates.localDate(t.date),
-                        description = t.description,
-                        type = t.type,
-                        amount = t.amount,
-                        currency = t.account?.currency.orEmpty(),
-                        accountName = t.account?.name.orEmpty(),
-                        categoryName = t.category?.name,
-                        categoryIcon = t.category?.icon,
-                        categoryColor = t.category?.color,
-                        toAccountName = to?.account?.name,
-                        toAmount = to?.amount,
-                        toCurrency = to?.account?.currency,
-                        viaTelegram = t.source == "telegram",
-                        status = t.status,
-                        marketAmount = t.marketAmount,
-                        valuationStatus = t.valuationStatus,
-                    )
+            return txs.mapNotNull { t ->
+                when {
+                    t.id in incomingLegs -> null
+                    t.type !in PAIRED -> row(t, t.id, LegDto(t.id, t.amount, t.accountId, t.account), null)
+                    t.linkedTransactionId != null -> {
+                        val to = byId[t.linkedTransactionId]?.let { LegDto(it.id, it.amount, it.accountId, it.account) } ?: t.linkedTransaction
+                        row(t, t.id, LegDto(t.id, t.amount, t.accountId, t.account), to)
+                    }
+                    t.linkedBy != null -> row(t, t.linkedBy.id, t.linkedBy, LegDto(t.id, t.amount, t.accountId, t.account))
+                    // Una pierna huérfana (de datos viejos) no se muestra
+                    else -> null
                 }
+            }
         }
+
+        private fun row(t: TransactionDto, id: String, from: LegDto, to: LegDto?) = Movement(
+            id = id,
+            date = Dates.localDate(t.date),
+            description = t.description,
+            type = t.type,
+            amount = from.amount,
+            currency = from.account?.currency.orEmpty(),
+            accountName = from.account?.name.orEmpty(),
+            categoryName = t.category?.name,
+            categoryIcon = t.category?.icon,
+            categoryColor = t.category?.color,
+            toAccountName = to?.account?.name,
+            toAmount = to?.amount,
+            toCurrency = to?.account?.currency,
+            viaTelegram = t.source == "telegram",
+            status = t.status,
+            // De un par solo se muestra el valor de la pierna que sale
+            marketAmount = t.marketAmount.takeIf { id == t.id },
+            valuationStatus = t.valuationStatus.takeIf { id == t.id },
+            inTotals = t.status == "APPROVED" && t.debtId == null && t.category?.isAdjustment != true &&
+                (t.type == "INCOME" || t.type == "EXPENSE"),
+        )
 
         private val PAIRED = setOf("TRANSFER", "EXCHANGE")
     }

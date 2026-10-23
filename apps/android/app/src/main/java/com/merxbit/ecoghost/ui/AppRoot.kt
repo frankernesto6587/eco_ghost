@@ -143,7 +143,7 @@ private fun Main(s: Session.LoggedIn, auth: AuthRepository, store: SessionStore,
                     org, s.user.name, onOrgClick = { orgSheet = true }, onAvatarClick = { tab = Tab.MORE },
                     onSeeAll = { tab = Tab.TXS }, onApprovals = { approvals = true }, onOpen = { detail = it },
                 )
-                Tab.TXS -> MovementsScreen(org.id, onOpen = { detail = it })
+                Tab.TXS -> MovementsScreen(org.id, showStatus = canWrite, onOpen = { detail = it })
                 Tab.DEBTS -> Soon("Deudas", "Lo que te deben y lo que debes, con sus pagos.")
                 Tab.ANALYSIS -> Soon("Análisis", "Gastos por categoría, meses y presupuestos.")
                 Tab.MORE -> MoreScreen(

@@ -115,6 +115,8 @@ data class CategoryDto(
     val icon: String? = null,
     val color: String? = null,
     val parentId: String? = null,
+    /** Saldo inicial, correcciones: mueven saldo pero no son gasto ni ingreso. */
+    val isAdjustment: Boolean = false,
 )
 
 @Serializable
@@ -146,6 +148,22 @@ data class TransactionDto(
     /** ...o la que sale (si esta es la que entra). */
     val linkedBy: LegDto? = null,
 )
+
+/**
+ * GET /transactions/summary. Solo lo aprobado, sin deudas ni ajustes, como el
+ * Panel. `count`: filas de la lista (un par cuenta una vez).
+ */
+@Serializable
+data class SummaryDto(
+    val income: Map<String, Long> = emptyMap(),
+    val expense: Map<String, Long> = emptyMap(),
+    val count: Int = 0,
+    val report: SummaryReportDto? = null,
+)
+
+/** Los mismos totales a mercado en la moneda de estadísticas. `incomplete`: sin tasa, no suman. */
+@Serializable
+data class SummaryReportDto(val currency: String, val income: Long = 0, val expense: Long = 0, val incomplete: Int = 0)
 
 /** La otra pierna de una transferencia o cambio. */
 @Serializable
@@ -309,13 +327,33 @@ interface EcoApi {
     @GET("accounts")
     suspend fun accounts(): List<AccountDto>
 
+    /** Los filtros que van en null no se envían. Las listas van separadas por comas. */
     @GET("transactions")
     suspend fun transactions(
         @Query("limit") limit: Int = 20,
         @Query("page") page: Int = 1,
         @Query("sortBy") sortBy: String = "date",
         @Query("sortOrder") sortOrder: String = "desc",
+        @Query("from") from: String? = null,
+        @Query("to") to: String? = null,
+        @Query("type") type: String? = null,
+        @Query("accountId") accountId: String? = null,
+        @Query("categoryId") categoryId: String? = null,
+        @Query("status") status: String? = null,
+        @Query("search") search: String? = null,
     ): Page<TransactionDto>
+
+    /** Totales de lo que sale con esos filtros (mismas reglas que el Panel). */
+    @GET("transactions/summary")
+    suspend fun summary(
+        @Query("from") from: String? = null,
+        @Query("to") to: String? = null,
+        @Query("type") type: String? = null,
+        @Query("accountId") accountId: String? = null,
+        @Query("categoryId") categoryId: String? = null,
+        @Query("status") status: String? = null,
+        @Query("search") search: String? = null,
+    ): SummaryDto
 
     @GET("categories")
     suspend fun categories(): List<CategoryNodeDto>

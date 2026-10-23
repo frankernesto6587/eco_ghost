@@ -24,7 +24,7 @@ object Money {
 }
 
 object Dates {
-    private val MESES = listOf("ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic")
+    val MESES = listOf("ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic")
     private val DIAS = listOf("lun", "mar", "mié", "jue", "vie", "sáb", "dom")
     val MESES_LARGOS = listOf(
         "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",

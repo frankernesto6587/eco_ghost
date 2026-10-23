@@ -22,6 +22,15 @@ import com.merxbit.ecoghost.data.net.HistoryEntryDto
 import com.merxbit.ecoghost.data.net.LegDto
 import com.merxbit.ecoghost.data.net.TransactionDto
 import com.merxbit.ecoghost.ui.movements.MovementDetailContent
+import com.merxbit.ecoghost.ui.movements.MovementsContent
+import com.merxbit.ecoghost.data.MovementFilter
+import com.merxbit.ecoghost.data.MovementFilters
+import com.merxbit.ecoghost.data.Period
+import com.merxbit.ecoghost.data.StatusFilter
+import com.merxbit.ecoghost.data.TypeFilter
+import com.merxbit.ecoghost.data.net.SummaryDto
+import com.merxbit.ecoghost.data.net.SummaryReportDto
+import java.time.YearMonth
 import kotlinx.serialization.json.JsonPrimitive
 import com.merxbit.ecoghost.data.EntryData
 import com.merxbit.ecoghost.data.EntryRepository
@@ -93,21 +102,21 @@ class ScreensTest {
         ),
     )
 
+    private val entryCategories = listOf(
+        CategoryNodeDto("ing", "Ingresos", "dollar", "#5ac576", kind = "INCOME", children = listOf(
+            CategoryNodeDto("sal", "Salario"), CategoryNodeDto("ven", "Ventas"), CategoryNodeDto("comi", "Comisiones USDT"),
+        )),
+        CategoryNodeDto("ali", "Alimentacion", "coffee", "#fa7c20", kind = "EXPENSE", children = listOf(
+            CategoryNodeDto("mer", "Mercado"), CategoryNodeDto("del", "Delivery"), CategoryNodeDto("res", "Restaurantes"),
+        )),
+        CategoryNodeDto("tra", "Transporte", "car", "#c97adb", kind = "EXPENSE", children = listOf(CategoryNodeDto("com", "Combustible"))),
+        CategoryNodeDto("viv", "Vivienda", "home", "#6d95ee", kind = "EXPENSE", children = listOf(CategoryNodeDto("cons", "Construccion"))),
+        CategoryNodeDto("pre", "Prestamos", "transaction", null, kind = "BOTH"),
+    )
+
     private val entryData = EntryData(
         accounts = home.accounts,
-        groups = EntryRepository.groups(
-            listOf(
-                CategoryNodeDto("ing", "Ingresos", "dollar", "#5ac576", kind = "INCOME", children = listOf(
-                    CategoryNodeDto("sal", "Salario"), CategoryNodeDto("ven", "Ventas"), CategoryNodeDto("comi", "Comisiones USDT"),
-                )),
-                CategoryNodeDto("ali", "Alimentacion", "coffee", "#fa7c20", kind = "EXPENSE", children = listOf(
-                    CategoryNodeDto("mer", "Mercado"), CategoryNodeDto("del", "Delivery"), CategoryNodeDto("res", "Restaurantes"),
-                )),
-                CategoryNodeDto("tra", "Transporte", "car", "#c97adb", kind = "EXPENSE", children = listOf(CategoryNodeDto("com", "Combustible"))),
-                CategoryNodeDto("viv", "Vivienda", "home", "#6d95ee", kind = "EXPENSE", children = listOf(CategoryNodeDto("cons", "Construccion"))),
-                CategoryNodeDto("pre", "Prestamos", "transaction", null, kind = "BOTH"),
-            ),
-        ),
+        groups = EntryRepository.groups(entryCategories),
         // Uso de antes del arreglo: "Salario" en un gasto ya no se ofrece.
         usage = mapOf(EntryType.EXPENSE to listOf("mer", "sal", "cons", "del", "com", "res"), EntryType.INCOME to listOf("sal", "comi")),
         preferredAccountId = "2",
@@ -203,5 +212,41 @@ class ScreensTest {
     @Test fun editarGastoOscuro() = shot("editar-gasto-oscuro", ThemeMode.DARK) {
         entry(EntryForm.of(detalleGasto.tx), lock = MovementsRepository.lock(detalleGasto.tx))
     }
+    private val accountDtos = listOf(
+        AccountDto("1", "Efectivo USD", "CASH", "USD"), AccountDto("2", "Efectivo MN", "CASH", "MN"),
+        AccountDto("3", "BANDEC", "BANK", "MN"), AccountDto("4", "Zelle", "BANK", "USD"),
+    )
+    private val gastosMercado = listOf(
+        Movement("a", today, "Agro", "EXPENSE", 640_000, "MN", "Efectivo MN", "Mercado", "shopping-cart", "#fa7c20", marketAmount = 1_641, valuationStatus = "EXACT", inTotals = true),
+        Movement("f", today, "Pan", "EXPENSE", 30_000, "MN", "Efectivo MN", "Mercado", "shopping-cart", "#fa7c20", marketAmount = 77, valuationStatus = "EXACT", inTotals = true),
+        Movement("g", today.minusDays(2), "Mipyme Los Pinos", "EXPENSE", 1_250_000, "MN", "BANDEC", "Mercado", "shopping-cart", "#fa7c20", marketAmount = 3_205, valuationStatus = "EXACT", inTotals = true),
+        Movement("e", today.minusDays(3), "Paquete combo", "EXPENSE", 6_245, "USD", "Zelle", "Delivery", "car", "#fa7c20", viaTelegram = true, inTotals = true),
+        Movement("h", today.minusDays(3), "Cafeteria", "EXPENSE", 180_000, "MN", "Efectivo MN", "Restaurantes", "coffee", "#fa7c20", status = "PENDING"),
+    )
+    private val resumenMercado = SummaryDto(
+        expense = mapOf("MN" to 1_920_000, "USD" to 6_245), count = 5,
+        report = SummaryReportDto("USD", expense = 11_168),
+    )
+
+    @Composable
+    private fun movements(
+        items: List<Movement>, filter: MovementFilter, summary: SummaryDto?, end: Boolean = true,
+    ) = MovementsContent(
+        items, filter, summary, loading = false, end = end, error = null, reportCurrency = "USD",
+        accounts = accountDtos, groups = MovementFilters.groups(entryCategories), showStatus = true,
+        onFilter = {}, onOpen = {}, onMore = {}, onRefresh = {},
+    )
+
+    @Test fun movimientosFiltrosClaro() = shot("movimientos-filtros-claro", ThemeMode.LIGHT) {
+        movements(gastosMercado, MovementFilter(TypeFilter.EXPENSE, categoryId = "ali", period = Period.Month(YearMonth.from(today))), resumenMercado)
+    }
+    @Test fun movimientosBuscarOscuro() = shot("movimientos-buscar-oscuro", ThemeMode.DARK) {
+        movements(gastosMercado.take(3), MovementFilter(search = "6 400"), resumenMercado.copy(expense = mapOf("MN" to 640_000), count = 1, report = SummaryReportDto("USD", expense = 1_641)))
+    }
+    @Test fun movimientosClaro() = shot("movimientos-claro", ThemeMode.LIGHT) { movements(home.recent.map { it.copy(inTotals = it.type == "INCOME" || it.type == "EXPENSE") }, MovementFilter(), null) }
+    @Test fun movimientosVacioOscuro() = shot("movimientos-vacio-oscuro", ThemeMode.DARK) {
+        movements(emptyList(), MovementFilter(TypeFilter.EXCHANGE, accountId = "4", status = StatusFilter.REJECTED), SummaryDto())
+    }
+
     @Test fun inicioSinConexion() = shot("inicio-sin-conexion", ThemeMode.LIGHT) { HomeContent(org, "Frank", null, "Sin conexión con el servidor", false, {}) }
 }

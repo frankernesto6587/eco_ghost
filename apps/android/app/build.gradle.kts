@@ -24,8 +24,8 @@ android {
         applicationId = "com.merxbit.ecoghost"
         minSdk = 26
         targetSdk = 35
-        versionCode = 10
-        versionName = "0.8.0"
+        versionCode = 11
+        versionName = "0.9.0"
         // Cliente web de Google (el mismo que usa la API): el ID token sale con esta audiencia.
         // Además, cada paquete necesita su cliente Android (paquete + SHA-1) en la consola.
         buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"404310093136-87jpm95pd7q2s0al610ibgj9daai0f02.apps.googleusercontent.com\"")
